@@ -1,8 +1,10 @@
 mod note;
 mod parsing;
+mod store;
 
 use std::error::Error;
 
+use anyhow::{anyhow, Result};
 use tracing::{debug, info, Level};
 
 use lsp_types::{
@@ -13,7 +15,8 @@ use lsp_types::{
 use lsp_server::{Connection, Message, Request, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
-fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let filter = EnvFilter::default().add_directive(Level::DEBUG.into());
     tracing_subscriber::fmt()
         .with_env_filter(filter)
@@ -30,19 +33,24 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     let server_capabilities = serde_json::to_value(&ServerCapabilities::default()).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
 
-    main_loop(&connection, initialization_params)?;
+    main_loop(&connection, initialization_params).await?;
     io_threads.join()?;
 
     info!("Shutting down zeta-note LSP server");
     Ok(())
 }
 
-fn main_loop(
-    connection: &Connection,
-    params: serde_json::Value,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
-    let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    info!("Starting zeta-note main loop");
+async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result<()> {
+    let params: InitializeParams = serde_json::from_value(params).unwrap();
+    let root_uri = params.root_uri.ok_or(anyhow!("Expected a `rootUri`"))?;
+    let root_path = root_uri
+        .to_file_path()
+        .map_err(|_| anyhow!("`rootUri` should be a file path"))?;
+
+    info!("Starting zeta-note main loop at {}", root_path.display());
+
+    let note_files = store::find_notes(&root_path).await?;
+    info!("Found {} note files", note_files.len());
 
     for msg in &connection.receiver {
         debug!("Got msg: {:?}", msg);

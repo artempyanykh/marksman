@@ -5,11 +5,16 @@ authors = ["Artem Pyanykh <artem.pyanykh@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0"
 clap = "3.0.0-beta.2"
+glob = "0.3.0"
+futures = "0.3.13"
 lsp-server = "0.5.0"
 lsp-types = "0.88.0"
 pulldown-cmark = { version = "0.8", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tokio = { version = "1.2.0", features = ["full"] }
 tracing = "0.1.25"
 tracing-subscriber = "0.2.16"
+url = "2.2.0"

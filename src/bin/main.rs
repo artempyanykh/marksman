@@ -1,19 +1,15 @@
-mod note;
-mod parsing;
-mod store;
-
-use std::error::Error;
-
 use anyhow::{anyhow, Result};
 use tracing::{debug, info, Level};
 
 use lsp_types::{
-    request::DocumentSymbolRequest, DocumentSymbolResponse, InitializeParams, OneOf,
-    ServerCapabilities,
+    request::{DocumentSymbolRequest, WorkspaceSymbol},
+    DocumentSymbolResponse, InitializeParams, OneOf, ServerCapabilities,
 };
 
 use lsp_server::{Connection, Message, Request, RequestId, Response};
 use tracing_subscriber::EnvFilter;
+
+use zeta_note::{db, store};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -29,8 +25,9 @@ async fn main() -> Result<()> {
 
     let mut server_capabilities = ServerCapabilities::default();
     server_capabilities.document_symbol_provider = Some(OneOf::Left(true));
+    server_capabilities.workspace_symbol_provider = Some(OneOf::Left(true));
 
-    let server_capabilities = serde_json::to_value(&ServerCapabilities::default()).unwrap();
+    let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
 
     main_loop(&connection, initialization_params).await?;
@@ -51,6 +48,7 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
 
     let note_files = store::find_notes(&root_path).await?;
     info!("Found {} note files", note_files.len());
+    let mut index = db::GlobalIndex::from_files(&note_files).await?;
 
     for msg in &connection.receiver {
         debug!("Got msg: {:?}", msg);
@@ -62,9 +60,22 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                 }
                 debug!("Got request: {:?}", req);
 
-                if let Ok((id, params)) = cast::<DocumentSymbolRequest>(req) {
+                if let Ok((id, params)) = cast::<DocumentSymbolRequest>(req.clone()) {
                     debug!("Got documentSymbol request #{}: {:?}", id, params);
                     let result: Option<DocumentSymbolResponse> = None;
+                    let result = serde_json::to_value(&result).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast::<WorkspaceSymbol>(req.clone()) {
+                    debug!("Got workspaceSymbol request #{}: {:?}", id, params);
+                    let result = Some(index.headings_all(&params.query));
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,

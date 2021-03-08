@@ -2,11 +2,13 @@ use anyhow::{anyhow, Result};
 use tracing::{debug, info, Level};
 
 use lsp_types::{
+    notification::DidChangeTextDocument,
     request::{DocumentSymbolRequest, WorkspaceSymbol},
-    DocumentSymbolResponse, InitializeParams, OneOf, ServerCapabilities,
+    DidChangeTextDocumentParams, DocumentSymbolResponse, InitializeParams, OneOf,
+    ServerCapabilities,
 };
 
-use lsp_server::{Connection, Message, Request, RequestId, Response};
+use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
 use zeta_note::{db, store};
@@ -60,7 +62,7 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                 }
                 debug!("Got request: {:?}", req);
 
-                if let Ok((id, params)) = cast::<DocumentSymbolRequest>(req.clone()) {
+                if let Ok((id, params)) = cast_r::<DocumentSymbolRequest>(req.clone()) {
                     debug!("Got documentSymbol request #{}: {:?}", id, params);
                     let file = params.text_document.uri.to_file_path().unwrap();
                     let result = Some(index.headings(file, ""));
@@ -74,7 +76,7 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                     continue;
                 }
 
-                if let Ok((id, params)) = cast::<WorkspaceSymbol>(req.clone()) {
+                if let Ok((id, params)) = cast_r::<WorkspaceSymbol>(req.clone()) {
                     debug!("Got workspaceSymbol request #{}: {:?}", id, params);
                     let result = Some(index.headings_all(&params.query));
                     let result = serde_json::to_value(&result).unwrap();
@@ -92,16 +94,25 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
             }
             Message::Notification(not) => {
                 debug!("Got notification: {:?}", not);
+                if let Ok(params) = cast_n::<DidChangeTextDocument>(not) {}
             }
         }
     }
     Ok(())
 }
 
-fn cast<R>(req: Request) -> Result<(RequestId, R::Params), Request>
+fn cast_r<R>(req: Request) -> Result<(RequestId, R::Params), Request>
 where
     R: lsp_types::request::Request,
     R::Params: serde::de::DeserializeOwned,
 {
     req.extract(R::METHOD)
+}
+
+fn cast_n<N>(notif: Notification) -> Result<N::Params, Notification>
+where
+    N: lsp_types::notification::Notification,
+    N::Params: serde::de::DeserializeOwned,
+{
+    notif.extract(N::METHOD)
 }

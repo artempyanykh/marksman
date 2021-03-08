@@ -46,6 +46,7 @@ mod test {
     use anyhow::Result;
 
     use super::*;
+    use k9::{assert_equal, snapshot};
     use std::{error::Error, fs, io, path::PathBuf};
 
     fn read_resource(name: &str) -> io::Result<String> {
@@ -61,7 +62,34 @@ mod test {
     fn scrape_headings() -> Result<(), Box<dyn Error>> {
         let text = read_resource("example1.md")?;
         let elements = scrape(&text);
-        assert_eq!(elements.len(), 3);
+        snapshot!(
+            elements,
+            r###"
+[
+    (
+        Heading {
+            level: 1,
+            text: "# Some text in heading 1",
+        },
+        28..54,
+    ),
+    (
+        Heading {
+            level: 2,
+            text: "## Some text in heading 1-2",
+        },
+        56..85,
+    ),
+    (
+        Heading {
+            level: 1,
+            text: "#     Some text in heading 2",
+        },
+        118..146,
+    ),
+]
+"###
+        );
 
         Ok(())
     }
@@ -69,7 +97,7 @@ mod test {
     #[test]
     fn scrape_eof() {
         let elements = scrape("#");
-        assert_eq!(
+        assert_equal!(
             elements,
             vec![(
                 Element::Heading {

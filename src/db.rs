@@ -60,6 +60,7 @@ impl GlobalIndex<PathBuf> {
         Ok(())
     }
 
+    #[allow(deprecated)]
     pub fn headings(&self, tag: PathBuf, query: &str) -> Vec<SymbolInformation> {
         let mut symbols = Vec::new();
 

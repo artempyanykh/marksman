@@ -217,6 +217,7 @@ pub fn text_matches_query(text: &str, query: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use k9::assert_equal;
 
     mod offset_map {
         use super::*;
@@ -226,7 +227,7 @@ mod tests {
             //          012
             let text = "Hi!";
             let offsets = OffsetMap::new(text);
-            assert_eq!(offsets.line_ranges, vec![0..3, 3..3]);
+            assert_equal!(offsets.line_ranges, vec![0..3, 3..3]);
         }
 
         #[test]
@@ -234,7 +235,7 @@ mod tests {
             //          012 3
             let text = "Hi!\n";
             let offsets = OffsetMap::new(text);
-            assert_eq!(offsets.line_ranges, vec![0..4, 4..4]);
+            assert_equal!(offsets.line_ranges, vec![0..4, 4..4]);
         }
 
         #[test]
@@ -242,7 +243,7 @@ mod tests {
             //          012 3 4
             let text = "Hi!\r\n";
             let offsets = OffsetMap::new(text);
-            assert_eq!(offsets.line_ranges, vec![0..5, 5..5]);
+            assert_equal!(offsets.line_ranges, vec![0..5, 5..5]);
         }
 
         #[test]
@@ -250,32 +251,32 @@ mod tests {
             //          012 345678
             let text = "Hi!\nWorld";
             let offsets = OffsetMap::new(text);
-            assert_eq!(offsets.line_ranges, vec![0..4, 4..9, 9..9]);
+            assert_equal!(offsets.line_ranges, vec![0..4, 4..9, 9..9]);
         }
 
         #[test]
         fn eof_to_lsp() {
             let text = "H";
             let offsets = OffsetMap::new(text);
-            assert_eq!(offsets.offset_to_lsp_position(1), Some(Position::new(0, 1)));
+            assert_equal!(offsets.offset_to_lsp_position(1), Some(Position::new(0, 1)));
         }
 
         #[test]
         fn empty_lsp() {
             let text = "";
             let offsets = OffsetMap::new(text);
-            assert_eq!(offsets.offset_to_lsp_position(0), Some(Position::new(0, 0)));
+            assert_equal!(offsets.offset_to_lsp_position(0), Some(Position::new(0, 0)));
         }
     }
 
     #[test]
     fn test_text_matches_query() {
         let text = "Hello World!";
-        assert!(text_matches_query(&text, "h"));
-        assert!(text_matches_query(&text, "hel"));
-        assert!(text_matches_query(&text, "hw"));
-        assert!(text_matches_query(&text, "h!"));
-        assert!(!text_matches_query(&text, "hz"));
+        assert_equal!(text_matches_query(&text, "h"), true);
+        assert_equal!(text_matches_query(&text, "hel"), true);
+        assert_equal!(text_matches_query(&text, "hw"), true);
+        assert_equal!(text_matches_query(&text, "h!"), true);
+        assert_equal!(text_matches_query(&text, "hz"), false);
     }
 
     mod apply_change {
@@ -292,7 +293,7 @@ mod tests {
                 )),
                 "Hi",
             );
-            assert_eq!(&replaced, "# Hi World");
+            assert_equal!(&replaced, "# Hi World");
         }
 
         #[test]
@@ -308,7 +309,7 @@ mod tests {
                 )),
                 "",
             );
-            assert_eq!(&replaced, "Hi");
+            assert_equal!(&replaced, "Hi");
         }
 
         #[test]
@@ -324,7 +325,7 @@ mod tests {
                 )),
                 "\n",
             );
-            assert_eq!(&replaced, "Hi\n");
+            assert_equal!(&replaced, "Hi\n");
         }
     }
 }

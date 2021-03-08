@@ -99,37 +99,51 @@ impl GlobalIndex<PathBuf> {
         Ok(())
     }
 
-    pub fn headings_all(&mut self, query: &str) -> Vec<SymbolInformation> {
+    pub fn headings(&mut self, tag: PathBuf, query: &str) -> Vec<SymbolInformation> {
         let mut symbols = Vec::new();
 
-        for (tag, text) in self.content_map.iter() {
-            let file_index = self.file_index_cache.retrieve(tag.clone(), text.clone());
-            let line_offset = self.offset_cache.retrieve(tag.clone(), text.clone());
+        let text = match self.content_map.get(&tag) {
+            Some(t) => t,
+            _ => return symbols,
+        };
 
-            for (element, span) in &file_index.elements {
-                match element {
-                    Element::Heading {
-                        text: heading_text, ..
-                    } if text_matches_query(heading_text, query) => {
-                        let lsp_range = match line_offset.range_to_lsp_range(span) {
-                            Some(r) => r,
-                            _ => continue,
-                        };
-                        let uri = Url::from_file_path(tag).unwrap();
-                        let location = lsp_types::Location::new(uri, lsp_range);
-                        let symbol = lsp_types::SymbolInformation {
-                            name: heading_text.clone(),
-                            kind: lsp_types::SymbolKind::String,
-                            tags: None,
-                            deprecated: None,
-                            location,
-                            container_name: None,
-                        };
-                        symbols.push(symbol)
-                    }
-                    _ => (),
+        let file_index = self.file_index_cache.retrieve(tag.clone(), text.clone());
+        let line_offset = self.offset_cache.retrieve(tag.clone(), text.clone());
+
+        for (element, span) in &file_index.elements {
+            match element {
+                Element::Heading {
+                    text: heading_text, ..
+                } if text_matches_query(heading_text, query) => {
+                    let lsp_range = match line_offset.range_to_lsp_range(span) {
+                        Some(r) => r,
+                        _ => continue,
+                    };
+                    let uri = Url::from_file_path(&tag).unwrap();
+                    let location = lsp_types::Location::new(uri, lsp_range);
+                    let symbol = lsp_types::SymbolInformation {
+                        name: heading_text.clone(),
+                        kind: lsp_types::SymbolKind::String,
+                        tags: None,
+                        deprecated: None,
+                        location,
+                        container_name: None,
+                    };
+                    symbols.push(symbol)
                 }
+                _ => (),
             }
+        }
+
+        symbols
+    }
+
+    pub fn headings_all(&mut self, query: &str) -> Vec<SymbolInformation> {
+        let mut symbols = Vec::new();
+        let tags: Vec<_> = self.content_map.keys().map(|t| t.to_owned()).collect();
+
+        for tag in &tags {
+            symbols.append(&mut self.headings(tag.clone(), query));
         }
 
         symbols

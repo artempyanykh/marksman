@@ -62,7 +62,8 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
 
                 if let Ok((id, params)) = cast::<DocumentSymbolRequest>(req.clone()) {
                     debug!("Got documentSymbol request #{}: {:?}", id, params);
-                    let result: Option<DocumentSymbolResponse> = None;
+                    let file = params.text_document.uri.to_file_path().unwrap();
+                    let result = Some(index.headings(file, ""));
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,

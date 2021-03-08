@@ -1,8 +1,12 @@
+use std::ops::Range;
+
 use pulldown_cmark::{Event, Parser, Tag};
 
-use crate::note::{Element, Span};
+use crate::note::Element;
 
-pub fn scrape(text: &str) -> Vec<(Element, Span)> {
+pub type ElementWithLoc = (Element, Range<usize>);
+
+pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
     let parser = Parser::new(text);
     let mut elements = Vec::new();
 
@@ -55,7 +59,7 @@ mod test {
     fn scrape_headings() -> Result<(), Box<dyn Error>> {
         let text = read_resource("example1.md")?;
         let elements = scrape(&text);
-        assert_eq!(elements, vec![]);
+        assert_eq!(elements.len(), 3);
 
         Ok(())
     }

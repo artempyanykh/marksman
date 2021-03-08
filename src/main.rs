@@ -48,9 +48,11 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
 
     info!("Starting zeta-note main loop at {}", root_path.display());
 
-    let note_files = store::find_notes(&root_path).await?;
+    let ignores = store::find_ignores(&root_path).await?;
+    let note_files = store::find_notes(&root_path, &ignores).await?;
     info!("Found {} note files", note_files.len());
-    let mut index = db::GlobalIndex::from_files(&note_files).await?;
+
+    let mut index = db::GlobalIndex::from_files(&note_files, &ignores).await?;
 
     for msg in &connection.receiver {
         debug!("Got msg: {:?}", msg);

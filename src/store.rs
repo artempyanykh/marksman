@@ -1,14 +1,71 @@
 use anyhow::Result;
 
 use glob::Pattern;
-use std::path::{Path, PathBuf};
+use once_cell::sync::OnceCell;
+use std::{
+    borrow::Borrow,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::SystemTime,
+};
 use tokio::fs;
 
 use tracing::debug;
 
-pub async fn find_notes(root_path: &Path) -> Result<Vec<PathBuf>> {
-    let ignores = find_ignores(root_path).await?;
-    find_notes_inner(root_path, &ignores).await
+use crate::{
+    parsing::{self, ElementWithLoc},
+    text::OffsetMap,
+};
+
+#[derive(Debug)]
+pub struct Note {
+    pub version: Version,
+    pub content: Arc<str>,
+    lazy_offsets: OnceCell<OffsetMap<Arc<str>>>,
+    lazy_elements: OnceCell<Vec<ElementWithLoc>>,
+}
+
+impl Note {
+    pub fn new(version: Version, content: Arc<str>) -> Self {
+        Self {
+            version,
+            content: content.clone(),
+            lazy_offsets: OnceCell::new(),
+            lazy_elements: OnceCell::new(),
+        }
+    }
+
+    pub fn offsets(&self) -> &OffsetMap<Arc<str>> {
+        self.lazy_offsets
+            .get_or_init(|| OffsetMap::new(self.content.clone()))
+    }
+
+    pub fn elements(&self) -> &[ElementWithLoc] {
+        self.lazy_elements
+            .get_or_init(|| parsing::scrape(self.content.borrow()))
+    }
+}
+
+#[derive(Debug)]
+pub enum Version {
+    Fs(SystemTime),
+    Vs(u32),
+}
+
+pub async fn read_note(path: &Path, ignores: &[Pattern]) -> Result<Option<Note>> {
+    if is_note_file(path, ignores) {
+        let content = fs::read_to_string(path).await?;
+        let meta = fs::metadata(path).await?;
+        let version = Version::Fs(meta.modified()?);
+
+        Ok(Some(Note::new(version, content.into())))
+    } else {
+        return Ok(None);
+    }
+}
+
+pub async fn find_notes(root_path: &Path, ignores: &[Pattern]) -> Result<Vec<PathBuf>> {
+    find_notes_inner(root_path, ignores).await
 }
 
 async fn find_notes_inner<'a>(root_path: &Path, ignores: &[Pattern]) -> Result<Vec<PathBuf>> {
@@ -51,7 +108,7 @@ fn is_note_file(path: &Path, ignores: &[Pattern]) -> bool {
     return true;
 }
 
-async fn find_ignores(root_path: &Path) -> Result<Vec<Pattern>> {
+pub async fn find_ignores(root_path: &Path) -> Result<Vec<Pattern>> {
     let supported_ignores = [".ignore", ".gitignore"];
 
     for ignore in &supported_ignores {

@@ -1,8 +1,4 @@
-use std::ops::Range;
-
 pub type NoteID = String;
-
-pub type Span = Range<usize>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Element {

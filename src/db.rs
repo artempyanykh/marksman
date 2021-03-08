@@ -1,121 +1,70 @@
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     hash::Hash,
-    ops::Range,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use anyhow::Result;
-use lsp_types::{Position, SymbolInformation, SymbolKind, Url};
-use tokio::fs;
+use glob::Pattern;
+use lsp_types::{SymbolInformation, Url};
 
 use crate::{
     note::Element,
-    parsing,
-    text::{text_matches_query, OffsetMap},
+    store::{self, Note},
+    text::text_matches_query,
 };
 
-#[derive(Default)]
-pub struct FileIndex {
-    elements: Vec<(Element, Range<usize>)>,
-}
-
-impl FileIndex {
-    pub fn new(text: &str) -> Self {
-        let elements = parsing::scrape(text);
-        Self { elements }
-    }
-}
-
-pub struct Cache<T, V, S> {
-    hydrate_fn: Box<dyn Fn(S) -> V>,
-    inner: HashMap<T, V>,
-}
-
-impl<T: Eq + Hash, V, S: Borrow<str>> Cache<T, V, S> {
-    pub fn new<F: Fn(S) -> V + 'static>(hydrate_fn: F) -> Self {
-        Self {
-            hydrate_fn: Box::new(hydrate_fn),
-            inner: HashMap::new(),
-        }
-    }
-
-    pub fn erase(&mut self, tag: &T) {
-        self.inner.remove(tag);
-    }
-
-    pub fn retrieve(&mut self, tag: T, text: S) -> &V {
-        self.inner.entry(tag).or_insert((self.hydrate_fn)(text))
-    }
-}
-
+#[derive(Debug, Default)]
 pub struct GlobalIndex<T>
 where
     T: Default,
 {
-    content_map: HashMap<T, Arc<str>>,
-    offset_cache: Cache<T, OffsetMap<Arc<str>>, Arc<str>>,
-    file_index_cache: Cache<T, FileIndex, Arc<str>>,
+    notes: HashMap<T, Note>,
 }
 
 impl<T> GlobalIndex<T>
 where
     T: Eq + Hash + Default + std::fmt::Debug + Clone,
 {
-    pub fn empty() -> Self {
-        let offset_cache = Cache::new(OffsetMap::new);
-        let file_index_cache = Cache::new(|rs: Arc<str>| FileIndex::new(rs.borrow()));
-        Self {
-            content_map: HashMap::new(),
-            offset_cache,
-            file_index_cache,
-        }
-    }
-
-    pub fn insert(&mut self, tag: T, content: String) {
-        self.offset_cache.erase(&tag);
-        self.file_index_cache.erase(&tag);
-        self.content_map.insert(tag, content.into());
+    pub fn insert(&mut self, tag: T, note: Note) {
+        self.notes.insert(tag, note);
     }
 }
 
 impl GlobalIndex<PathBuf> {
-    pub async fn from_files(files: &[PathBuf]) -> Result<Self> {
-        let mut empty = Self::empty();
+    pub async fn from_files(files: &[PathBuf], ignores: &[Pattern]) -> Result<Self> {
+        let mut empty = Self::default();
 
         for file in files {
-            empty.with_file(file).await?;
+            empty.with_file(file, ignores).await?;
         }
 
         Ok(empty)
     }
 
-    pub async fn with_file(&mut self, file: &Path) -> Result<()> {
-        let content = fs::read_to_string(file).await?;
-        self.insert(file.to_path_buf(), content);
+    pub async fn with_file(&mut self, file: &Path, ignores: &[Pattern]) -> Result<()> {
+        let note = store::read_note(file, ignores).await?;
+        if let Some(note) = note {
+            self.insert(file.to_path_buf(), note);
+        }
 
         Ok(())
     }
 
-    pub fn headings(&mut self, tag: PathBuf, query: &str) -> Vec<SymbolInformation> {
+    pub fn headings(&self, tag: PathBuf, query: &str) -> Vec<SymbolInformation> {
         let mut symbols = Vec::new();
 
-        let text = match self.content_map.get(&tag) {
+        let note = match self.notes.get(&tag) {
             Some(t) => t,
             _ => return symbols,
         };
 
-        let file_index = self.file_index_cache.retrieve(tag.clone(), text.clone());
-        let line_offset = self.offset_cache.retrieve(tag.clone(), text.clone());
-
-        for (element, span) in &file_index.elements {
+        for (element, span) in note.elements() {
             match element {
                 Element::Heading {
                     text: heading_text, ..
                 } if text_matches_query(heading_text, query) => {
-                    let lsp_range = match line_offset.range_to_lsp_range(span) {
+                    let lsp_range = match note.offsets().range_to_lsp_range(span) {
                         Some(r) => r,
                         _ => continue,
                     };
@@ -138,11 +87,9 @@ impl GlobalIndex<PathBuf> {
         symbols
     }
 
-    pub fn headings_all(&mut self, query: &str) -> Vec<SymbolInformation> {
+    pub fn headings_all(&self, query: &str) -> Vec<SymbolInformation> {
         let mut symbols = Vec::new();
-        let tags: Vec<_> = self.content_map.keys().map(|t| t.to_owned()).collect();
-
-        for tag in &tags {
+        for tag in self.notes.keys() {
             symbols.append(&mut self.headings(tag.clone(), query));
         }
 

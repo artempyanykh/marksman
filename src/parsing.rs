@@ -43,7 +43,9 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
 
 #[cfg(test)]
 mod test {
-    use super::scrape;
+    use anyhow::Result;
+
+    use super::*;
     use std::{error::Error, fs, io, path::PathBuf};
 
     fn read_resource(name: &str) -> io::Result<String> {
@@ -62,5 +64,20 @@ mod test {
         assert_eq!(elements.len(), 3);
 
         Ok(())
+    }
+
+    #[test]
+    fn scrape_eof() {
+        let elements = scrape("#");
+        assert_eq!(
+            elements,
+            vec![(
+                Element::Heading {
+                    level: 1,
+                    text: "#".to_string()
+                },
+                0..1
+            )]
+        );
     }
 }

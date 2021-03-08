@@ -46,10 +46,10 @@ impl Note {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Version {
     Fs(SystemTime),
-    Vs(u32),
+    Vs(i32),
 }
 
 pub async fn read_note(path: &Path, ignores: &[Pattern]) -> Result<Option<Note>> {

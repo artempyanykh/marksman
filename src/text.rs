@@ -11,6 +11,18 @@ where
     line_ranges: Vec<Range<usize>>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Offset {
+    Inner(usize),
+    End,
+}
+
+impl From<usize> for Offset {
+    fn from(v: usize) -> Self {
+        Self::Inner(v)
+    }
+}
+
 impl<T: Borrow<str>> OffsetMap<T> {
     pub fn new(text: T) -> Self {
         let mut line_ranges = Vec::new();
@@ -56,28 +68,35 @@ impl<T: Borrow<str>> OffsetMap<T> {
 
         // Handle a situation when there's no newline at the end
         if let (Some(start), Some((pos, c))) = (line_start, last_char) {
-            line_ranges.push(start..(pos + c.len_utf8()))
+            line_ranges.push(start..(pos + c.len_utf8()));
         }
 
         // Insert an artificial blank line with an empty range
         if let Some((pos, c)) = last_char {
-            line_ranges.push(pos + c.len_utf8()..pos + c.len_utf8())
+            line_ranges.push(pos + c.len_utf8()..pos + c.len_utf8());
+        }
+
+        // Insert an artificial blank line for an empty string
+        if text.borrow().is_empty() {
+            line_ranges.push(0..0);
         }
 
         OffsetMap { text, line_ranges }
     }
 
-    pub fn offset_to_line(&self, offset: usize) -> Option<usize> {
+    fn offset_to_line(&self, offset: usize) -> Option<usize> {
         if offset > self.text.borrow().len() {
             return None;
-        }
-
-        for (idx, range) in self.line_ranges.iter().enumerate() {
-            if offset >= range.start && offset < range.end {
-                return Some(idx);
+        } else if offset == self.text.borrow().len() {
+            Some(self.line_ranges.len().max(2) - 2)
+        } else {
+            for (idx, range) in self.line_ranges.iter().enumerate() {
+                if offset >= range.start && offset < range.end {
+                    return Some(idx);
+                }
             }
+            panic!("Couldn't translate u8 offset {} to line", offset)
         }
-        panic!("Couldn't translate u8 offset {} to line", offset)
     }
 
     pub fn offset_to_lsp_position(&self, offset: usize) -> Option<Position> {
@@ -86,22 +105,24 @@ impl<T: Borrow<str>> OffsetMap<T> {
         let line = self.offset_to_line(offset)?;
         let line_range = self.line_ranges[line].clone();
 
-        let u8_offset = offset - line_range.start;
+        let target_u8_offset = offset - line_range.start;
+        let mut u8_offset = 0;
         let mut u16_offset = 0;
         let mut found = false;
 
-        // Handle the case of artificial blank line
-        if u8_offset == 0 {
-            found = true;
-        }
-
-        for (c_off, c) in text[line_range].char_indices() {
-            if c_off == u8_offset {
+        for c in text[line_range].chars() {
+            if u8_offset == target_u8_offset {
                 found = true;
                 break;
             } else {
+                u8_offset += c.len_utf8();
                 u16_offset += c.len_utf16();
             }
+        }
+
+        // Handle "append"/"after eol" case
+        if !found && u8_offset == target_u8_offset {
+            found = true;
         }
 
         assert!(found, "Offset not found in line");
@@ -114,7 +135,7 @@ impl<T: Borrow<str>> OffsetMap<T> {
         Some(lsp_types::Range::new(start, end))
     }
 
-    pub fn lsp_pos_to_offset(&self, lsp_pos: Position) -> Option<usize> {
+    pub fn lsp_pos_to_offset(&self, lsp_pos: Position) -> Option<Offset> {
         let line_range = self.line_ranges.get(lsp_pos.line as usize)?.to_owned();
 
         let mut u8_offset = line_range.start;
@@ -136,8 +157,13 @@ impl<T: Borrow<str>> OffsetMap<T> {
             }
         }
 
+        // Handle "append" case
+        if !found && u16_offset == lsp_pos.character {
+            return Some(Offset::End);
+        }
+
         assert!(found, "LSP pos not found in line");
-        Some(u8_offset)
+        Some(u8_offset.into())
     }
 }
 
@@ -154,7 +180,19 @@ pub fn apply_change<S: Borrow<str>>(
             let end_offset = orig_map.lsp_pos_to_offset(range.end).unwrap();
 
             let mut new = orig.to_string();
-            new.replace_range(start_offset..end_offset, &patch);
+            match (start_offset, end_offset) {
+                (Offset::Inner(start_offset), Offset::End) => {
+                    new.replace_range(start_offset.., &patch)
+                }
+                (Offset::Inner(start_offset), Offset::Inner(end_offset)) => {
+                    new.replace_range(start_offset..end_offset, &patch)
+                }
+                (Offset::End, Offset::End) => new.push_str(&patch),
+                _ => panic!(
+                    "Bad range from VSCode: {:?} - {:?}",
+                    start_offset, end_offset
+                ),
+            }
             new
         }
     }
@@ -214,6 +252,20 @@ mod tests {
             let offsets = OffsetMap::new(text);
             assert_eq!(offsets.line_ranges, vec![0..4, 4..9, 9..9]);
         }
+
+        #[test]
+        fn eof_to_lsp() {
+            let text = "H";
+            let offsets = OffsetMap::new(text);
+            assert_eq!(offsets.offset_to_lsp_position(1), Some(Position::new(0, 1)));
+        }
+
+        #[test]
+        fn empty_lsp() {
+            let text = "";
+            let offsets = OffsetMap::new(text);
+            assert_eq!(offsets.offset_to_lsp_position(0), Some(Position::new(0, 0)));
+        }
     }
 
     #[test]
@@ -257,6 +309,22 @@ mod tests {
                 "",
             );
             assert_eq!(&replaced, "Hi");
+        }
+
+        #[test]
+        fn at_linend() {
+            //          01
+            let text = "Hi";
+            let replaced = apply_change(
+                text,
+                &OffsetMap::new(text),
+                Some(lsp_types::Range::new(
+                    lsp_types::Position::new(0, 2),
+                    lsp_types::Position::new(0, 2),
+                )),
+                "\n",
+            );
+            assert_eq!(&replaced, "Hi\n");
         }
     }
 }

@@ -29,6 +29,15 @@ where
     pub fn insert(&mut self, tag: T, note: Note) {
         self.notes.insert(tag, note);
     }
+
+    pub fn find(&self, tag: &T) -> Option<&Note> {
+        self.notes.get(tag)
+    }
+
+    pub fn require(&self, tag: &T) -> &Note {
+        self.find(tag)
+            .expect(&format!("Required a note for non-existent tag: {:?}", tag))
+    }
 }
 
 impl GlobalIndex<PathBuf> {

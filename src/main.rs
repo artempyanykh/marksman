@@ -2,16 +2,15 @@ use anyhow::{anyhow, Result};
 use tracing::{debug, info, Level};
 
 use lsp_types::{
-    notification::DidChangeTextDocument,
+    notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{DocumentSymbolRequest, WorkspaceSymbol},
-    DidChangeTextDocumentParams, DocumentSymbolResponse, InitializeParams, OneOf,
-    ServerCapabilities,
+    InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
-use zeta_note::{db, store};
+use zeta_note::{db, ls, store};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,6 +27,9 @@ async fn main() -> Result<()> {
     let mut server_capabilities = ServerCapabilities::default();
     server_capabilities.document_symbol_provider = Some(OneOf::Left(true));
     server_capabilities.workspace_symbol_provider = Some(OneOf::Left(true));
+    server_capabilities.text_document_sync = Some(TextDocumentSyncCapability::Kind(
+        TextDocumentSyncKind::Incremental,
+    ));
 
     let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
@@ -96,7 +98,45 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
             }
             Message::Notification(not) => {
                 debug!("Got notification: {:?}", not);
-                if let Ok(params) = cast_n::<DidChangeTextDocument>(not) {}
+
+                if let Ok(params) = cast_n::<DidOpenTextDocument>(not.clone()) {
+                    debug!("Got didOpen notification: {:?}", params);
+
+                    let path = params
+                        .text_document
+                        .uri
+                        .to_file_path()
+                        .expect("Failed to turn uri into path");
+                    let note = ls::note_open(&params.text_document);
+                    index.insert(path, note);
+                }
+
+                if let Ok(params) = cast_n::<DidCloseTextDocument>(not.clone()) {
+                    debug!("Got didClose notification: {:?}", params);
+
+                    let path = params
+                        .text_document
+                        .uri
+                        .to_file_path()
+                        .expect("Failed to turn uri into path");
+                    let note = ls::note_close(&params.text_document, &ignores).await?;
+                    if let Some(note) = note {
+                        index.insert(path, note);
+                    }
+                }
+
+                if let Ok(params) = cast_n::<DidChangeTextDocument>(not.clone()) {
+                    debug!("Got didChange notification: {:?}", params);
+
+                    let path = params
+                        .text_document
+                        .uri
+                        .to_file_path()
+                        .expect("Failed to turn uri into path");
+                    let existing_note = index.require(&path);
+                    let updated_note = ls::note_apply_changes(existing_note, &params);
+                    index.insert(path, updated_note);
+                }
             }
         }
     }

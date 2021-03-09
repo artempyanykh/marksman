@@ -9,7 +9,7 @@ use glob::Pattern;
 use lsp_types::{SymbolInformation, Url};
 
 use crate::{
-    note::Element,
+    note::{Element, Heading},
     store::{self, Note},
     text::text_matches_query,
 };
@@ -71,9 +71,9 @@ impl GlobalIndex<PathBuf> {
 
         for (element, span) in note.elements() {
             match element {
-                Element::Heading {
+                Element::Heading(Heading {
                     text: heading_text, ..
-                } if text_matches_query(heading_text, query) => {
+                }) if text_matches_query(heading_text.as_str(), query) => {
                     let lsp_range = match note.offsets().range_to_lsp_range(span) {
                         Some(r) => r,
                         _ => continue,

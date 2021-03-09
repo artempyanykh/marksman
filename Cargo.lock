@@ -1010,6 +1010,7 @@ dependencies = [
  "lsp-types",
  "once_cell",
  "pulldown-cmark",
+ "regex",
  "serde",
  "serde_json",
  "tokio",

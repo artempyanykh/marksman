@@ -13,7 +13,7 @@ use tokio::fs;
 use tracing::debug;
 
 use crate::{
-    parsing::{self, ElementWithLoc},
+    note::{self, ElementWithLoc},
     text::OffsetMap,
 };
 
@@ -42,7 +42,7 @@ impl Note {
 
     pub fn elements(&self) -> &[ElementWithLoc] {
         self.lazy_elements
-            .get_or_init(|| parsing::scrape(self.content.borrow()))
+            .get_or_init(|| note::scrape(self.content.borrow()))
     }
 }
 

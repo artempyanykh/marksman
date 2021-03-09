@@ -4,6 +4,7 @@ use glob::Pattern;
 use once_cell::sync::OnceCell;
 use std::{
     borrow::Borrow,
+    ops::Range,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -67,6 +68,13 @@ impl Note {
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn heading_with_text(&self, text: &str) -> Option<(&Heading, &Range<usize>)> {
+        self.elements().iter().find_map(|el| match el {
+            (Element::Heading(hd), span) if hd.text.contains(text) => Some((hd, span)),
+            _ => None,
+        })
     }
 
     pub fn element_at_offset(&self, offset: usize) -> Option<&ElementWithLoc> {

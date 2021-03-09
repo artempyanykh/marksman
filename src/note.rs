@@ -17,7 +17,8 @@ pub type ElementWithLoc = (Element, Range<usize>);
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Element {
     Heading(Heading),
-    Link(Link),
+    LinkRegular(LinkRegular),
+    LinkRef(LinkRef),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -28,55 +29,55 @@ pub struct Heading {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Link {
-    Ref {
-        text: String,
-        note_id: Option<String>,
-        heading: Option<String>,
-    },
-    Regular {
-        text: String,
-        dest: Option<String>,
-        title: Option<String>,
-    },
+pub struct LinkRef {
+    pub text: String,
+    pub note_id: Option<String>,
+    pub heading: Option<String>,
 }
 
-impl Link {
-    pub fn parse(text: &str, dest: CowStr, title: CowStr) -> Link {
-        let ref_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
-        match ref_link_regex.captures(text) {
-            Some(captures) => {
-                let text = text.to_string();
-                let note_id = captures
-                    .get(1)
-                    .map(|m| m.as_str().to_string())
-                    .filter(|s| !s.is_empty());
-                let heading = captures
-                    .get(3)
-                    .map(|m| m.as_str().to_string())
-                    .filter(|s| !s.is_empty());
-                Link::Ref {
-                    text,
-                    note_id,
-                    heading,
-                }
-            }
-            _ => {
-                let text = text.to_string();
-                let dest = if dest.is_empty() {
-                    None
-                } else {
-                    Some(dest.to_string())
-                };
-                let title = if title.is_empty() {
-                    None
-                } else {
-                    Some(title.to_string())
-                };
-                Link::Regular { text, dest, title }
-            }
-        }
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct LinkRegular {
+    text: String,
+    dest: Option<String>,
+    title: Option<String>,
+}
+
+pub fn parse_link_ref(text: &str, dest: CowStr, title: CowStr) -> Option<LinkRef> {
+    let ref_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
+
+    if let Some(captures) = ref_link_regex.captures(text) {
+        let text = text.to_string();
+        let note_id = captures
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .filter(|s| !s.is_empty());
+        let heading = captures
+            .get(3)
+            .map(|m| m.as_str().to_string())
+            .filter(|s| !s.is_empty());
+        Some(LinkRef {
+            text,
+            note_id,
+            heading,
+        })
+    } else {
+        None
     }
+}
+
+pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> LinkRegular {
+    let text = text.to_string();
+    let dest = if dest.is_empty() {
+        None
+    } else {
+        Some(dest.to_string())
+    };
+    let title = if title.is_empty() {
+        None
+    } else {
+        Some(title.to_string())
+    };
+    LinkRegular { text, dest, title }
 }
 
 pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
@@ -121,8 +122,12 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
                 | LinkType::Shortcut
                 | LinkType::ShortcutUnknown => {
                     let link_text = text[el_span.start..el_span.end].trim();
-                    let link = Link::parse(link_text, dest, title);
-                    elements.push((Element::Link(link), el_span));
+                    let link = parse_link_ref(link_text, dest.clone(), title.clone())
+                        .map(|r| Element::LinkRef(r))
+                        .unwrap_or_else(|| {
+                            Element::LinkRegular(parse_link_regular(link_text, dest, title))
+                        });
+                    elements.push((link, el_span));
                 }
                 _ => (),
             },
@@ -210,8 +215,8 @@ mod test {
         150..171,
     ),
     (
-        Link(
-            Ref {
+        LinkRef(
+            LinkRef {
                 text: "[:noteid]",
                 note_id: Some(
                     "noteid",
@@ -222,8 +227,8 @@ mod test {
         196..205,
     ),
     (
-        Link(
-            Ref {
+        LinkRef(
+            LinkRef {
                 text: "[:@# Some text in heading 1]",
                 note_id: None,
                 heading: Some(
@@ -234,8 +239,8 @@ mod test {
         235..263,
     ),
     (
-        Link(
-            Ref {
+        LinkRef(
+            LinkRef {
                 text: "[:othernote@#Some heading]",
                 note_id: Some(
                     "othernote",
@@ -248,8 +253,8 @@ mod test {
         301..327,
     ),
     (
-        Link(
-            Ref {
+        LinkRef(
+            LinkRef {
                 text: "[:othernote@]",
                 note_id: Some(
                     "othernote",
@@ -260,8 +265,8 @@ mod test {
         372..385,
     ),
     (
-        Link(
-            Regular {
+        LinkRegular(
+            LinkRegular {
                 text: "[foo][bar]",
                 dest: Some(
                     "https://bar.com",
@@ -272,8 +277,8 @@ mod test {
         411..421,
     ),
     (
-        Link(
-            Regular {
+        LinkRegular(
+            LinkRegular {
                 text: "[foo][non-existent]",
                 dest: None,
                 title: None,
@@ -282,8 +287,8 @@ mod test {
         450..469,
     ),
     (
-        Link(
-            Regular {
+        LinkRegular(
+            LinkRegular {
                 text: "[bar]",
                 dest: Some(
                     "https://bar.com",
@@ -294,8 +299,8 @@ mod test {
         498..503,
     ),
     (
-        Link(
-            Regular {
+        LinkRegular(
+            LinkRegular {
                 text: "[foo]",
                 dest: None,
                 title: None,
@@ -304,8 +309,8 @@ mod test {
         537..542,
     ),
     (
-        Link(
-            Ref {
+        LinkRef(
+            LinkRef {
                 text: "[:]",
                 note_id: None,
                 heading: None,

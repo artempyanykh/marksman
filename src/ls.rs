@@ -77,11 +77,11 @@ pub fn completion_candidates(
 
         for (tag, note) in index.notes() {
             if note.title().is_some()
-                && text::text_matches_query(note.title().unwrap(), &partial_input)
+                && text::text_matches_query(&note.title().unwrap().text, &partial_input)
             {
                 let id = note::note_id_from_path(tag, root);
                 candidates.push(CompletionItem {
-                    label: note.title().unwrap().to_string(),
+                    label: note.title().unwrap().text.clone(),
                     kind: Some(lsp_types::CompletionItemKind::File),
                     detail: Some(id.clone()),
                     insert_text: Some(id),

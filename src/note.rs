@@ -14,19 +14,20 @@ pub fn note_id_from_path(path: &Path, root: &Path) -> NoteID {
 
 pub type ElementWithLoc = (Element, Range<usize>);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Element {
     Heading(Heading),
     Link(Link),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Heading {
     pub level: u8,
     pub text: String,
+    pub scope: Range<usize>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Link {
     Ref {
         text: String,
@@ -83,21 +84,33 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
     let parser = Parser::new_with_broken_link_callback(text, Options::all(), Some(&mut callback));
     let mut elements = Vec::new();
 
-    for (event, span) in parser.into_offset_iter() {
+    let mut scoped_headings: Vec<(u8, String, Range<usize>)> = Vec::new();
+
+    for (event, el_span) in parser.into_offset_iter() {
         match event {
             Event::Start(Tag::Heading(level)) => {
-                let heading_text = &text[span.start..span.end];
+                let heading_text = &text[el_span.start..el_span.end];
 
                 // Trim newlines, whitespaces on the right
-                let trim_right_text = heading_text.trim_end();
+                let trim_right_text = heading_text.trim_end().to_string();
                 let trimmed_on_right = heading_text.len() - trim_right_text.len();
-                let heading_span = span.start..(span.end - trimmed_on_right);
+                let heading_span = el_span.start..(el_span.end - trimmed_on_right);
 
-                let heading = Element::Heading(Heading {
-                    level: level as u8,
-                    text: trim_right_text.to_string(),
-                });
-                elements.push((heading, heading_span));
+                while let Some(last) = scoped_headings.last() {
+                    if last.0 > level as u8 {
+                        let last = scoped_headings.pop().unwrap();
+                        let heading = Heading {
+                            level: last.0,
+                            text: last.1,
+                            scope: last.2.start..el_span.start,
+                        };
+                        elements.push((Element::Heading(heading), last.2));
+                    } else {
+                        break;
+                    }
+                }
+
+                scoped_headings.push((level as u8, trim_right_text, heading_span));
             }
             Event::Start(Tag::Link(typ, dest, title)) => match typ {
                 LinkType::Inline
@@ -107,15 +120,26 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
                 | LinkType::CollapsedUnknown
                 | LinkType::Shortcut
                 | LinkType::ShortcutUnknown => {
-                    let link_text = text[span.start..span.end].trim();
+                    let link_text = text[el_span.start..el_span.end].trim();
                     let link = Link::parse(link_text, dest, title);
-                    elements.push((Element::Link(link), span));
+                    elements.push((Element::Link(link), el_span));
                 }
                 _ => (),
             },
             _ => (),
         }
     }
+
+    for remaining in scoped_headings {
+        let heading = Heading {
+            level: remaining.0,
+            text: remaining.1,
+            scope: remaining.2.start..text.len(),
+        };
+        elements.push((Element::Heading(heading), remaining.2));
+    }
+
+    elements.sort_by_key(|(_, span)| span.start);
 
     elements
 }
@@ -150,6 +174,7 @@ mod test {
             Heading {
                 level: 1,
                 text: "# Some text in heading 1",
+                scope: 28..634,
             },
         ),
         28..52,
@@ -159,6 +184,7 @@ mod test {
             Heading {
                 level: 2,
                 text: "## Some text in heading 1-2",
+                scope: 56..118,
             },
         ),
         56..83,
@@ -168,6 +194,7 @@ mod test {
             Heading {
                 level: 1,
                 text: "#     Some text in heading 2",
+                scope: 118..634,
             },
         ),
         118..146,
@@ -177,6 +204,7 @@ mod test {
             Heading {
                 level: 2,
                 text: "## Heading with links",
+                scope: 150..634,
             },
         ),
         150..171,
@@ -300,7 +328,8 @@ mod test {
             vec![(
                 Element::Heading(Heading {
                     level: 1,
-                    text: "#".to_string()
+                    text: "#".to_string(),
+                    scope: 0..1
                 }),
                 0..1
             )]

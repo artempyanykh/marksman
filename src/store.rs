@@ -23,7 +23,7 @@ pub struct Note {
     pub content: Arc<str>,
     lazy_offsets: OnceCell<OffsetMap<Arc<str>>>,
     lazy_elements: OnceCell<Vec<ElementWithLoc>>,
-    lazy_title: OnceCell<Option<String>>,
+    lazy_title: OnceCell<Option<Heading>>,
 }
 
 impl Note {
@@ -47,21 +47,16 @@ impl Note {
             .get_or_init(|| note::scrape(self.content.borrow()))
     }
 
-    pub fn title(&self) -> Option<&str> {
+    pub fn title(&self) -> Option<&Heading> {
         let title = self.lazy_title.get_or_init(|| {
             let elements = self.elements();
             elements.iter().find_map(|el| match el {
-                (Element::Heading(Heading { level, text }), _) if *level == 1 => {
-                    Some(text.to_string())
-                }
+                (Element::Heading(hd), _) if hd.level == 1 => Some(hd.clone()),
                 _ => None,
             })
         });
 
-        match title {
-            Some(s) => Some(s.as_str()),
-            _ => None,
-        }
+        title.as_ref()
     }
 
     pub fn headings(&self) -> Vec<&Heading> {

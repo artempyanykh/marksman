@@ -6,17 +6,17 @@ use std::{
 use anyhow::Result;
 use glob::Pattern;
 use lsp_types::{
-    CompletionItem, DidChangeTextDocumentParams, Documentation, Hover, HoverContents,
-    MarkupContent, TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
+    CompletionItem, DidChangeTextDocumentParams, Documentation, Hover, HoverContents, Location,
+    MarkupContent, TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Url,
 };
 use serde::{Deserialize, Serialize};
 use serde_json;
-use text::text_matches_query;
+
 use tracing::debug;
 
 use crate::{
     db::GlobalIndex,
-    note::{self, Element, LinkRef, NoteID},
+    note::{self, Element, NoteID},
     store::{self, Note, Version},
     text,
 };
@@ -87,7 +87,7 @@ pub fn completion_candidates(
                 continue;
             }
 
-            if let Some(title) = note.title() {
+            if let Some((title, _)) = note.title() {
                 if !text::text_matches_query(&title.text, &partial_input) {
                     continue;
                 }
@@ -234,6 +234,42 @@ pub fn hover(
 
         return Some(Hover {
             contents: HoverContents::Markup(markup),
+            range,
+        });
+    }
+
+    None
+}
+
+pub fn goto_definition(
+    root: &Path,
+    index: &GlobalIndex<PathBuf>,
+    path: &PathBuf,
+    pos: &lsp_types::Position,
+) -> Option<Location> {
+    let note = index.find(path)?;
+    let (encl_el, _) = note.element_at_pos(pos)?;
+
+    if let Element::LinkRef(link_ref) = encl_el {
+        let target_note_id = link_ref
+            .note_id
+            .clone()
+            .unwrap_or_else(|| note::note_id_from_path(path, root));
+
+        let target_tag = root.join(target_note_id).with_extension("md");
+        let target_note = index.find(&target_tag)?;
+        let (_, target_span) = if let Some(link_heading) = &link_ref.heading {
+            target_note.heading_with_text(link_heading)?
+        } else {
+            target_note.title()?
+        };
+        let range = target_note
+            .offsets()
+            .range_to_lsp_range(target_span)
+            .unwrap();
+
+        return Some(Location {
+            uri: Url::from_file_path(&target_tag).unwrap(),
             range,
         });
     }

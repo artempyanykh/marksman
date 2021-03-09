@@ -24,7 +24,7 @@ pub struct Note {
     pub content: Arc<str>,
     lazy_offsets: OnceCell<OffsetMap<Arc<str>>>,
     lazy_elements: OnceCell<Vec<ElementWithLoc>>,
-    lazy_title: OnceCell<Option<Heading>>,
+    lazy_title: OnceCell<Option<(Heading, Range<usize>)>>,
 }
 
 impl Note {
@@ -48,16 +48,19 @@ impl Note {
             .get_or_init(|| note::scrape(self.content.borrow()))
     }
 
-    pub fn title(&self) -> Option<&Heading> {
+    pub fn title(&self) -> Option<(&Heading, &Range<usize>)> {
         let title = self.lazy_title.get_or_init(|| {
             let elements = self.elements();
             elements.iter().find_map(|el| match el {
-                (Element::Heading(hd), _) if hd.level == 1 => Some(hd.clone()),
+                (Element::Heading(hd), span) if hd.level == 1 => Some((hd.clone(), span.clone())),
                 _ => None,
             })
         });
 
-        title.as_ref()
+        match title {
+            Some((heading, span)) => Some((heading, span)),
+            _ => None,
+        }
     }
 
     pub fn headings(&self) -> Vec<&Heading> {

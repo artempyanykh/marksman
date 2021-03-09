@@ -42,7 +42,7 @@ pub struct LinkRegular {
     title: Option<String>,
 }
 
-pub fn parse_link_ref(text: &str, dest: CowStr, title: CowStr) -> Option<LinkRef> {
+pub fn parse_link_ref(text: &str) -> Option<LinkRef> {
     let ref_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
 
     if let Some(captures) = ref_link_regex.captures(text) {
@@ -122,7 +122,7 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
                 | LinkType::Shortcut
                 | LinkType::ShortcutUnknown => {
                     let link_text = text[el_span.start..el_span.end].trim();
-                    let link = parse_link_ref(link_text, dest.clone(), title.clone())
+                    let link = parse_link_ref(link_text)
                         .map(|r| Element::LinkRef(r))
                         .unwrap_or_else(|| {
                             Element::LinkRegular(parse_link_regular(link_text, dest, title))

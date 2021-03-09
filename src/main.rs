@@ -4,10 +4,11 @@ use tracing::{debug, info, Level};
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
-        Completion, DocumentSymbolRequest, HoverRequest, ResolveCompletionItem, WorkspaceSymbol,
+        Completion, DocumentSymbolRequest, GotoDefinition, HoverRequest, ResolveCompletionItem,
+        WorkspaceSymbol,
     },
-    CompletionOptions, CompletionResponse, HoverProviderCapability, InitializeParams, OneOf,
-    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    CompletionOptions, CompletionResponse, GotoDefinitionResponse, HoverProviderCapability,
+    InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
@@ -39,6 +40,7 @@ async fn main() -> Result<()> {
         ..CompletionOptions::default()
     });
     server_capabilities.hover_provider = Some(HoverProviderCapability::Simple(true));
+    server_capabilities.definition_provider = Some(OneOf::Left(true));
 
     let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
@@ -146,6 +148,26 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                     let position = params.text_document_position_params.position;
                     let hover = ls::hover(&root_path, &index, &path, &position);
                     let result = serde_json::to_value(hover).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<GotoDefinition>(req.clone()) {
+                    let path = params
+                        .text_document_position_params
+                        .text_document
+                        .uri
+                        .to_file_path()
+                        .unwrap();
+                    let position = params.text_document_position_params.position;
+                    let result = ls::goto_definition(&root_path, &index, &path, &position)
+                        .map(|loc| GotoDefinitionResponse::Scalar(loc));
+                    let result = serde_json::to_value(result).unwrap();
                     let resp = Response {
                         id,
                         result: Some(result),

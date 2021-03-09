@@ -13,8 +13,8 @@ use tokio::fs;
 use tracing::debug;
 
 use crate::{
-    note::{self, ElementWithLoc},
-    text::OffsetMap,
+    note::{self, Element, ElementWithLoc, Heading},
+    text::{Offset, OffsetMap},
 };
 
 #[derive(Debug)]
@@ -23,15 +23,17 @@ pub struct Note {
     pub content: Arc<str>,
     lazy_offsets: OnceCell<OffsetMap<Arc<str>>>,
     lazy_elements: OnceCell<Vec<ElementWithLoc>>,
+    lazy_title: OnceCell<Option<String>>,
 }
 
 impl Note {
     pub fn new(version: Version, content: Arc<str>) -> Self {
         Self {
             version,
-            content: content.clone(),
+            content: content,
             lazy_offsets: OnceCell::new(),
             lazy_elements: OnceCell::new(),
+            lazy_title: OnceCell::new(),
         }
     }
 
@@ -43,6 +45,47 @@ impl Note {
     pub fn elements(&self) -> &[ElementWithLoc] {
         self.lazy_elements
             .get_or_init(|| note::scrape(self.content.borrow()))
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        let title = self.lazy_title.get_or_init(|| {
+            let elements = self.elements();
+            elements.iter().find_map(|el| match el {
+                (Element::Heading(Heading { level, text }), _) if *level == 1 => {
+                    Some(text.to_string())
+                }
+                _ => None,
+            })
+        });
+
+        match title {
+            Some(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn headings(&self) -> Vec<&Heading> {
+        self.elements()
+            .iter()
+            .filter_map(|el| match el {
+                (Element::Heading(hd), _) => Some(hd),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn element_at_offset(&self, offset: usize) -> Option<&ElementWithLoc> {
+        self.elements()
+            .iter()
+            .find(|(_, span)| span.contains(&offset))
+    }
+
+    pub fn element_at_pos(&self, pos: &lsp_types::Position) -> Option<&ElementWithLoc> {
+        let offset = match self.offsets().lsp_pos_to_offset(pos) {
+            Some(Offset::Inner(off)) => off,
+            _ => return None,
+        };
+        self.element_at_offset(offset)
     }
 }
 

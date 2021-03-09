@@ -135,7 +135,7 @@ impl<T: Borrow<str>> OffsetMap<T> {
         Some(lsp_types::Range::new(start, end))
     }
 
-    pub fn lsp_pos_to_offset(&self, lsp_pos: Position) -> Option<Offset> {
+    pub fn lsp_pos_to_offset(&self, lsp_pos: &Position) -> Option<Offset> {
         let line_range = self.line_ranges.get(lsp_pos.line as usize)?.to_owned();
 
         let mut u8_offset = line_range.start;
@@ -176,8 +176,8 @@ pub fn apply_change<S: Borrow<str>>(
     match range {
         None => patch.to_string(),
         Some(range) => {
-            let start_offset = orig_map.lsp_pos_to_offset(range.start).unwrap();
-            let end_offset = orig_map.lsp_pos_to_offset(range.end).unwrap();
+            let start_offset = orig_map.lsp_pos_to_offset(&range.start).unwrap();
+            let end_offset = orig_map.lsp_pos_to_offset(&range.end).unwrap();
 
             let mut new = orig.to_string();
             match (start_offset, end_offset) {
@@ -199,6 +199,10 @@ pub fn apply_change<S: Borrow<str>>(
 }
 
 pub fn text_matches_query(text: &str, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+
     let text = text.to_lowercase();
     let query = query.to_lowercase();
 

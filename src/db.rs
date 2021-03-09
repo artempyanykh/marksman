@@ -36,7 +36,11 @@ where
 
     pub fn require(&self, tag: &T) -> &Note {
         self.find(tag)
-            .expect(&format!("Required a note for non-existent tag: {:?}", tag))
+            .unwrap_or_else(|| panic!("Required a note for non-existent tag: {:?}", tag))
+    }
+
+    pub fn notes(&self) -> impl Iterator<Item = (&T, &Note)> {
+        self.notes.iter()
     }
 }
 

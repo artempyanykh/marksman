@@ -3,8 +3,9 @@ use tracing::{debug, info, Level};
 
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-    request::{DocumentSymbolRequest, WorkspaceSymbol},
-    InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    request::{Completion, DocumentSymbolRequest, WorkspaceSymbol},
+    CompletionOptions, CompletionResponse, InitializeParams, OneOf, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
@@ -30,6 +31,10 @@ async fn main() -> Result<()> {
     server_capabilities.text_document_sync = Some(TextDocumentSyncCapability::Kind(
         TextDocumentSyncKind::Incremental,
     ));
+    server_capabilities.completion_provider = Some(CompletionOptions {
+        trigger_characters: Some(vec![":".to_string(), "@".to_string()]),
+        ..CompletionOptions::default()
+    });
 
     let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
@@ -83,6 +88,27 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                 if let Ok((id, params)) = cast_r::<WorkspaceSymbol>(req.clone()) {
                     debug!("Got workspaceSymbol request #{}: {:?}", id, params);
                     let result = Some(index.headings_all(&params.query));
+                    let result = serde_json::to_value(&result).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<Completion>(req.clone()) {
+                    let path = params
+                        .text_document_position
+                        .text_document
+                        .uri
+                        .to_file_path()
+                        .unwrap();
+                    let pos = params.text_document_position.position;
+                    let candidates = ls::completion_candidates(&root_path, &index, &path, &pos)
+                        .unwrap_or_default();
+                    let result = Some(CompletionResponse::Array(candidates));
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,

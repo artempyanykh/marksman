@@ -12,9 +12,10 @@ Some text under heading 1-2
 
 This is a cross link [:noteid].
 
-This is an internal link [:# Some text in heading 1].
+This is an internal link [:@# Some text in heading 1].
 
-This is an cross link to heading [:othernote#Some heading].
+This is an cross link to heading [:othernote@#Some heading].
+This is an incomple cross link to heading [:othernote@].
 
 
 This is a link ref [foo][bar].

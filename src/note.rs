@@ -1,10 +1,17 @@
 use regex::Regex;
 
-use std::ops::Range;
+use std::{ops::Range, path::Path};
 
 use pulldown_cmark::{BrokenLink, CowStr, Event, LinkType, Options, Parser, Tag};
 
 pub type NoteID = String;
+
+pub fn note_id_from_path(path: &Path, root: &Path) -> NoteID {
+    let rel = path.strip_prefix(root).unwrap();
+    let stem = rel.with_extension("");
+    stem.to_string_lossy().to_string()
+}
+
 pub type ElementWithLoc = (Element, Range<usize>);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -35,7 +42,7 @@ pub enum Link {
 
 impl Link {
     pub fn parse(text: &str, dest: CowStr, title: CowStr) -> Link {
-        let ref_link_regex = Regex::new(r"^\[:([^#]*)(#.*)?\]$").unwrap();
+        let ref_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
         match ref_link_regex.captures(text) {
             Some(captures) => {
                 let text = text.to_string();
@@ -44,7 +51,7 @@ impl Link {
                     .map(|m| m.as_str().to_string())
                     .filter(|s| !s.is_empty());
                 let heading = captures
-                    .get(2)
+                    .get(3)
                     .map(|m| m.as_str().to_string())
                     .filter(|s| !s.is_empty());
                 Link::Ref {
@@ -119,7 +126,7 @@ mod test {
 
     use super::*;
     use k9::{assert_equal, snapshot};
-    use std::{error::Error, fs, io, path::PathBuf};
+    use std::{fs, io, path::PathBuf};
 
     fn read_resource(name: &str) -> io::Result<String> {
         let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -131,7 +138,7 @@ mod test {
     }
 
     #[test]
-    fn scrape_headings() -> Result<(), Box<dyn Error>> {
+    fn scrape_note() -> Result<()> {
         let text = read_resource("example1.md")?;
         let elements = scrape(&text);
         snapshot!(
@@ -189,19 +196,19 @@ mod test {
     (
         Link(
             Ref {
-                text: "[:# Some text in heading 1]",
+                text: "[:@# Some text in heading 1]",
                 note_id: None,
                 heading: Some(
                     "# Some text in heading 1",
                 ),
             },
         ),
-        235..262,
+        235..263,
     ),
     (
         Link(
             Ref {
-                text: "[:othernote#Some heading]",
+                text: "[:othernote@#Some heading]",
                 note_id: Some(
                     "othernote",
                 ),
@@ -210,7 +217,19 @@ mod test {
                 ),
             },
         ),
-        300..325,
+        301..327,
+    ),
+    (
+        Link(
+            Ref {
+                text: "[:othernote@]",
+                note_id: Some(
+                    "othernote",
+                ),
+                heading: None,
+            },
+        ),
+        372..385,
     ),
     (
         Link(
@@ -222,7 +241,7 @@ mod test {
                 title: None,
             },
         ),
-        351..361,
+        411..421,
     ),
     (
         Link(
@@ -232,7 +251,7 @@ mod test {
                 title: None,
             },
         ),
-        390..409,
+        450..469,
     ),
     (
         Link(
@@ -244,7 +263,7 @@ mod test {
                 title: None,
             },
         ),
-        438..443,
+        498..503,
     ),
     (
         Link(
@@ -254,7 +273,7 @@ mod test {
                 title: None,
             },
         ),
-        477..482,
+        537..542,
     ),
     (
         Link(
@@ -264,7 +283,7 @@ mod test {
                 heading: None,
             },
         ),
-        542..545,
+        602..605,
     ),
 ]
 "###

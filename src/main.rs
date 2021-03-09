@@ -3,7 +3,7 @@ use tracing::{debug, info, Level};
 
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-    request::{Completion, DocumentSymbolRequest, WorkspaceSymbol},
+    request::{Completion, DocumentSymbolRequest, ResolveCompletionItem, WorkspaceSymbol},
     CompletionOptions, CompletionResponse, InitializeParams, OneOf, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind,
 };
@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
     ));
     server_capabilities.completion_provider = Some(CompletionOptions {
         trigger_characters: Some(vec![":".to_string(), "@".to_string()]),
+        resolve_provider: Some(true),
         ..CompletionOptions::default()
     });
 
@@ -110,6 +111,19 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                         .unwrap_or_default();
                     let result = Some(CompletionResponse::Array(candidates));
                     let result = serde_json::to_value(&result).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<ResolveCompletionItem>(req.clone()) {
+                    let resolved = ls::completion_resolve(&root_path, &index, &params)
+                        .unwrap_or_else(|| params.clone());
+                    let result = serde_json::to_value(resolved).unwrap();
                     let resp = Response {
                         id,
                         result: Some(result),

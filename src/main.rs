@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
-use tracing::{debug, info, Level};
+use tracing::{info, Level};
 
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
@@ -13,7 +15,7 @@ use lsp_types::{
     TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
-use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
+use lsp_server::{Connection, Message, Notification, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
 use zeta_note::{db, ls, store};
@@ -56,14 +58,16 @@ async fn main() -> Result<()> {
     let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
 
-    main_loop(&connection, initialization_params).await?;
+    main_loop(connection, initialization_params).await?;
     io_threads.join()?;
 
     info!("Shutting down zeta-note LSP server");
     Ok(())
 }
 
-async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result<()> {
+async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<()> {
+    let connection = Arc::new(connection);
+
     let params: InitializeParams = serde_json::from_value(params).unwrap();
     let root_uri = params.root_uri.ok_or(anyhow!("Expected a `rootUri`"))?;
     let root_path = root_uri
@@ -78,18 +82,38 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
 
     let mut index = db::GlobalIndex::from_files(&note_files, &ignores).await?;
 
+    let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(10);
+    let mut last_note_count = index.notes().count();
+    pending_not_tx
+        .send(ls::status_notification(last_note_count))
+        .await?;
+
+    let not_connection = connection.clone();
+    let not_handle = tokio::spawn(async move {
+        while let Some(not) = pending_not_rx.recv().await {
+            not_connection
+                .sender
+                .send(Message::Notification(not))
+                .unwrap_or(());
+        }
+    });
+
     for msg in &connection.receiver {
-        debug!("Got msg: {:?}", msg);
+        let current_notes_count = index.notes().count();
+        if current_notes_count != last_note_count {
+            pending_not_tx
+                .send(ls::status_notification(current_notes_count))
+                .await?;
+            last_note_count = current_notes_count;
+        }
 
         match msg {
             Message::Request(req) => {
                 if connection.handle_shutdown(&req)? {
                     return Ok(());
                 }
-                debug!("Got request: {:?}", req);
 
                 if let Ok((id, params)) = cast_r::<DocumentSymbolRequest>(req.clone()) {
-                    debug!("Got documentSymbol request #{}: {:?}", id, params);
                     let file = params.text_document.uri.to_file_path().unwrap();
                     let result = Some(index.headings(file, ""));
                     let result = serde_json::to_value(&result).unwrap();
@@ -103,7 +127,6 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                 }
 
                 if let Ok((id, params)) = cast_r::<WorkspaceSymbol>(req.clone()) {
-                    debug!("Got workspaceSymbol request #{}: {:?}", id, params);
                     let result = Some(index.headings_all(&params.query));
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
@@ -227,15 +250,9 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                     continue;
                 }
             }
-            Message::Response(resp) => {
-                debug!("Got response: {:?}", resp);
-            }
+            Message::Response(_) => {}
             Message::Notification(not) => {
-                debug!("Got notification: {:?}", not);
-
                 if let Ok(params) = cast_n::<DidOpenTextDocument>(not.clone()) {
-                    debug!("Got didOpen notification: {:?}", params);
-
                     let path = params
                         .text_document
                         .uri
@@ -246,8 +263,6 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                 }
 
                 if let Ok(params) = cast_n::<DidCloseTextDocument>(not.clone()) {
-                    debug!("Got didClose notification: {:?}", params);
-
                     let path = params
                         .text_document
                         .uri
@@ -260,8 +275,6 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                 }
 
                 if let Ok(params) = cast_n::<DidChangeTextDocument>(not.clone()) {
-                    debug!("Got didChange notification: {:?}", params);
-
                     let path = params
                         .text_document
                         .uri
@@ -274,10 +287,14 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
             }
         }
     }
+
+    not_handle.abort();
+    not_handle.await?;
+
     Ok(())
 }
 
-fn cast_r<R>(req: Request) -> Result<(RequestId, R::Params), Request>
+fn cast_r<R>(req: lsp_server::Request) -> Result<(RequestId, R::Params), lsp_server::Request>
 where
     R: lsp_types::request::Request,
     R::Params: serde::de::DeserializeOwned,

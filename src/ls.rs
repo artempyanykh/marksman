@@ -55,6 +55,14 @@ pub async fn note_close(id: &TextDocumentIdentifier, ignores: &[Pattern]) -> Res
     store::read_note(&path, ignores).await
 }
 
+pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
+    let value = serde_json::json!({"ok": true, "notes": num_notes});
+    lsp_server::Notification {
+        method: "zeta-note/status".to_string(),
+        params: value,
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Clone)]
 pub enum CompletionType {
     NoteCompletion { note_id: NoteID },

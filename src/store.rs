@@ -93,6 +93,24 @@ impl Note {
         };
         self.element_at_offset(offset)
     }
+
+    pub fn elements_in_span(&self, range: &Range<Offset>) -> Vec<&ElementWithLoc> {
+        let target_span =
+            range.start.to_usize(self.content.len())..range.end.to_usize(self.content.len());
+        let mut elements_in_offsets = Vec::new(); // strict inclusion
+        for e in self.elements() {
+            if target_span.contains(&e.1.start) && target_span.contains(&e.1.end) {
+                elements_in_offsets.push(e);
+            }
+        }
+        elements_in_offsets
+    }
+
+    pub fn elements_in_range(&self, range: &lsp_types::Range) -> Option<Vec<&ElementWithLoc>> {
+        let span = self.offsets().lsp_pos_to_offset(&range.start)?
+            ..self.offsets().lsp_pos_to_offset(&range.end)?;
+        Some(self.elements_in_span(&span))
+    }
 }
 
 #[derive(Debug, Clone)]

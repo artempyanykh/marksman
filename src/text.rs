@@ -17,6 +17,15 @@ pub enum Offset {
     End,
 }
 
+impl Offset {
+    pub fn to_usize(&self, text_len: usize) -> usize {
+        match self {
+            Offset::Inner(inner) => *inner,
+            Offset::End => text_len,
+        }
+    }
+}
+
 impl From<usize> for Offset {
     fn from(v: usize) -> Self {
         Self::Inner(v)

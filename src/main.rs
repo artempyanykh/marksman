@@ -5,10 +5,12 @@ use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
         Completion, DocumentSymbolRequest, GotoDefinition, HoverRequest, ResolveCompletionItem,
-        WorkspaceSymbol,
+        SemanticTokensFullRequest, SemanticTokensRangeRequest, WorkspaceSymbol,
     },
     CompletionOptions, CompletionResponse, GotoDefinitionResponse, HoverProviderCapability,
-    InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    InitializeParams, OneOf, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
+    SemanticTokensRangeResult, SemanticTokensResult, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
@@ -41,6 +43,15 @@ async fn main() -> Result<()> {
     });
     server_capabilities.hover_provider = Some(HoverProviderCapability::Simple(true));
     server_capabilities.definition_provider = Some(OneOf::Left(true));
+    server_capabilities.semantic_tokens_provider = Some(
+        SemanticTokensOptions {
+            legend: ls::semantic_tokens_legend().clone(),
+            range: Some(true),
+            full: Some(SemanticTokensFullOptions::Bool(true)),
+            ..SemanticTokensOptions::default()
+        }
+        .into(),
+    );
 
     let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
@@ -167,6 +178,45 @@ async fn main_loop(connection: &Connection, params: serde_json::Value) -> Result
                     let position = params.text_document_position_params.position;
                     let result = ls::goto_definition(&root_path, &index, &path, &position)
                         .map(|loc| GotoDefinitionResponse::Scalar(loc));
+                    let result = serde_json::to_value(result).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<SemanticTokensFullRequest>(req.clone()) {
+                    let path = params.text_document.uri.to_file_path().unwrap();
+                    let tokens = ls::semantic_tokens_full(&index, &path);
+                    let result = tokens.map(|tv| {
+                        SemanticTokensResult::Tokens(SemanticTokens {
+                            data: tv,
+                            ..SemanticTokens::default()
+                        })
+                    });
+                    let result = serde_json::to_value(result).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<SemanticTokensRangeRequest>(req.clone()) {
+                    let path = params.text_document.uri.to_file_path().unwrap();
+                    let range = params.range;
+                    let tokens = ls::semantic_tokens_range(&index, &path, &range);
+                    let result = tokens.map(|tv| {
+                        SemanticTokensRangeResult::Tokens(SemanticTokens {
+                            data: tv,
+                            ..SemanticTokens::default()
+                        })
+                    });
                     let result = serde_json::to_value(result).unwrap();
                     let resp = Response {
                         id,

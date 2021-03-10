@@ -7,8 +7,10 @@ use anyhow::Result;
 use glob::Pattern;
 use lsp_types::{
     CompletionItem, DidChangeTextDocumentParams, Documentation, Hover, HoverContents, Location,
-    MarkupContent, TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Url,
+    MarkupContent, SemanticToken, SemanticTokenType, SemanticTokensLegend,
+    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Url,
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
@@ -16,7 +18,7 @@ use tracing::debug;
 
 use crate::{
     db::GlobalIndex,
-    note::{self, Element, NoteID},
+    note::{self, Element, ElementWithLoc, NoteID},
     store::{self, Note, Version},
     text,
 };
@@ -275,4 +277,96 @@ pub fn goto_definition(
     }
 
     None
+}
+
+//////////////////////////////////////////
+// Semantic tokens
+/////////////////////////////////////////
+
+pub fn semantic_token_type_mapping(tok_type: &SemanticTokenType) -> u32 {
+    if *tok_type == SemanticTokenType::CLASS {
+        // Heading
+        0
+    } else if *tok_type == SemanticTokenType::PROPERTY {
+        // LinkRef
+        1
+    } else {
+        unimplemented!("Unsupported token type: {}", tok_type.as_str())
+    }
+}
+
+static LAZY_SEMANTIC_TOKENS_LEGEND: Lazy<SemanticTokensLegend> = Lazy::new(|| {
+    let token_types = vec![SemanticTokenType::CLASS, SemanticTokenType::PROPERTY];
+    let token_modifiers = Vec::new();
+    SemanticTokensLegend {
+        token_types,
+        token_modifiers,
+    }
+});
+
+pub fn semantic_tokens_legend() -> &'static SemanticTokensLegend {
+    LAZY_SEMANTIC_TOKENS_LEGEND.borrow()
+}
+
+pub fn semantic_tokens_range(
+    index: &GlobalIndex<PathBuf>,
+    path: &PathBuf,
+    range: &lsp_types::Range,
+) -> Option<Vec<SemanticToken>> {
+    let note = index.find(path)?;
+    let elements = note.elements_in_range(range)?;
+    Some(semantic_tokens_encode(note, elements))
+}
+
+pub fn semantic_tokens_full(
+    index: &GlobalIndex<PathBuf>,
+    path: &PathBuf,
+) -> Option<Vec<SemanticToken>> {
+    let note = index.find(path)?;
+    let elements = note.elements().iter().collect();
+    Some(semantic_tokens_encode(note, elements))
+}
+
+fn semantic_tokens_encode(note: &Note, mut elements: Vec<&ElementWithLoc>) -> Vec<SemanticToken> {
+    // Sort before so that deltas are ok to calculate
+    elements.sort_by_key(|(_, span)| span.start);
+
+    let mut encoded = Vec::new();
+    let mut cur_line = 0;
+    let mut cur_char_offset = 0;
+
+    for (el, el_span) in elements {
+        let token_type = match el {
+            Element::Heading(..) => SemanticTokenType::CLASS,
+            Element::LinkRef(..) => SemanticTokenType::PROPERTY,
+            _ => continue,
+        };
+        let el_pos = note.offsets().range_to_lsp_range(&el_span).unwrap();
+        // Can't handle multiline tokens properly so skip.
+        // Would be nice to improve at some point
+        if el_pos.end.line > el_pos.start.line {
+            continue;
+        }
+
+        let delta_line = el_pos.start.line - cur_line;
+        let delta_start = if delta_line == 0 {
+            el_pos.start.character - cur_char_offset
+        } else {
+            el_pos.start.character
+        };
+        let length = el_pos.end.character - el_pos.start.character;
+
+        let token = SemanticToken {
+            delta_line,
+            delta_start,
+            length,
+            token_type: semantic_token_type_mapping(&token_type),
+            token_modifiers_bitset: 0,
+        };
+        encoded.push(token);
+        cur_line = el_pos.start.line;
+        cur_char_offset = el_pos.start.character;
+    }
+
+    encoded
 }

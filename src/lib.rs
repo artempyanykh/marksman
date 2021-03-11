@@ -1,4 +1,4 @@
-pub mod db;
+pub mod facts;
 pub mod ls;
 pub mod note;
 pub mod store;

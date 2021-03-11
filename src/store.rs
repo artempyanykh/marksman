@@ -1,10 +1,9 @@
 use anyhow::Result;
 
 use glob::Pattern;
-use once_cell::sync::OnceCell;
+
 use std::{
-    borrow::Borrow,
-    ops::Range,
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -13,119 +12,95 @@ use tokio::fs;
 
 use tracing::debug;
 
-use crate::{
-    note::{self, Element, ElementWithLoc, Heading},
-    text::{Offset, OffsetMap},
-};
+use crate::note::{NoteID, NoteName};
 
-#[derive(Debug)]
-pub struct Note {
-    pub version: Version,
-    pub content: Arc<str>,
-    lazy_offsets: OnceCell<OffsetMap<Arc<str>>>,
-    lazy_elements: OnceCell<Vec<ElementWithLoc>>,
-    lazy_title: OnceCell<Option<(Heading, Range<usize>)>>,
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct NoteFile {
+    pub root: PathBuf,
+    pub path: PathBuf,
 }
 
-impl Note {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteIndex {
+    notes: Arc<[NoteFile]>,
+}
+
+impl NoteIndex {
+    pub fn ids(&self) -> impl Iterator<Item = NoteID> {
+        (1..self.notes.len()).into_iter().map(|i| i.into())
+    }
+
+    pub fn files(&self) -> impl Iterator<Item = &NoteFile> {
+        self.notes.iter()
+    }
+
+    pub fn find_by_path(&self, path: &Path) -> Option<NoteID> {
+        self.notes.iter().enumerate().find_map(|(idx, nf)| {
+            if nf.path == path {
+                Some(idx.into())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn find_by_name(&self, name: &NoteName) -> Option<NoteID> {
+        self.notes.iter().enumerate().find_map(|(idx, nf)| {
+            if NoteName::from_path(&nf.path, &nf.root) == *name {
+                Some(idx.into())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn find_by_id(&self, id: NoteID) -> Arc<NoteFile> {
+        self.notes[id.to_usize()].clone().into()
+    }
+
+    pub fn with_note_file(&self, file: NoteFile) -> NoteIndex {
+        let mut notes: HashSet<NoteFile> = self
+            .notes
+            .iter()
+            .map(|x| x.to_owned())
+            .collect::<HashSet<_>>();
+        notes.insert(file);
+
+        let notes = notes.into_iter().collect::<Vec<_>>();
+        NoteIndex {
+            notes: notes.into(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct NoteText {
+    pub version: Version,
+    pub content: Arc<str>,
+}
+
+impl NoteText {
     pub fn new(version: Version, content: Arc<str>) -> Self {
         Self {
             version,
             content: content,
-            lazy_offsets: OnceCell::new(),
-            lazy_elements: OnceCell::new(),
-            lazy_title: OnceCell::new(),
         }
-    }
-
-    pub fn offsets(&self) -> &OffsetMap<Arc<str>> {
-        self.lazy_offsets
-            .get_or_init(|| OffsetMap::new(self.content.clone()))
-    }
-
-    pub fn elements(&self) -> &[ElementWithLoc] {
-        self.lazy_elements
-            .get_or_init(|| note::scrape(self.content.borrow()))
-    }
-
-    pub fn title(&self) -> Option<(&Heading, &Range<usize>)> {
-        let title = self.lazy_title.get_or_init(|| {
-            let elements = self.elements();
-            elements.iter().find_map(|el| match el {
-                (Element::Heading(hd), span) if hd.level == 1 => Some((hd.clone(), span.clone())),
-                _ => None,
-            })
-        });
-
-        match title {
-            Some((heading, span)) => Some((heading, span)),
-            _ => None,
-        }
-    }
-
-    pub fn headings(&self) -> Vec<&Heading> {
-        self.elements()
-            .iter()
-            .filter_map(|el| match el {
-                (Element::Heading(hd), _) => Some(hd),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub fn heading_with_text(&self, text: &str) -> Option<(&Heading, &Range<usize>)> {
-        self.elements().iter().find_map(|el| match el {
-            (Element::Heading(hd), span) if hd.text.contains(text) => Some((hd, span)),
-            _ => None,
-        })
-    }
-
-    pub fn element_at_offset(&self, offset: usize) -> Option<&ElementWithLoc> {
-        self.elements()
-            .iter()
-            .find(|(_, span)| span.contains(&offset))
-    }
-
-    pub fn element_at_pos(&self, pos: &lsp_types::Position) -> Option<&ElementWithLoc> {
-        let offset = match self.offsets().lsp_pos_to_offset(pos) {
-            Some(Offset::Inner(off)) => off,
-            _ => return None,
-        };
-        self.element_at_offset(offset)
-    }
-
-    pub fn elements_in_span(&self, range: &Range<Offset>) -> Vec<&ElementWithLoc> {
-        let target_span =
-            range.start.to_usize(self.content.len())..range.end.to_usize(self.content.len());
-        let mut elements_in_offsets = Vec::new(); // strict inclusion
-        for e in self.elements() {
-            if target_span.contains(&e.1.start) && target_span.contains(&e.1.end) {
-                elements_in_offsets.push(e);
-            }
-        }
-        elements_in_offsets
-    }
-
-    pub fn elements_in_range(&self, range: &lsp_types::Range) -> Option<Vec<&ElementWithLoc>> {
-        let span = self.offsets().lsp_pos_to_offset(&range.start)?
-            ..self.offsets().lsp_pos_to_offset(&range.end)?;
-        Some(self.elements_in_span(&span))
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Version {
     Fs(SystemTime),
     Vs(i32),
 }
 
-pub async fn read_note(path: &Path, ignores: &[Pattern]) -> Result<Option<Note>> {
+pub async fn read_note(path: &Path, ignores: &[Pattern]) -> Result<Option<NoteText>> {
     if is_note_file(path, ignores) {
         let content = fs::read_to_string(path).await?;
         let meta = fs::metadata(path).await?;
         let version = Version::Fs(meta.modified()?);
 
-        Ok(Some(Note::new(version, content.into())))
+        Ok(Some(NoteText::new(version, content.into())))
     } else {
         return Ok(None);
     }

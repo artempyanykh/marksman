@@ -7,8 +7,8 @@ use anyhow::Result;
 use glob::Pattern;
 use lsp_types::{
     CompletionItem, DidChangeTextDocumentParams, Documentation, Hover, HoverContents, Location,
-    MarkupContent, SemanticToken, SemanticTokenType, SemanticTokensLegend,
-    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Url,
+    MarkupContent, SemanticToken, SemanticTokenType, SemanticTokensLegend, SymbolInformation,
+    TextDocumentIdentifier, TextDocumentItem, Url,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -17,42 +17,54 @@ use serde_json;
 use tracing::debug;
 
 use crate::{
-    db::GlobalIndex,
+    facts::{FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
     note::{Element, ElementWithLoc, NoteName},
-    store::{self, Note, Version},
-    text,
+    store::{NoteFile, NoteText, Version},
+    text::{self, text_matches_query, OffsetMap},
 };
 
-fn note_apply_change(note: Note, change: &TextDocumentContentChangeEvent) -> Note {
-    let new_text = text::apply_change(
-        note.content.borrow(),
-        note.offsets(),
-        change.range,
-        &change.text,
-    );
-    let infligh_version = Version::Vs(-1);
-    Note::new(infligh_version, new_text.into())
-}
+//////////////////////////////////////////
+// Text Sync
+/////////////////////////////////////////
 
-pub fn note_apply_changes(note: &Note, changes: &DidChangeTextDocumentParams) -> Note {
-    let mut final_note = Note::new(note.version.clone(), note.content.clone());
+pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeTextDocumentParams) {
+    if let Some(note_id) = facts.note_index().find_by_path(path) {
+        let note = facts.note_facts(note_id);
+        let note_text = note.text();
+        let mut final_text = note_text.content.to_string();
 
-    for change in &changes.content_changes {
-        final_note = note_apply_change(final_note, change);
+        for change in &changes.content_changes {
+            final_text = text::apply_change(
+                &final_text,
+                &OffsetMap::new(final_text.as_str()),
+                change.range,
+                &change.text,
+            );
+        }
+
+        let final_version = Version::Vs(changes.text_document.version);
+        let final_note = NoteText::new(final_version, final_text.into());
+        facts.update_note(note_id, final_note);
     }
-
-    let final_version = Version::Vs(changes.text_document.version);
-    final_note.version = final_version;
-    final_note
 }
 
-pub fn note_open(document: &TextDocumentItem) -> Note {
-    Note::new(Version::Vs(document.version), document.text.clone().into())
+pub fn note_open(facts: &mut FactsDB, root: &Path, path: &Path, document: &TextDocumentItem) {
+    let note = NoteText::new(Version::Vs(document.version), document.text.clone().into());
+    let note_file = NoteFile {
+        root: root.to_path_buf(),
+        path: path.to_path_buf(),
+    };
+    facts.insert_note(note_file, note);
 }
 
-pub async fn note_close(id: &TextDocumentIdentifier, ignores: &[Pattern]) -> Result<Option<Note>> {
+pub async fn note_close(
+    facts: &mut FactsDB,
+    root: &Path,
+    id: &TextDocumentIdentifier,
+    ignores: &[Pattern],
+) -> Result<()> {
     let path = id.uri.to_file_path().expect("Failed to turn uri into path");
-    store::read_note(&path, ignores).await
+    facts.with_file(root, &path, ignores).await
 }
 
 pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
@@ -62,6 +74,60 @@ pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
         params: value,
     }
 }
+
+//////////////////////////////////////////
+// Symbols
+/////////////////////////////////////////
+
+#[allow(deprecated)]
+pub fn document_symbols(facts: &FactsDB, path: &Path, query: &str) -> Vec<SymbolInformation> {
+    let mut symbols = Vec::new();
+
+    let note_id = match facts.note_index().find_by_path(path) {
+        Some(t) => t,
+        _ => return symbols,
+    };
+    let note = facts.note_facts(note_id);
+    let el_index = note.element_index();
+
+    let matching_ids = note.headings_matching(|hd| text_matches_query(hd.text.as_str(), query));
+    let matching_els = el_index.headings_with_ids(&matching_ids);
+
+    for (hd, span) in matching_els {
+        let lsp_range = match note.indexed_text().range_to_lsp_range(&span) {
+            Some(r) => r,
+            _ => continue,
+        };
+        let uri = Url::from_file_path(&note.file().path).unwrap();
+        let location = lsp_types::Location::new(uri, lsp_range);
+        let symbol = lsp_types::SymbolInformation {
+            name: hd.text.clone(),
+            kind: lsp_types::SymbolKind::String,
+            tags: None,
+            deprecated: None,
+            location,
+            container_name: None,
+        };
+        symbols.push(symbol)
+    }
+
+    symbols
+}
+
+pub fn workspace_symbols(facts: &FactsDB, query: &str) -> Vec<SymbolInformation> {
+    let mut symbols = Vec::new();
+    let note_index = facts.note_index();
+    let files = note_index.files();
+    for nf in files {
+        symbols.append(&mut document_symbols(facts, &nf.path, query));
+    }
+
+    symbols
+}
+
+//////////////////////////////////////////
+// Completion
+/////////////////////////////////////////
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Clone)]
 pub enum CompletionType {
@@ -76,12 +142,15 @@ pub enum CompletionType {
 
 pub fn completion_candidates(
     root: &Path,
-    index: &GlobalIndex<PathBuf>,
+    facts: &FactsDB,
     current_tag: &PathBuf,
     pos: &lsp_types::Position,
 ) -> Option<Vec<CompletionItem>> {
-    let encl_note = index.find(current_tag)?;
-    let (enclosing_el, _) = encl_note.element_at_pos(pos)?;
+    let encl_note_id = facts.note_index().find_by_path(current_tag)?;
+    let encl_note = facts.note_facts(encl_note_id);
+    let encl_el_index = encl_note.element_index();
+
+    let (enclosing_el, _) = encl_el_index.elements_by_id(encl_note.element_at_lsp_pos(pos)?);
     let enclosing_link_ref = match enclosing_el {
         Element::LinkRef(r) => r,
         _ => return None,
@@ -100,18 +169,21 @@ pub fn completion_candidates(
             .map(NoteName::into_string)
             .unwrap_or_default();
 
-        for (tag, note) in index.notes() {
-            if current_tag == tag {
+        for id in facts.note_index().ids() {
+            if id == encl_note_id {
                 // Don't try to complete the current note
                 continue;
             }
 
-            if let Some((title, _)) = note.title() {
+            let note = facts.note_facts(id);
+            let note_el_index = note.element_index();
+
+            if let Some((title, _)) = note.title().map(|id| note_el_index.heading_by_id(id)) {
                 if !text::text_matches_query(&title.text, &partial_input) {
                     continue;
                 }
 
-                let name = NoteName::from_path(tag, root);
+                let name = NoteName::from_path(&note.file().path, root);
                 let data = serde_json::to_value(CompletionType::NoteCompletion {
                     note_name: name.clone(),
                 })
@@ -138,15 +210,16 @@ pub fn completion_candidates(
         };
         debug!("Mathing headings inside {:?}...", target_tag);
 
-        let target_note = index.find(&target_tag)?;
-        let query = enclosing_link_ref.heading.clone().unwrap_or_default();
-        let candidate_headings: Vec<_> = target_note
-            .headings()
-            .into_iter()
-            .filter(|hd| text::text_matches_query(&hd.text, &query))
-            .collect();
+        let target_note_id = facts.note_index().find_by_path(&target_tag)?;
+        let target_note = facts.note_facts(target_note_id);
+        let target_el_index = target_note.element_index();
 
-        for hd in candidate_headings {
+        let query = enclosing_link_ref.heading.clone().unwrap_or_default();
+        let candidate_headings: Vec<_> =
+            target_note.headings_matching(|hd| text::text_matches_query(&hd.text, &query));
+        let candidate_headings = target_el_index.headings_with_ids(&candidate_headings);
+
+        for (hd, _) in candidate_headings {
             if hd.level == 1 {
                 // no need to complete on heading level 1 as it should be unique
                 // in the document and file link points to it
@@ -173,11 +246,7 @@ pub fn completion_candidates(
     }
 }
 
-pub fn completion_resolve(
-    root: &Path,
-    index: &GlobalIndex<PathBuf>,
-    unresolved: &CompletionItem,
-) -> Option<CompletionItem> {
+pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Option<CompletionItem> {
     let completion_type = unresolved
         .data
         .clone()
@@ -186,12 +255,12 @@ pub fn completion_resolve(
 
     match completion_type {
         CompletionType::NoteCompletion { note_name, .. } => {
-            let tag = note_name.to_path(root);
-            let note = index.find(&tag)?;
+            let note_id = facts.note_index().find_by_name(&note_name)?;
+            let note = facts.note_facts(note_id);
 
             let documentation = Documentation::MarkupContent(MarkupContent {
                 kind: lsp_types::MarkupKind::Markdown,
-                value: note.content.to_string(),
+                value: note.text().content.to_string(),
             });
 
             Some(CompletionItem {
@@ -200,10 +269,11 @@ pub fn completion_resolve(
             })
         }
         CompletionType::HeadingCompletion { note_name, heading } => {
-            let tag = note_name.to_path(root);
-            let note = index.find(&tag)?;
-            let (heading, _) = note.heading_with_text(&heading)?;
-            let content = &note.content[heading.scope.clone()];
+            let note_id = facts.note_index().find_by_name(&note_name)?;
+            let note = facts.note_facts(note_id);
+            let el_index = note.element_index();
+            let (heading, _) = el_index.heading_by_id(note.heading_with_text(&heading)?);
+            let content = &note.text().content[heading.scope.clone()];
             let documentation = Documentation::MarkupContent(MarkupContent {
                 kind: lsp_types::MarkupKind::Markdown,
                 value: content.to_string(),
@@ -217,32 +287,41 @@ pub fn completion_resolve(
     }
 }
 
+//////////////////////////////////////////
+// Hover, Go to
+/////////////////////////////////////////
+
 pub fn hover(
     root: &Path,
-    index: &GlobalIndex<PathBuf>,
+    facts: &FactsDB,
     path: &PathBuf,
     pos: &lsp_types::Position,
 ) -> Option<Hover> {
-    let note = index.find(path)?;
-    let (hovered_el, span) = note.element_at_pos(pos)?;
+    let note_id = facts.note_index().find_by_path(path)?;
+    let note = facts.note_facts(note_id);
+    let el_index = note.element_index();
+    let (hovered_el, span) = el_index.elements_by_id(note.element_at_lsp_pos(pos)?);
 
     if let Element::LinkRef(link_ref) = hovered_el {
-        let range = note.offsets().range_to_lsp_range(&span);
+        let range = note.indexed_text().range_to_lsp_range(&span);
 
-        let target_note_name = link_ref
+        let target_note_path = link_ref
             .note_name
             .clone()
             .map(|name| name.to_path(root))
             .unwrap_or_else(|| path.clone());
 
-        let note = index.find(&target_note_name)?;
+        let target_id = facts.note_index().find_by_path(&target_note_path)?;
+        let note = facts.note_facts(target_id);
+        let el_index = note.element_index();
+        let text = note.text();
         let text = if let Some(heading) = &link_ref.heading {
-            let (heading, _) = note.heading_with_text(&heading)?;
+            let (heading, _) = el_index.heading_by_id(note.heading_with_text(&heading)?);
 
-            let text = &note.content[heading.scope.clone()];
+            let text = &text.content[heading.scope.clone()];
             text
         } else {
-            let text = &note.content[..];
+            let text = &text.content[..];
             text
         };
 
@@ -262,33 +341,35 @@ pub fn hover(
 
 pub fn goto_definition(
     root: &Path,
-    index: &GlobalIndex<PathBuf>,
+    facts: &FactsDB,
     path: &PathBuf,
     pos: &lsp_types::Position,
 ) -> Option<Location> {
-    let note = index.find(path)?;
-    let (encl_el, _) = note.element_at_pos(pos)?;
+    let note_id = facts.note_index().find_by_path(path)?;
+    let note = facts.note_facts(note_id);
+    let el_index = note.element_index();
+    let (encl_el, _) = el_index.elements_by_id(note.element_at_lsp_pos(pos)?);
 
     if let Element::LinkRef(link_ref) = encl_el {
-        let taget_note_name = link_ref
+        let target_note_name = link_ref
             .note_name
             .clone()
             .unwrap_or_else(|| NoteName::from_path(path, root));
 
-        let target_tag = taget_note_name.to_path(root);
-        let target_note = index.find(&target_tag)?;
-        let (_, target_span) = if let Some(link_heading) = &link_ref.heading {
-            target_note.heading_with_text(link_heading)?
+        let target_id = facts.note_index().find_by_name(&target_note_name)?;
+        let target_note = facts.note_facts(target_id);
+        let (_, target_range) = if let Some(link_heading) = &link_ref.heading {
+            el_index.heading_by_id(target_note.heading_with_text(link_heading)?)
         } else {
-            target_note.title()?
+            el_index.heading_by_id(target_note.title()?)
         };
         let range = target_note
-            .offsets()
-            .range_to_lsp_range(target_span)
+            .indexed_text()
+            .range_to_lsp_range(&target_range)
             .unwrap();
 
         return Some(Location {
-            uri: Url::from_file_path(&target_tag).unwrap(),
+            uri: Url::from_file_path(&note.file().path).unwrap(),
             range,
         });
     }
@@ -326,25 +407,35 @@ pub fn semantic_tokens_legend() -> &'static SemanticTokensLegend {
 }
 
 pub fn semantic_tokens_range(
-    index: &GlobalIndex<PathBuf>,
+    facts: &FactsDB,
     path: &PathBuf,
     range: &lsp_types::Range,
 ) -> Option<Vec<SemanticToken>> {
-    let note = index.find(path)?;
-    let elements = note.elements_in_range(range)?;
+    let note_id = facts.note_index().find_by_path(path)?;
+    let note = facts.note_facts(note_id);
+    let element_ids = note.elements_in_lsp_range(range)?;
+    let el_idx = note.element_index();
+    let elements = el_idx.elements_with_ids(&element_ids).collect();
     Some(semantic_tokens_encode(note, elements))
 }
 
-pub fn semantic_tokens_full(
-    index: &GlobalIndex<PathBuf>,
-    path: &PathBuf,
-) -> Option<Vec<SemanticToken>> {
-    let note = index.find(path)?;
-    let elements = note.elements().iter().collect();
+pub fn semantic_tokens_full(facts: &FactsDB, path: &PathBuf) -> Option<Vec<SemanticToken>> {
+    let note_id = facts.note_index().find_by_path(path)?;
+    let note = facts.note_facts(note_id);
+    let el_idx = note.element_index();
+
+    let elements = el_idx
+        .elements_with_loc()
+        .into_iter()
+        .map(|(_, ewl)| ewl)
+        .collect();
     Some(semantic_tokens_encode(note, elements))
 }
 
-fn semantic_tokens_encode(note: &Note, mut elements: Vec<&ElementWithLoc>) -> Vec<SemanticToken> {
+fn semantic_tokens_encode(
+    note: NoteFactsDB<'_>,
+    mut elements: Vec<&ElementWithLoc>,
+) -> Vec<SemanticToken> {
     // Sort before so that deltas are ok to calculate
     elements.sort_by_key(|(_, span)| span.start);
 
@@ -358,7 +449,7 @@ fn semantic_tokens_encode(note: &Note, mut elements: Vec<&ElementWithLoc>) -> Ve
             Element::LinkRef(..) => SemanticTokenType::PROPERTY,
             _ => continue,
         };
-        let el_pos = note.offsets().range_to_lsp_range(&el_span).unwrap();
+        let el_pos = note.indexed_text().range_to_lsp_range(&el_span).unwrap();
         // Can't handle multiline tokens properly so skip.
         // Would be nice to improve at some point
         if el_pos.end.line > el_pos.start.line {

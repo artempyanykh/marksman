@@ -2,12 +2,12 @@ use std::{borrow::Borrow, ops::Range};
 
 use lsp_types::Position;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct OffsetMap<T>
 where
     T: Borrow<str>,
 {
-    text: T,
+    pub text: T,
     line_ranges: Vec<Range<usize>>,
 }
 

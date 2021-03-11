@@ -18,7 +18,7 @@ use lsp_types::{
 use lsp_server::{Connection, Message, Notification, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
-use zeta_note::{db, ls, store};
+use zeta_note::{facts, ls, store};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -80,10 +80,13 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
     let note_files = store::find_notes(&root_path, &ignores).await?;
     info!("Found {} note files", note_files.len());
 
-    let mut index = db::GlobalIndex::from_files(&note_files, &ignores).await?;
+    let mut index = facts::FactsDB::default();
+    for f in note_files {
+        index.with_file(&root_path, &f, &ignores).await?;
+    }
 
     let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(10);
-    let mut last_note_count = index.notes().count();
+    let mut last_note_count = index.note_index().ids().count();
     pending_not_tx
         .send(ls::status_notification(last_note_count))
         .await?;
@@ -99,7 +102,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
     });
 
     for msg in &connection.receiver {
-        let current_notes_count = index.notes().count();
+        let current_notes_count = index.note_index().ids().count();
         if current_notes_count != last_note_count {
             pending_not_tx
                 .send(ls::status_notification(current_notes_count))
@@ -115,7 +118,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
 
                 if let Ok((id, params)) = cast_r::<DocumentSymbolRequest>(req.clone()) {
                     let file = params.text_document.uri.to_file_path().unwrap();
-                    let result = Some(index.headings(file, ""));
+                    let result = ls::document_symbols(&index, &file, "");
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,
@@ -127,7 +130,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                 }
 
                 if let Ok((id, params)) = cast_r::<WorkspaceSymbol>(req.clone()) {
-                    let result = Some(index.headings_all(&params.query));
+                    let result = ls::workspace_symbols(&index, &params.query);
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,
@@ -160,8 +163,8 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                 }
 
                 if let Ok((id, params)) = cast_r::<ResolveCompletionItem>(req.clone()) {
-                    let resolved = ls::completion_resolve(&root_path, &index, &params)
-                        .unwrap_or_else(|| params.clone());
+                    let resolved =
+                        ls::completion_resolve(&index, &params).unwrap_or_else(|| params.clone());
                     let result = serde_json::to_value(resolved).unwrap();
                     let resp = Response {
                         id,
@@ -258,20 +261,11 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .uri
                         .to_file_path()
                         .expect("Failed to turn uri into path");
-                    let note = ls::note_open(&params.text_document);
-                    index.insert(path, note);
+                    ls::note_open(&mut index, &root_path, &path, &params.text_document);
                 }
 
                 if let Ok(params) = cast_n::<DidCloseTextDocument>(not.clone()) {
-                    let path = params
-                        .text_document
-                        .uri
-                        .to_file_path()
-                        .expect("Failed to turn uri into path");
-                    let note = ls::note_close(&params.text_document, &ignores).await?;
-                    if let Some(note) = note {
-                        index.insert(path, note);
-                    }
+                    ls::note_close(&mut index, &root_path, &params.text_document, &ignores).await?;
                 }
 
                 if let Ok(params) = cast_n::<DidChangeTextDocument>(not.clone()) {
@@ -280,9 +274,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .uri
                         .to_file_path()
                         .expect("Failed to turn uri into path");
-                    let existing_note = index.require(&path);
-                    let updated_note = ls::note_apply_changes(existing_note, &params);
-                    index.insert(path, updated_note);
+                    ls::note_apply_changes(&mut index, &path, &params);
                 }
             }
         }

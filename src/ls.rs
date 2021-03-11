@@ -56,7 +56,7 @@ pub async fn note_close(id: &TextDocumentIdentifier, ignores: &[Pattern]) -> Res
 }
 
 pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
-    let value = serde_json::json!({"ok": true, "notes": num_notes});
+    let value = serde_json::json!({"state": "ok", "notes": num_notes});
     lsp_server::Notification {
         method: "zeta-note/status".to_string(),
         params: value,

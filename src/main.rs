@@ -80,13 +80,10 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
     let note_files = store::find_notes(&root_path, &ignores).await?;
     info!("Found {} note files", note_files.len());
 
-    let mut index = facts::FactsDB::default();
-    for f in note_files {
-        index.with_file(&root_path, &f, &ignores).await?;
-    }
+    let mut index = facts::FactsDB::from_files(&root_path, &note_files, &ignores).await?;
 
     let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(10);
-    let mut last_note_count = index.note_index().ids().count();
+    let mut last_note_count = index.note_index().size();
     pending_not_tx
         .send(ls::status_notification(last_note_count))
         .await?;
@@ -102,7 +99,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
     });
 
     for msg in &connection.receiver {
-        let current_notes_count = index.note_index().ids().count();
+        let current_notes_count = index.note_index().size();
         if current_notes_count != last_note_count {
             pending_not_tx
                 .send(ls::status_notification(current_notes_count))

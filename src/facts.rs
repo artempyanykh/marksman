@@ -21,6 +21,8 @@ pub trait Facts: salsa::Database {
     fn note_index(&self, key: ()) -> Arc<NoteIndex>;
 
     #[salsa::input]
+    fn note_content(&self, note_file: NoteFile) -> Arc<NoteText>;
+
     fn note_text(&self, note_id: NoteID) -> Arc<NoteText>;
 
     fn note_indexed_text(&self, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>>;
@@ -54,13 +56,17 @@ impl salsa::Database for FactsDBInternal {}
 pub struct FactsDB(FactsDBInternal);
 
 impl FactsDB {
+    pub fn empty() -> Self {
+        let mut db = Self::default();
+        db.0.set_note_index((), NoteIndex::default().into());
+        db
+    }
+
     pub fn insert_note(&mut self, note_file: NoteFile, note: NoteText) {
-        let note_path = note_file.path.clone();
         let idx = self.note_index();
-        let new_idx = idx.with_note_file(note_file);
-        let new_id = new_idx.find_by_path(&note_path).unwrap();
+        let new_idx = idx.with_note_file(note_file.clone());
         self.0.set_note_index((), new_idx.into());
-        self.0.set_note_text(new_id, note.into());
+        self.0.set_note_content(note_file, note.into());
     }
 
     pub fn remove_note(&self) {
@@ -68,11 +74,12 @@ impl FactsDB {
     }
 
     pub fn update_note(&mut self, note_id: NoteID, note: NoteText) {
-        self.0.set_note_text(note_id, note.into());
+        let file = self.note_index().find_by_id(note_id);
+        self.0.set_note_content((*file).clone(), note.into());
     }
 
     pub async fn from_files(root: &Path, files: &[PathBuf], ignores: &[Pattern]) -> Result<Self> {
-        let mut empty = Self::default();
+        let mut empty = Self::empty();
 
         for file in files {
             empty.with_file(root, file, ignores).await?;
@@ -263,6 +270,11 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
 }
 
 // Derived queries
+
+fn note_text(db: &dyn Facts, note_id: NoteID) -> Arc<NoteText> {
+    let file = db.note_index(()).find_by_id(note_id);
+    db.note_content((*file).clone())
+}
 
 fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>> {
     let note_text = db.note_text(note_id);

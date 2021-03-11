@@ -25,9 +25,21 @@ pub struct NoteIndex {
     notes: Arc<[NoteFile]>,
 }
 
+impl Default for NoteIndex {
+    fn default() -> Self {
+        Self {
+            notes: Vec::new().into(),
+        }
+    }
+}
+
 impl NoteIndex {
+    pub fn size(&self) -> usize {
+        self.notes.len()
+    }
+
     pub fn ids(&self) -> impl Iterator<Item = NoteID> {
-        (1..self.notes.len()).into_iter().map(|i| i.into())
+        (0..self.notes.len()).into_iter().map(|i| i.into())
     }
 
     pub fn files(&self) -> impl Iterator<Item = &NoteFile> {

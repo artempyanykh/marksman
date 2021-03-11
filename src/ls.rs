@@ -298,6 +298,7 @@ pub fn hover(
     pos: &lsp_types::Position,
 ) -> Option<Hover> {
     let note_id = facts.note_index().find_by_path(path)?;
+    let note_name = NoteName::from_path(path, root);
     let note = facts.note_facts(note_id);
     let el_index = note.element_index();
     let (hovered_el, span) = el_index.elements_by_id(note.element_at_lsp_pos(pos)?);
@@ -305,24 +306,18 @@ pub fn hover(
     if let Element::LinkRef(link_ref) = hovered_el {
         let range = note.indexed_text().range_to_lsp_range(&span);
 
-        let target_note_path = link_ref
-            .note_name
-            .clone()
-            .map(|name| name.to_path(root))
-            .unwrap_or_else(|| path.clone());
+        let target_note_name = link_ref.note_name.clone().unwrap_or_else(|| note_name);
 
-        let target_id = facts.note_index().find_by_path(&target_note_path)?;
-        let note = facts.note_facts(target_id);
-        let el_index = note.element_index();
-        let text = note.text();
+        let target_id = facts.note_index().find_by_name(&target_note_name)?;
+        let target_note = facts.note_facts(target_id);
+        let target_index = target_note.element_index();
+        let target_text = target_note.text();
         let text = if let Some(heading) = &link_ref.heading {
-            let (heading, _) = el_index.heading_by_id(note.heading_with_text(&heading)?);
+            let (heading, _) = target_index.heading_by_id(target_note.heading_with_text(&heading)?);
 
-            let text = &text.content[heading.scope.clone()];
-            text
+            &target_text.content[heading.scope.clone()]
         } else {
-            let text = &text.content[..];
-            text
+            &target_text.content[..]
         };
 
         let markup = MarkupContent {
@@ -345,10 +340,10 @@ pub fn goto_definition(
     path: &PathBuf,
     pos: &lsp_types::Position,
 ) -> Option<Location> {
-    let note_id = facts.note_index().find_by_path(path)?;
-    let note = facts.note_facts(note_id);
-    let el_index = note.element_index();
-    let (encl_el, _) = el_index.elements_by_id(note.element_at_lsp_pos(pos)?);
+    let source_id = facts.note_index().find_by_path(path)?;
+    let source_note = facts.note_facts(source_id);
+    let souce_index = source_note.element_index();
+    let (encl_el, _) = souce_index.elements_by_id(source_note.element_at_lsp_pos(pos)?);
 
     if let Element::LinkRef(link_ref) = encl_el {
         let target_note_name = link_ref
@@ -358,10 +353,11 @@ pub fn goto_definition(
 
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
+        let target_index = target_note.element_index();
         let (_, target_range) = if let Some(link_heading) = &link_ref.heading {
-            el_index.heading_by_id(target_note.heading_with_text(link_heading)?)
+            target_index.heading_by_id(target_note.heading_with_text(link_heading)?)
         } else {
-            el_index.heading_by_id(target_note.title()?)
+            target_index.heading_by_id(target_note.title()?)
         };
         let range = target_note
             .indexed_text()
@@ -369,7 +365,7 @@ pub fn goto_definition(
             .unwrap();
 
         return Some(Location {
-            uri: Url::from_file_path(&note.file().path).unwrap(),
+            uri: Url::from_file_path(&target_note.file().path).unwrap(),
             range,
         });
     }

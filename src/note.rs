@@ -46,7 +46,7 @@ impl NoteName {
     }
 
     pub fn to_path(&self, root: &Path) -> PathBuf {
-        root.join(root).with_extension(".md")
+        root.join(&self.0).with_extension("md")
     }
 
     pub fn to_str(&self) -> &str {

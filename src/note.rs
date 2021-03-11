@@ -1,16 +1,68 @@
 use regex::Regex;
 
-use std::{ops::Range, path::Path};
+use std::{
+    fmt::{Debug, Display},
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use pulldown_cmark::{BrokenLink, CowStr, Event, LinkType, Options, Parser, Tag};
 
-pub type NoteID = String;
+use serde::{Deserialize, Serialize};
 
-pub fn note_id_from_path(path: &Path, root: &Path) -> NoteID {
-    let rel = path.strip_prefix(root).unwrap();
-    let stem = rel.with_extension("");
-    stem.to_string_lossy().to_string()
+#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct NoteName(String);
+
+impl From<String> for NoteName {
+    fn from(name: String) -> Self {
+        Self(name)
+    }
 }
+
+impl From<&str> for NoteName {
+    fn from(name: &str) -> Self {
+        name.to_string().into()
+    }
+}
+
+impl Debug for NoteName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_str())
+    }
+}
+
+impl Display for NoteName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_str())
+    }
+}
+
+impl NoteName {
+    pub fn from_path(path: &Path, root: &Path) -> NoteName {
+        let rel = path.strip_prefix(root).unwrap();
+        let stem = rel.with_extension("");
+        stem.to_string_lossy().to_string().into()
+    }
+
+    pub fn to_path(&self, root: &Path) -> PathBuf {
+        root.join(root).with_extension(".md")
+    }
+
+    pub fn to_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteID(u32);
 
 pub type ElementWithLoc = (Element, Range<usize>);
 
@@ -31,7 +83,7 @@ pub struct Heading {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LinkRef {
     pub text: String,
-    pub note_id: Option<String>,
+    pub note_name: Option<NoteName>,
     pub heading: Option<String>,
 }
 
@@ -47,17 +99,18 @@ pub fn parse_link_ref(text: &str) -> Option<LinkRef> {
 
     if let Some(captures) = ref_link_regex.captures(text) {
         let text = text.to_string();
-        let note_id = captures
+        let note_name = captures
             .get(1)
-            .map(|m| m.as_str().to_string())
-            .filter(|s| !s.is_empty());
+            .map(|m| m.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.into());
         let heading = captures
             .get(3)
             .map(|m| m.as_str().to_string())
             .filter(|s| !s.is_empty());
         Some(LinkRef {
             text,
-            note_id,
+            note_name,
             heading,
         })
     } else {
@@ -218,8 +271,8 @@ mod test {
         LinkRef(
             LinkRef {
                 text: "[:noteid]",
-                note_id: Some(
-                    "noteid",
+                note_name: Some(
+                    noteid,
                 ),
                 heading: None,
             },
@@ -230,7 +283,7 @@ mod test {
         LinkRef(
             LinkRef {
                 text: "[:@# Some text in heading 1]",
-                note_id: None,
+                note_name: None,
                 heading: Some(
                     "# Some text in heading 1",
                 ),
@@ -242,8 +295,8 @@ mod test {
         LinkRef(
             LinkRef {
                 text: "[:othernote@#Some heading]",
-                note_id: Some(
-                    "othernote",
+                note_name: Some(
+                    othernote,
                 ),
                 heading: Some(
                     "#Some heading",
@@ -256,8 +309,8 @@ mod test {
         LinkRef(
             LinkRef {
                 text: "[:othernote@]",
-                note_id: Some(
-                    "othernote",
+                note_name: Some(
+                    othernote,
                 ),
                 heading: None,
             },
@@ -312,7 +365,7 @@ mod test {
         LinkRef(
             LinkRef {
                 text: "[:]",
-                note_id: None,
+                note_name: None,
                 heading: None,
             },
         ),

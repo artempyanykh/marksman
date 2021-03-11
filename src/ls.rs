@@ -18,7 +18,7 @@ use tracing::debug;
 
 use crate::{
     db::GlobalIndex,
-    note::{self, Element, ElementWithLoc, NoteID},
+    note::{Element, ElementWithLoc, NoteName},
     store::{self, Note, Version},
     text,
 };
@@ -65,8 +65,13 @@ pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Clone)]
 pub enum CompletionType {
-    NoteCompletion { note_id: NoteID },
-    HeadingCompletion { note_id: NoteID, heading: String },
+    NoteCompletion {
+        note_name: NoteName,
+    },
+    HeadingCompletion {
+        note_name: NoteName,
+        heading: String,
+    },
 }
 
 pub fn completion_candidates(
@@ -89,7 +94,11 @@ pub fn completion_candidates(
 
     if tries_to_match_note {
         debug!("Mathing notes...");
-        let partial_input = enclosing_link_ref.note_id.clone().unwrap_or_default();
+        let partial_input = enclosing_link_ref
+            .note_name
+            .clone()
+            .map(NoteName::into_string)
+            .unwrap_or_default();
 
         for (tag, note) in index.notes() {
             if current_tag == tag {
@@ -102,16 +111,16 @@ pub fn completion_candidates(
                     continue;
                 }
 
-                let id = note::note_id_from_path(tag, root);
+                let name = NoteName::from_path(tag, root);
                 let data = serde_json::to_value(CompletionType::NoteCompletion {
-                    note_id: id.clone(),
+                    note_name: name.clone(),
                 })
                 .unwrap();
                 candidates.push(CompletionItem {
                     label: title.text.clone(),
                     kind: Some(lsp_types::CompletionItemKind::File),
-                    detail: Some(id.clone()),
-                    insert_text: Some(id),
+                    detail: Some(name.to_string()),
+                    insert_text: Some(name.to_string()),
                     data: Some(data),
                     ..CompletionItem::default()
                 })
@@ -119,12 +128,12 @@ pub fn completion_candidates(
         }
     } else {
         // tries to match a heading inside a note
-        let target_note_id = match &enclosing_link_ref.note_id {
-            Some(id) => id.to_string(),
-            _ => note::note_id_from_path(current_tag, root),
+        let target_note_name = match &enclosing_link_ref.note_name {
+            Some(name) => name.clone(),
+            _ => NoteName::from_path(current_tag, root),
         };
-        let target_tag = match &enclosing_link_ref.note_id {
-            Some(id) => root.join(id).with_extension("md"),
+        let target_tag = match &enclosing_link_ref.note_name {
+            Some(name) => name.to_path(root),
             _ => current_tag.to_path_buf(),
         };
         debug!("Mathing headings inside {:?}...", target_tag);
@@ -144,7 +153,7 @@ pub fn completion_candidates(
                 continue;
             }
             let data = serde_json::to_value(CompletionType::HeadingCompletion {
-                note_id: target_note_id.clone(),
+                note_name: target_note_name.clone(),
                 heading: hd.text.to_string(),
             })
             .unwrap();
@@ -176,8 +185,8 @@ pub fn completion_resolve(
         .and_then(Result::ok)?;
 
     match completion_type {
-        CompletionType::NoteCompletion { note_id, .. } => {
-            let tag = root.join(note_id).with_extension("md");
+        CompletionType::NoteCompletion { note_name, .. } => {
+            let tag = note_name.to_path(root);
             let note = index.find(&tag)?;
 
             let documentation = Documentation::MarkupContent(MarkupContent {
@@ -190,8 +199,8 @@ pub fn completion_resolve(
                 ..unresolved.clone()
             })
         }
-        CompletionType::HeadingCompletion { note_id, heading } => {
-            let tag = root.join(note_id).with_extension("md");
+        CompletionType::HeadingCompletion { note_name, heading } => {
+            let tag = note_name.to_path(root);
             let note = index.find(&tag)?;
             let (heading, _) = note.heading_with_text(&heading)?;
             let content = &note.content[heading.scope.clone()];
@@ -220,13 +229,13 @@ pub fn hover(
     if let Element::LinkRef(link_ref) = hovered_el {
         let range = note.offsets().range_to_lsp_range(&span);
 
-        let target_note_id = link_ref
-            .note_id
+        let target_note_name = link_ref
+            .note_name
             .clone()
-            .map(|id| root.join(id).with_extension("md"))
+            .map(|name| name.to_path(root))
             .unwrap_or_else(|| path.clone());
 
-        let note = index.find(&target_note_id)?;
+        let note = index.find(&target_note_name)?;
         let text = if let Some(heading) = &link_ref.heading {
             let (heading, _) = note.heading_with_text(&heading)?;
 
@@ -261,12 +270,12 @@ pub fn goto_definition(
     let (encl_el, _) = note.element_at_pos(pos)?;
 
     if let Element::LinkRef(link_ref) = encl_el {
-        let target_note_id = link_ref
-            .note_id
+        let taget_note_name = link_ref
+            .note_name
             .clone()
-            .unwrap_or_else(|| note::note_id_from_path(path, root));
+            .unwrap_or_else(|| NoteName::from_path(path, root));
 
-        let target_tag = root.join(target_note_id).with_extension("md");
+        let target_tag = taget_note_name.to_path(root);
         let target_note = index.find(&target_tag)?;
         let (_, target_span) = if let Some(link_heading) = &link_ref.heading {
             target_note.heading_with_text(link_heading)?

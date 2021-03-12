@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use tracing::{info, Level};
+use tracing::info;
 
 use lsp_types::{
-    notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
+    notification::{
+        DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification,
+        PublishDiagnostics,
+    },
     request::{
         Completion, DocumentSymbolRequest, GotoDefinition, HoverRequest, ResolveCompletionItem,
         SemanticTokensFullRequest, SemanticTokensRangeRequest, WorkspaceSymbol,
@@ -15,14 +18,17 @@ use lsp_types::{
     TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
-use lsp_server::{Connection, Message, Notification, RequestId, Response};
+use lsp_server::{Connection, Message, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
-use zeta_note::{facts, lsp, store};
+use zeta_note::{diag::DiagCollection, facts, lsp, store};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let filter = EnvFilter::default().add_directive(Level::DEBUG.into());
+    // let filter = EnvFilter::default().add_directive("zeta_note=debug".into()?);
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_default()
+        .add_directive("zeta_note=debug".parse()?);
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
@@ -81,9 +87,10 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
     info!("Found {} note files", note_files.len());
 
     let mut index = facts::FactsDB::from_files(&root_path, &note_files, &ignores).await?;
-
-    let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(10);
+    let mut diag_col = DiagCollection::default();
     let mut last_note_count = index.note_index().size();
+
+    let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(100);
     pending_not_tx
         .send(lsp::status_notification(last_note_count))
         .await?;
@@ -105,6 +112,18 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                 .send(lsp::status_notification(current_notes_count))
                 .await?;
             last_note_count = current_notes_count;
+        }
+
+        if let Some((publish_params, new_col)) = lsp::diag(&index, &diag_col) {
+            diag_col = new_col;
+            for param in publish_params {
+                let param = serde_json::to_value(param).unwrap();
+                let not = lsp_server::Notification {
+                    method: PublishDiagnostics::METHOD.to_string(),
+                    params: param,
+                };
+                pending_not_tx.send(not).await?;
+            }
         }
 
         match msg {
@@ -292,7 +311,7 @@ where
     req.extract(R::METHOD)
 }
 
-fn cast_n<N>(notif: Notification) -> Result<N::Params, Notification>
+fn cast_n<N>(notif: lsp_server::Notification) -> Result<N::Params, lsp_server::Notification>
 where
     N: lsp_types::notification::Notification,
     N::Params: serde::de::DeserializeOwned,

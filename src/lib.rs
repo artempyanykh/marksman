@@ -1,3 +1,4 @@
+pub mod diag;
 pub mod facts;
 pub mod lsp;
 pub mod store;

@@ -75,8 +75,8 @@ impl NoteIndex {
         })
     }
 
-    pub fn find_by_id(&self, id: NoteID) -> Arc<NoteFile> {
-        self.notes[id.to_usize()].clone().into()
+    pub fn find_by_id(&self, id: NoteID) -> NoteFile {
+        self.notes[id.to_usize()].clone()
     }
 
     pub fn with_note_file(&self, file: NoteFile) -> NoteIndex {
@@ -110,6 +110,15 @@ impl NoteText {
 pub enum Version {
     Fs(SystemTime),
     Vs(i32),
+}
+
+impl Version {
+    pub fn to_lsp_version(&self) -> Option<i32> {
+        match self {
+            Version::Vs(v) => Some(*v),
+            _ => None,
+        }
+    }
 }
 
 pub async fn read_note(path: &Path, ignores: &[Pattern]) -> Result<Option<NoteText>> {

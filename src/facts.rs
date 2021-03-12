@@ -10,13 +10,14 @@ use glob::Pattern;
 use salsa;
 
 use crate::{
+    diag::{self, DiagWithLoc},
     store::{self, NoteFile, NoteIndex, NoteText},
     structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
     text::{Offset, OffsetMap},
 };
 
 #[salsa::query_group(FactsStorage)]
-pub trait Facts: salsa::Database {
+pub trait Facts<'a>: salsa::Database {
     #[salsa::input]
     fn note_index(&self, key: ()) -> NoteIndex;
 
@@ -30,6 +31,7 @@ pub trait Facts: salsa::Database {
     fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]>;
     fn note_headings(&self, note_id: NoteID) -> Arc<[HeadingID]>;
     fn note_refs(&self, note_id: NoteID) -> Arc<[LinkRefID]>;
+    fn note_diag(&self, note_id: NoteID) -> Arc<[DiagWithLoc]>;
 }
 
 #[salsa::database(FactsStorage)]
@@ -69,7 +71,7 @@ impl FactsDB {
 
     pub fn update_note(&mut self, note_id: NoteID, note: NoteText) {
         let file = self.note_index().find_by_id(note_id);
-        self.0.set_note_content((*file).clone(), note.into());
+        self.0.set_note_content(file.clone(), note.into());
     }
 
     pub async fn from_files(root: &Path, files: &[PathBuf], ignores: &[Pattern]) -> Result<Self> {
@@ -95,40 +97,12 @@ impl FactsDB {
     pub fn note_facts(&self, note_id: NoteID) -> NoteFactsDB {
         NoteFactsDB {
             id: note_id,
-            db: self,
+            db: &self.0,
         }
     }
 
     pub fn note_index(&self) -> NoteIndex {
         self.0.note_index(())
-    }
-
-    pub fn note_text(&self, note_id: NoteID) -> NoteText {
-        self.0.note_text(note_id)
-    }
-
-    pub fn note_indexed_text(&self, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>> {
-        self.0.note_indexed_text(note_id)
-    }
-
-    pub fn note_structure(&self, note_id: NoteID) -> Structure {
-        self.0.note_structure(note_id)
-    }
-
-    pub fn note_title(&self, note_id: NoteID) -> Option<HeadingID> {
-        self.0.note_title(note_id)
-    }
-
-    pub fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]> {
-        self.0.note_elements(note_id)
-    }
-
-    pub fn note_headings(&self, note_id: NoteID) -> Arc<[HeadingID]> {
-        self.0.note_headings(note_id)
-    }
-
-    pub fn note_refs(&self, note_id: NoteID) -> Arc<[LinkRefID]> {
-        self.0.note_refs(note_id)
     }
 }
 
@@ -142,9 +116,10 @@ pub trait NoteFacts {
     fn elements(&self) -> Arc<[ElementID]>;
     fn headings(&self) -> Arc<[HeadingID]>;
     fn refs(&self) -> Arc<[LinkRefID]>;
+    fn diag(&self) -> Arc<[DiagWithLoc]>;
 }
-pub trait NoteFactsExt {
-    fn file(&self) -> Arc<NoteFile>;
+pub trait NoteFactsExt: NoteFacts {
+    fn file(&self) -> NoteFile;
     fn headings_matching(&self, pred: impl Fn(&Heading) -> bool) -> Vec<HeadingID>;
     fn heading_with_text(&self, text: &str) -> Option<HeadingID>;
     fn element_at_offset(&self, offset: usize) -> Option<ElementID>;
@@ -153,11 +128,15 @@ pub trait NoteFactsExt {
     fn elements_in_lsp_range(&self, range: &lsp_types::Range) -> Option<Vec<ElementID>>;
 }
 pub struct NoteFactsDB<'a> {
+    db: &'a dyn Facts,
     id: NoteID,
-    db: &'a FactsDB,
 }
 
-impl<'a> NoteFactsDB<'a> {}
+impl<'a> NoteFactsDB<'a> {
+    pub fn new(db: &'a dyn Facts, id: NoteID) -> Self {
+        Self { db, id }
+    }
+}
 
 impl<'a> NoteFacts for NoteFactsDB<'a> {
     fn text(&self) -> NoteText {
@@ -186,6 +165,10 @@ impl<'a> NoteFacts for NoteFactsDB<'a> {
 
     fn refs(&self) -> Arc<[LinkRefID]> {
         self.db.note_refs(self.id)
+    }
+
+    fn diag(&self) -> Arc<[DiagWithLoc]> {
+        self.db.note_diag(self.id)
     }
 }
 
@@ -258,8 +241,8 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
         Some(self.elements_in_range(&range))
     }
 
-    fn file(&self) -> Arc<NoteFile> {
-        self.db.note_index().find_by_id(self.id)
+    fn file(&self) -> NoteFile {
+        self.db.note_index(()).find_by_id(self.id)
     }
 }
 
@@ -267,7 +250,7 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
 
 fn note_text(db: &dyn Facts, note_id: NoteID) -> NoteText {
     let file = db.note_index(()).find_by_id(note_id);
-    db.note_content((*file).clone())
+    db.note_content(file.clone())
 }
 
 fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>> {
@@ -299,4 +282,12 @@ fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
 
 fn note_refs(db: &dyn Facts, note_id: NoteID) -> Arc<[LinkRefID]> {
     db.note_structure(note_id).refs().into()
+}
+
+fn note_diag(db: &dyn Facts, note_id: NoteID) -> Arc<[DiagWithLoc]> {
+    let note_facts = NoteFactsDB::new(db, note_id);
+    let mut diags = Vec::new();
+    diags.append(&mut diag::check_title(&note_facts));
+
+    diags.into()
 }

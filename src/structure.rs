@@ -11,7 +11,7 @@ use pulldown_cmark::{BrokenLink, CowStr, Event, LinkType, Options, Parser, Tag};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct NoteName(String);
 
 impl From<String> for NoteName {
@@ -212,7 +212,7 @@ pub enum Element {
     LinkRef(LinkRef),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Heading {
     pub level: u8,
     pub text: String,

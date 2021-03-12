@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    collections::HashSet,
     path::{Path, PathBuf},
 };
 
@@ -7,8 +8,8 @@ use anyhow::Result;
 use glob::Pattern;
 use lsp_types::{
     CompletionItem, DidChangeTextDocumentParams, Documentation, Hover, HoverContents, Location,
-    MarkupContent, SemanticToken, SemanticTokenType, SemanticTokensLegend, SymbolInformation,
-    TextDocumentIdentifier, TextDocumentItem, Url,
+    MarkupContent, PublishDiagnosticsParams, SemanticToken, SemanticTokenType,
+    SemanticTokensLegend, SymbolInformation, TextDocumentIdentifier, TextDocumentItem, Url,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,7 @@ use serde_json;
 use tracing::debug;
 
 use crate::{
+    diag::{self, DiagCollection, DiagWithLoc},
     facts::{FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
     store::{NoteFile, NoteText, Version},
     structure::{Element, ElementWithLoc, NoteName},
@@ -78,18 +80,23 @@ pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
 
 #[allow(deprecated)]
 pub fn document_symbols(facts: &FactsDB, path: &Path, query: &str) -> Vec<SymbolInformation> {
+    debug!("document_symbols: start");
+
     let mut symbols = Vec::new();
 
     let note_id = match facts.note_index().find_by_path(path) {
         Some(t) => t,
         _ => return symbols,
     };
+    debug!("document_symbols: note_id={:?}", note_id);
+
     let note = facts.note_facts(note_id);
     let structure = note.structure();
 
     let matching_ids = note.headings_matching(|hd| text_matches_query(hd.text.as_str(), query));
-    let matching_els = structure.headings_with_ids(&matching_ids);
+    debug!("document_symbols: found {} ids", matching_ids.len());
 
+    let matching_els = structure.headings_with_ids(&matching_ids);
     for (hd, span) in matching_els {
         let lsp_range = match note.indexed_text().range_to_lsp_range(&span) {
             Some(r) => r,
@@ -471,4 +478,48 @@ fn semantic_tokens_encode(
     }
 
     encoded
+}
+
+//////////////////////////////////////////
+// Diagnostics
+/////////////////////////////////////////
+
+pub fn diag(
+    facts: &FactsDB,
+    prev_diag_col: &DiagCollection,
+) -> Option<(Vec<PublishDiagnosticsParams>, DiagCollection)> {
+    debug!("Diagnostic check initiated");
+
+    let mut changed = false;
+
+    let mut new_col = DiagCollection::default();
+    let mut diag_params = Vec::new();
+
+    for note_id in facts.note_index().ids() {
+        let note = facts.note_facts(note_id);
+        let file = note.file();
+        let diag = note.diag();
+        let diag: HashSet<DiagWithLoc> = diag.iter().map(|d| d.clone()).collect();
+
+        let changed_for_file = if let Some(prev_set) = prev_diag_col.store.get(&file) {
+            *prev_set != diag
+        } else {
+            true
+        };
+
+        if changed_for_file {
+            changed = true;
+            if let Some(param) = diag::to_publish(&file, &diag, facts) {
+                diag_params.push(param);
+            }
+        }
+
+        new_col.store.insert(file, diag);
+    }
+
+    if changed {
+        Some((diag_params, new_col))
+    } else {
+        None
+    }
 }

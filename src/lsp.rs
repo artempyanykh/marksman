@@ -18,8 +18,8 @@ use tracing::debug;
 
 use crate::{
     facts::{FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
-    note::{Element, ElementWithLoc, NoteName},
     store::{NoteFile, NoteText, Version},
+    structure::{Element, ElementWithLoc, NoteName},
     text::{self, text_matches_query, OffsetMap},
 };
 
@@ -50,10 +50,7 @@ pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeT
 
 pub fn note_open(facts: &mut FactsDB, root: &Path, path: &Path, document: &TextDocumentItem) {
     let note = NoteText::new(Version::Vs(document.version), document.text.clone().into());
-    let note_file = NoteFile {
-        root: root.to_path_buf(),
-        path: path.to_path_buf(),
-    };
+    let note_file = NoteFile::new(root, path);
     facts.insert_note(note_file, note);
 }
 
@@ -88,10 +85,10 @@ pub fn document_symbols(facts: &FactsDB, path: &Path, query: &str) -> Vec<Symbol
         _ => return symbols,
     };
     let note = facts.note_facts(note_id);
-    let el_index = note.element_index();
+    let structure = note.structure();
 
     let matching_ids = note.headings_matching(|hd| text_matches_query(hd.text.as_str(), query));
-    let matching_els = el_index.headings_with_ids(&matching_ids);
+    let matching_els = structure.headings_with_ids(&matching_ids);
 
     for (hd, span) in matching_els {
         let lsp_range = match note.indexed_text().range_to_lsp_range(&span) {
@@ -148,9 +145,9 @@ pub fn completion_candidates(
 ) -> Option<Vec<CompletionItem>> {
     let encl_note_id = facts.note_index().find_by_path(current_tag)?;
     let encl_note = facts.note_facts(encl_note_id);
-    let encl_el_index = encl_note.element_index();
+    let encl_structure = encl_note.structure();
 
-    let (enclosing_el, _) = encl_el_index.elements_by_id(encl_note.element_at_lsp_pos(pos)?);
+    let (enclosing_el, _) = encl_structure.elements_by_id(encl_note.element_at_lsp_pos(pos)?);
     let enclosing_link_ref = match enclosing_el {
         Element::LinkRef(r) => r,
         _ => return None,
@@ -169,21 +166,21 @@ pub fn completion_candidates(
             .map(NoteName::into_string)
             .unwrap_or_default();
 
-        for id in facts.note_index().ids() {
-            if id == encl_note_id {
+        for candidate_id in facts.note_index().ids() {
+            if candidate_id == encl_note_id {
                 // Don't try to complete the current note
                 continue;
             }
 
-            let note = facts.note_facts(id);
-            let note_el_index = note.element_index();
+            let cand = facts.note_facts(candidate_id);
+            let cand_struct = cand.structure();
 
-            if let Some((title, _)) = note.title().map(|id| note_el_index.heading_by_id(id)) {
+            if let Some((title, _)) = cand.title().map(|id| cand_struct.heading_by_id(id)) {
                 if !text::text_matches_query(&title.text, &partial_input) {
                     continue;
                 }
 
-                let name = NoteName::from_path(&note.file().path, root);
+                let name = NoteName::from_path(&cand.file().path, root);
                 let data = serde_json::to_value(CompletionType::NoteCompletion {
                     note_name: name.clone(),
                 })
@@ -210,14 +207,14 @@ pub fn completion_candidates(
         };
         debug!("Mathing headings inside {:?}...", target_tag);
 
-        let target_note_id = facts.note_index().find_by_path(&target_tag)?;
-        let target_note = facts.note_facts(target_note_id);
-        let target_el_index = target_note.element_index();
+        let cand_id = facts.note_index().find_by_path(&target_tag)?;
+        let cand = facts.note_facts(cand_id);
+        let cand_struct = cand.structure();
 
         let query = enclosing_link_ref.heading.clone().unwrap_or_default();
         let candidate_headings: Vec<_> =
-            target_note.headings_matching(|hd| text::text_matches_query(&hd.text, &query));
-        let candidate_headings = target_el_index.headings_with_ids(&candidate_headings);
+            cand.headings_matching(|hd| text::text_matches_query(&hd.text, &query));
+        let candidate_headings = cand_struct.headings_with_ids(&candidate_headings);
 
         for (hd, _) in candidate_headings {
             if hd.level == 1 {
@@ -271,8 +268,8 @@ pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Optio
         CompletionType::HeadingCompletion { note_name, heading } => {
             let note_id = facts.note_index().find_by_name(&note_name)?;
             let note = facts.note_facts(note_id);
-            let el_index = note.element_index();
-            let (heading, _) = el_index.heading_by_id(note.heading_with_text(&heading)?);
+            let structure = note.structure();
+            let (heading, _) = structure.heading_by_id(note.heading_with_text(&heading)?);
             let content = &note.text().content[heading.scope.clone()];
             let documentation = Documentation::MarkupContent(MarkupContent {
                 kind: lsp_types::MarkupKind::Markdown,
@@ -300,8 +297,8 @@ pub fn hover(
     let note_id = facts.note_index().find_by_path(path)?;
     let note_name = NoteName::from_path(path, root);
     let note = facts.note_facts(note_id);
-    let el_index = note.element_index();
-    let (hovered_el, span) = el_index.elements_by_id(note.element_at_lsp_pos(pos)?);
+    let note_structure = note.structure();
+    let (hovered_el, span) = note_structure.elements_by_id(note.element_at_lsp_pos(pos)?);
 
     if let Element::LinkRef(link_ref) = hovered_el {
         let range = note.indexed_text().range_to_lsp_range(&span);
@@ -310,10 +307,11 @@ pub fn hover(
 
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
-        let target_index = target_note.element_index();
+        let target_struct = target_note.structure();
         let target_text = target_note.text();
         let text = if let Some(heading) = &link_ref.heading {
-            let (heading, _) = target_index.heading_by_id(target_note.heading_with_text(&heading)?);
+            let (heading, _) =
+                target_struct.heading_by_id(target_note.heading_with_text(&heading)?);
 
             &target_text.content[heading.scope.clone()]
         } else {
@@ -342,7 +340,7 @@ pub fn goto_definition(
 ) -> Option<Location> {
     let source_id = facts.note_index().find_by_path(path)?;
     let source_note = facts.note_facts(source_id);
-    let souce_index = source_note.element_index();
+    let souce_index = source_note.structure();
     let (encl_el, _) = souce_index.elements_by_id(source_note.element_at_lsp_pos(pos)?);
 
     if let Element::LinkRef(link_ref) = encl_el {
@@ -353,11 +351,11 @@ pub fn goto_definition(
 
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
-        let target_index = target_note.element_index();
+        let target_struct = target_note.structure();
         let (_, target_range) = if let Some(link_heading) = &link_ref.heading {
-            target_index.heading_by_id(target_note.heading_with_text(link_heading)?)
+            target_struct.heading_by_id(target_note.heading_with_text(link_heading)?)
         } else {
-            target_index.heading_by_id(target_note.title()?)
+            target_struct.heading_by_id(target_note.title()?)
         };
         let range = target_note
             .indexed_text()
@@ -410,17 +408,17 @@ pub fn semantic_tokens_range(
     let note_id = facts.note_index().find_by_path(path)?;
     let note = facts.note_facts(note_id);
     let element_ids = note.elements_in_lsp_range(range)?;
-    let el_idx = note.element_index();
-    let elements = el_idx.elements_with_ids(&element_ids).collect();
+    let strukt = note.structure();
+    let elements = strukt.elements_with_ids(&element_ids).collect();
     Some(semantic_tokens_encode(note, elements))
 }
 
 pub fn semantic_tokens_full(facts: &FactsDB, path: &PathBuf) -> Option<Vec<SemanticToken>> {
     let note_id = facts.note_index().find_by_path(path)?;
     let note = facts.note_facts(note_id);
-    let el_idx = note.element_index();
+    let strukt = note.structure();
 
-    let elements = el_idx
+    let elements = strukt
         .elements_with_loc()
         .into_iter()
         .map(|(_, ewl)| ewl)

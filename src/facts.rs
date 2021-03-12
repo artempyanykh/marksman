@@ -10,31 +10,25 @@ use glob::Pattern;
 use salsa;
 
 use crate::{
-    note::{self, ElementID, ElementIndex, Heading, HeadingID, LinkRefID, NoteID},
     store::{self, NoteFile, NoteIndex, NoteText},
+    structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
     text::{Offset, OffsetMap},
 };
 
 #[salsa::query_group(FactsStorage)]
 pub trait Facts: salsa::Database {
     #[salsa::input]
-    fn note_index(&self, key: ()) -> Arc<NoteIndex>;
+    fn note_index(&self, key: ()) -> NoteIndex;
 
     #[salsa::input]
-    fn note_content(&self, note_file: NoteFile) -> Arc<NoteText>;
+    fn note_content(&self, note_file: NoteFile) -> NoteText;
 
-    fn note_text(&self, note_id: NoteID) -> Arc<NoteText>;
-
+    fn note_text(&self, note_id: NoteID) -> NoteText;
     fn note_indexed_text(&self, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>>;
-
-    fn note_element_index(&self, note_id: NoteID) -> Arc<ElementIndex>;
-
+    fn note_structure(&self, note_id: NoteID) -> Structure;
     fn note_title(&self, note_id: NoteID) -> Option<HeadingID>;
-
     fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]>;
-
     fn note_headings(&self, note_id: NoteID) -> Arc<[HeadingID]>;
-
     fn note_refs(&self, note_id: NoteID) -> Arc<[LinkRefID]>;
 }
 
@@ -88,13 +82,10 @@ impl FactsDB {
         Ok(empty)
     }
 
-    pub async fn with_file(&mut self, root: &Path, file: &Path, ignores: &[Pattern]) -> Result<()> {
-        let note = store::read_note(file, ignores).await?;
+    pub async fn with_file(&mut self, root: &Path, path: &Path, ignores: &[Pattern]) -> Result<()> {
+        let note = store::read_note(path, ignores).await?;
         if let Some(note) = note {
-            let note_file = NoteFile {
-                root: root.to_path_buf(),
-                path: file.to_path_buf(),
-            };
+            let note_file = NoteFile::new(root, path);
             self.insert_note(note_file, note);
         }
 
@@ -108,11 +99,11 @@ impl FactsDB {
         }
     }
 
-    pub fn note_index(&self) -> Arc<NoteIndex> {
+    pub fn note_index(&self) -> NoteIndex {
         self.0.note_index(())
     }
 
-    pub fn note_text(&self, note_id: NoteID) -> Arc<NoteText> {
+    pub fn note_text(&self, note_id: NoteID) -> NoteText {
         self.0.note_text(note_id)
     }
 
@@ -120,8 +111,8 @@ impl FactsDB {
         self.0.note_indexed_text(note_id)
     }
 
-    pub fn note_element_index(&self, note_id: NoteID) -> Arc<ElementIndex> {
-        self.0.note_element_index(note_id)
+    pub fn note_structure(&self, note_id: NoteID) -> Structure {
+        self.0.note_structure(note_id)
     }
 
     pub fn note_title(&self, note_id: NoteID) -> Option<HeadingID> {
@@ -144,9 +135,9 @@ impl FactsDB {
 // Narrow facts to a particular note (simpler UX)
 
 pub trait NoteFacts {
-    fn text(&self) -> Arc<NoteText>;
+    fn text(&self) -> NoteText;
     fn indexed_text(&self) -> Arc<OffsetMap<Arc<str>>>;
-    fn element_index(&self) -> Arc<ElementIndex>;
+    fn structure(&self) -> Structure;
     fn title(&self) -> Option<HeadingID>;
     fn elements(&self) -> Arc<[ElementID]>;
     fn headings(&self) -> Arc<[HeadingID]>;
@@ -169,7 +160,7 @@ pub struct NoteFactsDB<'a> {
 impl<'a> NoteFactsDB<'a> {}
 
 impl<'a> NoteFacts for NoteFactsDB<'a> {
-    fn text(&self) -> Arc<NoteText> {
+    fn text(&self) -> NoteText {
         self.db.note_text(self.id)
     }
 
@@ -177,8 +168,8 @@ impl<'a> NoteFacts for NoteFactsDB<'a> {
         self.db.note_indexed_text(self.id)
     }
 
-    fn element_index(&self) -> Arc<ElementIndex> {
-        self.db.note_element_index(self.id)
+    fn structure(&self) -> Structure {
+        self.db.note_structure(self.id)
     }
 
     fn title(&self) -> Option<HeadingID> {
@@ -200,11 +191,11 @@ impl<'a> NoteFacts for NoteFactsDB<'a> {
 
 impl<'a> NoteFactsExt for NoteFactsDB<'a> {
     fn headings_matching(&self, pred: impl Fn(&Heading) -> bool) -> Vec<HeadingID> {
-        let index = self.element_index();
+        let structure = self.structure();
         self.headings()
             .iter()
             .filter_map(|&id| {
-                let (hd, _) = index.heading_by_id(id);
+                let (hd, _) = structure.heading_by_id(id);
                 if pred(hd) {
                     Some(id)
                 } else {
@@ -221,14 +212,17 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
     }
 
     fn element_at_offset(&self, offset: usize) -> Option<ElementID> {
-        let index = self.element_index();
-        index.elements_with_loc().into_iter().find_map(|(id, ewl)| {
-            if ewl.1.contains(&offset) {
-                Some(id)
-            } else {
-                None
-            }
-        })
+        let structure = self.structure();
+        structure
+            .elements_with_loc()
+            .into_iter()
+            .find_map(|(id, ewl)| {
+                if ewl.1.contains(&offset) {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
     }
 
     fn element_at_lsp_pos(&self, pos: &lsp_types::Position) -> Option<ElementID> {
@@ -245,9 +239,9 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
         let target_span = range.start.to_usize(indexed_text.text.len())
             ..range.end.to_usize(indexed_text.text.len());
 
-        let index = self.element_index();
+        let structure = self.structure();
         let mut elements_in_offsets = Vec::new(); // strict inclusion
-        for (id, ewl) in index.elements_with_loc() {
+        for (id, ewl) in structure.elements_with_loc() {
             if target_span.contains(&ewl.1.start) && target_span.contains(&ewl.1.end) {
                 elements_in_offsets.push(id);
             }
@@ -271,7 +265,7 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
 
 // Derived queries
 
-fn note_text(db: &dyn Facts, note_id: NoteID) -> Arc<NoteText> {
+fn note_text(db: &dyn Facts, note_id: NoteID) -> NoteText {
     let file = db.note_index(()).find_by_id(note_id);
     db.note_content((*file).clone())
 }
@@ -281,22 +275,22 @@ fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>
     Arc::new(OffsetMap::new(note_text.content.clone()))
 }
 
-fn note_element_index(db: &dyn Facts, note_id: NoteID) -> Arc<ElementIndex> {
+fn note_structure(db: &dyn Facts, note_id: NoteID) -> Structure {
     let text = db.note_text(note_id);
-    let elements = note::scrape(&text.content);
-    ElementIndex::new(elements).into()
+    let elements = structure::scrape(&text.content);
+    Structure::new(elements)
 }
 
 fn note_elements(db: &dyn Facts, note_id: NoteID) -> Arc<[ElementID]> {
-    db.note_element_index(note_id).elements().into()
+    db.note_structure(note_id).elements().into()
 }
 
 fn note_headings(db: &dyn Facts, note_id: NoteID) -> Arc<[HeadingID]> {
-    db.note_element_index(note_id).headings().into()
+    db.note_structure(note_id).headings().into()
 }
 
 fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
-    let index = db.note_element_index(note_id);
+    let index = db.note_structure(note_id);
     db.note_headings(note_id)
         .iter()
         .find(|id| index.heading_by_id(**id).0.level == 1)
@@ -304,5 +298,5 @@ fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
 }
 
 fn note_refs(db: &dyn Facts, note_id: NoteID) -> Arc<[LinkRefID]> {
-    db.note_element_index(note_id).refs().into()
+    db.note_structure(note_id).refs().into()
 }

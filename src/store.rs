@@ -12,12 +12,21 @@ use tokio::fs;
 
 use tracing::debug;
 
-use crate::note::{NoteID, NoteName};
+use crate::structure::{NoteID, NoteName};
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct NoteFile {
-    pub root: PathBuf,
-    pub path: PathBuf,
+    pub root: Arc<Path>,
+    pub path: Arc<Path>,
+}
+
+impl NoteFile {
+    pub fn new(root: &Path, path: &Path) -> Self {
+        Self {
+            root: root.into(),
+            path: path.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +57,7 @@ impl NoteIndex {
 
     pub fn find_by_path(&self, path: &Path) -> Option<NoteID> {
         self.notes.iter().enumerate().find_map(|(idx, nf)| {
-            if nf.path == path {
+            if nf.path.as_ref() == path {
                 Some(idx.into())
             } else {
                 None
@@ -93,10 +102,7 @@ pub struct NoteText {
 
 impl NoteText {
     pub fn new(version: Version, content: Arc<str>) -> Self {
-        Self {
-            version,
-            content: content,
-        }
+        Self { version, content }
     }
 }
 

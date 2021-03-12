@@ -18,7 +18,7 @@ use lsp_types::{
 use lsp_server::{Connection, Message, Notification, RequestId, Response};
 use tracing_subscriber::EnvFilter;
 
-use zeta_note::{facts, ls, store};
+use zeta_note::{facts, lsp, store};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     server_capabilities.definition_provider = Some(OneOf::Left(true));
     server_capabilities.semantic_tokens_provider = Some(
         SemanticTokensOptions {
-            legend: ls::semantic_tokens_legend().clone(),
+            legend: lsp::semantic_tokens_legend().clone(),
             range: Some(true),
             full: Some(SemanticTokensFullOptions::Bool(true)),
             ..SemanticTokensOptions::default()
@@ -85,7 +85,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
     let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(10);
     let mut last_note_count = index.note_index().size();
     pending_not_tx
-        .send(ls::status_notification(last_note_count))
+        .send(lsp::status_notification(last_note_count))
         .await?;
 
     let not_connection = connection.clone();
@@ -102,7 +102,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
         let current_notes_count = index.note_index().size();
         if current_notes_count != last_note_count {
             pending_not_tx
-                .send(ls::status_notification(current_notes_count))
+                .send(lsp::status_notification(current_notes_count))
                 .await?;
             last_note_count = current_notes_count;
         }
@@ -115,7 +115,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
 
                 if let Ok((id, params)) = cast_r::<DocumentSymbolRequest>(req.clone()) {
                     let file = params.text_document.uri.to_file_path().unwrap();
-                    let result = ls::document_symbols(&index, &file, "");
+                    let result = lsp::document_symbols(&index, &file, "");
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,
@@ -127,7 +127,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                 }
 
                 if let Ok((id, params)) = cast_r::<WorkspaceSymbol>(req.clone()) {
-                    let result = ls::workspace_symbols(&index, &params.query);
+                    let result = lsp::workspace_symbols(&index, &params.query);
                     let result = serde_json::to_value(&result).unwrap();
                     let resp = Response {
                         id,
@@ -146,7 +146,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .to_file_path()
                         .unwrap();
                     let pos = params.text_document_position.position;
-                    let candidates = ls::completion_candidates(&root_path, &index, &path, &pos)
+                    let candidates = lsp::completion_candidates(&root_path, &index, &path, &pos)
                         .unwrap_or_default();
                     let result = Some(CompletionResponse::Array(candidates));
                     let result = serde_json::to_value(&result).unwrap();
@@ -161,7 +161,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
 
                 if let Ok((id, params)) = cast_r::<ResolveCompletionItem>(req.clone()) {
                     let resolved =
-                        ls::completion_resolve(&index, &params).unwrap_or_else(|| params.clone());
+                        lsp::completion_resolve(&index, &params).unwrap_or_else(|| params.clone());
                     let result = serde_json::to_value(resolved).unwrap();
                     let resp = Response {
                         id,
@@ -180,7 +180,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .to_file_path()
                         .unwrap();
                     let position = params.text_document_position_params.position;
-                    let hover = ls::hover(&root_path, &index, &path, &position);
+                    let hover = lsp::hover(&root_path, &index, &path, &position);
                     let result = serde_json::to_value(hover).unwrap();
                     let resp = Response {
                         id,
@@ -199,7 +199,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .to_file_path()
                         .unwrap();
                     let position = params.text_document_position_params.position;
-                    let result = ls::goto_definition(&root_path, &index, &path, &position)
+                    let result = lsp::goto_definition(&root_path, &index, &path, &position)
                         .map(|loc| GotoDefinitionResponse::Scalar(loc));
                     let result = serde_json::to_value(result).unwrap();
                     let resp = Response {
@@ -213,7 +213,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
 
                 if let Ok((id, params)) = cast_r::<SemanticTokensFullRequest>(req.clone()) {
                     let path = params.text_document.uri.to_file_path().unwrap();
-                    let tokens = ls::semantic_tokens_full(&index, &path);
+                    let tokens = lsp::semantic_tokens_full(&index, &path);
                     let result = tokens.map(|tv| {
                         SemanticTokensResult::Tokens(SemanticTokens {
                             data: tv,
@@ -233,7 +233,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                 if let Ok((id, params)) = cast_r::<SemanticTokensRangeRequest>(req.clone()) {
                     let path = params.text_document.uri.to_file_path().unwrap();
                     let range = params.range;
-                    let tokens = ls::semantic_tokens_range(&index, &path, &range);
+                    let tokens = lsp::semantic_tokens_range(&index, &path, &range);
                     let result = tokens.map(|tv| {
                         SemanticTokensRangeResult::Tokens(SemanticTokens {
                             data: tv,
@@ -258,11 +258,12 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .uri
                         .to_file_path()
                         .expect("Failed to turn uri into path");
-                    ls::note_open(&mut index, &root_path, &path, &params.text_document);
+                    lsp::note_open(&mut index, &root_path, &path, &params.text_document);
                 }
 
                 if let Ok(params) = cast_n::<DidCloseTextDocument>(not.clone()) {
-                    ls::note_close(&mut index, &root_path, &params.text_document, &ignores).await?;
+                    lsp::note_close(&mut index, &root_path, &params.text_document, &ignores)
+                        .await?;
                 }
 
                 if let Ok(params) = cast_n::<DidChangeTextDocument>(not.clone()) {
@@ -271,7 +272,7 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         .uri
                         .to_file_path()
                         .expect("Failed to turn uri into path");
-                    ls::note_apply_changes(&mut index, &path, &params);
+                    lsp::note_apply_changes(&mut index, &path, &params);
                 }
             }
         }

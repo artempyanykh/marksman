@@ -82,11 +82,11 @@ impl From<usize> for NoteID {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ElementIndex {
+pub struct Structure {
     elements: Arc<[ElementWithLoc]>,
 }
 
-impl ElementIndex {
+impl Structure {
     pub fn new(elements: Vec<ElementWithLoc>) -> Self {
         Self {
             elements: elements.into(),

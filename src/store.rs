@@ -18,13 +18,23 @@ use crate::structure::{NoteID, NoteName};
 pub struct NoteFile {
     pub root: Arc<Path>,
     pub path: Arc<Path>,
+    pub name: Arc<NoteName>,
 }
 
 impl NoteFile {
     pub fn new(root: &Path, path: &Path) -> Self {
+        let name: NoteName = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .with_extension("")
+            .to_string_lossy()
+            .to_string()
+            .into();
+
         Self {
             root: root.into(),
             path: path.into(),
+            name: name.into(),
         }
     }
 }

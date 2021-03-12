@@ -119,6 +119,7 @@ pub trait NoteFacts {
     fn diag(&self) -> Arc<[DiagWithLoc]>;
 }
 pub trait NoteFactsExt: NoteFacts {
+    fn id(&self) -> NoteID;
     fn file(&self) -> NoteFile;
     fn headings_matching(&self, pred: impl Fn(&Heading) -> bool) -> Vec<HeadingID>;
     fn heading_with_text(&self, text: &str) -> Option<HeadingID>;
@@ -244,6 +245,10 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
     fn file(&self) -> NoteFile {
         self.db.note_index(()).find_by_id(self.id)
     }
+
+    fn id(&self) -> NoteID {
+        self.id
+    }
 }
 
 // Derived queries
@@ -288,6 +293,8 @@ fn note_diag(db: &dyn Facts, note_id: NoteID) -> Arc<[DiagWithLoc]> {
     let note_facts = NoteFactsDB::new(db, note_id);
     let mut diags = Vec::new();
     diags.append(&mut diag::check_title(&note_facts));
+    diags.append(&mut diag::check_headings(&note_facts));
+    diags.append(&mut diag::check_refs(db, &note_facts));
 
     diags.into()
 }

@@ -446,7 +446,8 @@ fn semantic_tokens_encode(
 
     for (el, el_span) in elements {
         let token_type = match el {
-            Element::Heading(..) => SemanticTokenType::CLASS,
+            // SemanticTokenType::CLASS but skip for now as markdown syntax highlighting is already good eneough for headings
+            Element::Heading(..) => continue,
             Element::LinkRef(..) => SemanticTokenType::PROPERTY,
             _ => continue,
         };

@@ -150,11 +150,8 @@ impl Structure {
         }
     }
 
-    pub fn headings_with_ids<'a, 'b: 'a>(
-        &'a self,
-        ids: &'b [HeadingID],
-    ) -> impl Iterator<Item = (&'a Heading, Range<usize>)> {
-        ids.iter().map(move |&id| self.heading_by_id(id))
+    pub fn headings_with_ids(&self, ids: &[HeadingID]) -> Vec<(&Heading, Range<usize>)> {
+        ids.iter().map(move |&id| self.heading_by_id(id)).collect()
     }
 
     pub fn refs(&self) -> Vec<LinkRefID> {
@@ -175,6 +172,10 @@ impl Structure {
         } else {
             panic!("Expected a ref at idx {:?} in {:?}", id, self.elements)
         }
+    }
+
+    pub fn refs_with_ids(&self, ids: &[LinkRefID]) -> Vec<(&LinkRef, Range<usize>)> {
+        ids.iter().map(move |&id| self.ref_by_id(id)).collect()
     }
 }
 

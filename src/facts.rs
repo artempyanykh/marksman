@@ -1,5 +1,5 @@
 use std::{
-    ops::Range,
+    ops::{Deref, Range},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -31,6 +31,12 @@ pub trait Facts<'a>: salsa::Database {
     fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]>;
     fn note_headings(&self, note_id: NoteID) -> Arc<[HeadingID]>;
     fn note_refs(&self, note_id: NoteID) -> Arc<[LinkRefID]>;
+    fn note_valid_refs(&self, note_id: NoteID) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]>;
+    fn note_refs_to_heading(
+        &self,
+        note_id: NoteID,
+        headind_id: HeadingID,
+    ) -> Arc<[(NoteID, LinkRefID)]>;
     fn note_diag(&self, note_id: NoteID) -> Arc<[DiagWithLoc]>;
 }
 
@@ -116,6 +122,8 @@ pub trait NoteFacts {
     fn elements(&self) -> Arc<[ElementID]>;
     fn headings(&self) -> Arc<[HeadingID]>;
     fn refs(&self) -> Arc<[LinkRefID]>;
+    fn valid_refs(&self) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]>;
+    fn refs_to_heading(&self, heading_id: HeadingID) -> Arc<[(NoteID, LinkRefID)]>;
     fn diag(&self) -> Arc<[DiagWithLoc]>;
 }
 pub trait NoteFactsExt: NoteFacts {
@@ -130,7 +138,7 @@ pub trait NoteFactsExt: NoteFacts {
 }
 pub struct NoteFactsDB<'a> {
     db: &'a dyn Facts,
-    id: NoteID,
+    pub id: NoteID,
 }
 
 impl<'a> NoteFactsDB<'a> {
@@ -170,6 +178,14 @@ impl<'a> NoteFacts for NoteFactsDB<'a> {
 
     fn diag(&self) -> Arc<[DiagWithLoc]> {
         self.db.note_diag(self.id)
+    }
+
+    fn valid_refs(&self) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]> {
+        self.db.note_valid_refs(self.id)
+    }
+
+    fn refs_to_heading(&self, heading_id: HeadingID) -> Arc<[(NoteID, LinkRefID)]> {
+        self.db.note_refs_to_heading(self.id, heading_id)
     }
 }
 
@@ -287,6 +303,73 @@ fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
 
 fn note_refs(db: &dyn Facts, note_id: NoteID) -> Arc<[LinkRefID]> {
     db.note_structure(note_id).refs().into()
+}
+
+fn note_valid_refs(
+    db: &dyn Facts,
+    note_id: NoteID,
+) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]> {
+    let cur_note = NoteFactsDB::new(db, note_id);
+    let cur_strukt = cur_note.structure();
+
+    cur_note
+        .refs()
+        .iter()
+        .filter_map(|&rid| {
+            let (linkref, _) = cur_strukt.ref_by_id(rid);
+            let target_note_name = linkref
+                .note_name
+                .clone()
+                .unwrap_or(cur_note.file().name.deref().clone());
+
+            if let Some(target_id) = db.note_index(()).find_by_name(&target_note_name) {
+                let target_note = NoteFactsDB::new(db, target_id);
+                match &linkref.heading {
+                    Some(heading_text) => match target_note.heading_with_text(&heading_text) {
+                        Some(id) => Some((rid, target_id, Some(id))),
+                        _ => None,
+                    },
+                    _ => Some((rid, target_id, target_note.title())),
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .into()
+}
+
+fn note_refs_to_heading(
+    db: &dyn Facts,
+    note_id: NoteID,
+    heading_id: HeadingID,
+) -> Arc<[(NoteID, LinkRefID)]> {
+    let encl_note = NoteFactsDB::new(db, note_id);
+    let encl_note_title = encl_note.title();
+    let is_ref_to_title = encl_note_title.filter(|&tid| tid == heading_id).is_some();
+    let mut found_refs = Vec::new();
+
+    for cur_id in db.note_index(()).ids() {
+        let cur_note = NoteFactsDB::new(db, cur_id);
+        for (cur_rid, ref_to_note_id, ref_to_head_id) in cur_note.valid_refs().iter() {
+            if *ref_to_note_id == note_id {
+                match ref_to_head_id {
+                    Some(targ_hd_id) => {
+                        if *targ_hd_id == heading_id {
+                            found_refs.push((cur_id, *cur_rid))
+                        }
+                    }
+                    _ => {
+                        if is_ref_to_title {
+                            found_refs.push((cur_id, *cur_rid))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    found_refs.into()
 }
 
 fn note_diag(db: &dyn Facts, note_id: NoteID) -> Arc<[DiagWithLoc]> {

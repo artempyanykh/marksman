@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+
 use tracing::info;
 
 use lsp_types::{
@@ -9,12 +10,13 @@ use lsp_types::{
         PublishDiagnostics,
     },
     request::{
-        Completion, DocumentSymbolRequest, GotoDefinition, HoverRequest, ResolveCompletionItem,
-        SemanticTokensFullRequest, SemanticTokensRangeRequest, WorkspaceSymbol,
+        CodeLensRequest, CodeLensResolve, Completion, DocumentSymbolRequest, GotoDefinition,
+        HoverRequest, ResolveCompletionItem, SemanticTokensFullRequest, SemanticTokensRangeRequest,
+        WorkspaceSymbol,
     },
-    CompletionOptions, CompletionResponse, GotoDefinitionResponse, HoverProviderCapability,
-    InitializeParams, OneOf, SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions,
-    SemanticTokensRangeResult, SemanticTokensResult, ServerCapabilities,
+    CodeLensOptions, CompletionOptions, CompletionResponse, GotoDefinitionResponse,
+    HoverProviderCapability, InitializeParams, OneOf, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensOptions, SemanticTokensRangeResult, SemanticTokensResult, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
@@ -28,7 +30,7 @@ async fn main() -> Result<()> {
     // let filter = EnvFilter::default().add_directive("zeta_note=debug".into()?);
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_default()
-        .add_directive("zeta_note=debug".parse()?);
+        .add_directive("zeta_note::debug".parse()?);
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
@@ -60,6 +62,9 @@ async fn main() -> Result<()> {
         }
         .into(),
     );
+    server_capabilities.code_lens_provider = Some(CodeLensOptions {
+        resolve_provider: Some(true),
+    });
 
     let server_capabilities = serde_json::to_value(&server_capabilities).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
@@ -260,6 +265,31 @@ async fn main_loop(connection: Connection, params: serde_json::Value) -> Result<
                         })
                     });
                     let result = serde_json::to_value(result).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<CodeLensRequest>(req.clone()) {
+                    let path = params.text_document.uri.to_file_path().unwrap();
+                    let lenses = lsp::code_lenses(&index, &path);
+                    let result = serde_json::to_value(lenses).unwrap();
+                    let resp = Response {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    };
+                    connection.sender.send(Message::Response(resp))?;
+                    continue;
+                }
+
+                if let Ok((id, params)) = cast_r::<CodeLensResolve>(req.clone()) {
+                    let resolved_lens = lsp::code_lens_resolve(&index, &params).unwrap_or(params);
+                    let result = serde_json::to_value(resolved_lens).unwrap();
                     let resp = Response {
                         id,
                         result: Some(result),

@@ -7,9 +7,10 @@ use std::{
 use anyhow::Result;
 use glob::Pattern;
 use lsp_types::{
-    CompletionItem, DidChangeTextDocumentParams, Documentation, Hover, HoverContents, Location,
-    MarkupContent, PublishDiagnosticsParams, SemanticToken, SemanticTokenType,
-    SemanticTokensLegend, SymbolInformation, TextDocumentIdentifier, TextDocumentItem, Url,
+    CodeLens, Command, CompletionItem, DidChangeTextDocumentParams, Documentation, Hover,
+    HoverContents, Location, MarkupContent, Position, PublishDiagnosticsParams, SemanticToken,
+    SemanticTokenType, SemanticTokensLegend, SymbolInformation, TextDocumentIdentifier,
+    TextDocumentItem, Url,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -523,4 +524,123 @@ pub fn diag(
     } else {
         None
     }
+}
+
+//////////////////////////////////////////
+// Code Lenses
+/////////////////////////////////////////
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceData {
+    note_path: PathBuf,
+    heading_text: String,
+}
+
+pub fn code_lenses(facts: &FactsDB, path: &Path) -> Option<Vec<CodeLens>> {
+    let note = facts.note_facts(facts.note_index().find_by_path(path)?);
+
+    // Just generate dummy "references" lens for each heading
+    // They will get resolved to actual commands separately
+    let strukt = note.structure();
+    let indexed_text = note.indexed_text();
+    let mut lenses = Vec::new();
+
+    for &h_id in &strukt.headings() {
+        // Don't generate lenses for headings with no references
+        let ref_count = note.refs_to_heading(h_id).len();
+        if ref_count == 0 {
+            continue;
+        }
+
+        let (heading, range) = strukt.heading_by_id(h_id);
+        let lsp_range = match indexed_text.range_to_lsp_range(&range) {
+            Some(lr) => lr,
+            None => continue,
+        };
+        let ref_data = ReferenceData {
+            note_path: path.to_path_buf(),
+            heading_text: heading.text.to_string(),
+        };
+        let lens = CodeLens {
+            range: lsp_range,
+            command: None,
+            data: Some(serde_json::to_value(ref_data).unwrap()),
+        };
+
+        lenses.push(lens);
+    }
+
+    Some(lenses)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShowReferencesData {
+    uri: Url,
+    position: Position,
+    locations: Vec<Location>,
+}
+
+pub fn code_lens_resolve(facts: &FactsDB, lens: &CodeLens) -> Option<CodeLens> {
+    debug!("code_lens_resolve: start");
+
+    let lens_data = lens.data.clone()?;
+    let ref_data: ReferenceData = serde_json::from_value(lens_data).ok()?;
+    let note = facts.note_facts(facts.note_index().find_by_path(&ref_data.note_path)?);
+    let strukt = note.structure();
+
+    let heading_id = note.heading_with_text(&ref_data.heading_text)?;
+    let (_, heading_range) = strukt.heading_by_id(heading_id);
+    let heading_lsp_pos = note
+        .indexed_text()
+        .offset_to_lsp_position(heading_range.start)?;
+
+    debug!(
+        "code_lens_resolve: note_id={:?}, heading_id={:?}",
+        note.id, heading_id
+    );
+
+    let references = note.refs_to_heading(heading_id);
+    debug!("code_lens_resolve: found {} references", references.len());
+
+    let mut locations: Vec<Location> = Vec::new();
+    for (src_note_id, src_ref_id) in references.iter() {
+        let src_note = facts.note_facts(*src_note_id);
+        let src_indexed_text = src_note.indexed_text();
+        let src_strukt = src_note.structure();
+
+        let (_, src_range) = src_strukt.ref_by_id(*src_ref_id);
+        let lsp_range = match src_indexed_text.range_to_lsp_range(&src_range) {
+            Some(r) => r,
+            _ => continue,
+        };
+
+        let loc = Location {
+            uri: Url::from_file_path(src_note.file().path).unwrap(),
+            range: lsp_range,
+        };
+
+        locations.push(loc)
+    }
+
+    let num_locs = locations.len();
+    let arguments = if locations.is_empty() {
+        None
+    } else {
+        let data = ShowReferencesData {
+            uri: Url::from_file_path(note.file().path).unwrap(),
+            position: heading_lsp_pos,
+            locations,
+        };
+        Some(vec![serde_json::to_value(data).unwrap()])
+    };
+    let command = Command {
+        title: format!("{} references", num_locs),
+        command: "zetaNote.showReferences".to_string(),
+        arguments,
+    };
+
+    Some(CodeLens {
+        command: Some(command),
+        ..lens.clone()
+    })
 }

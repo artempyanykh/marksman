@@ -372,40 +372,40 @@ mod test {
             Heading {
                 level: 1,
                 text: "# Some text in heading 1",
-                scope: 28..634,
+                scope: 26..604,
             },
         ),
-        28..52,
+        26..50,
     ),
     (
         Heading(
             Heading {
                 level: 2,
                 text: "## Some text in heading 1-2",
-                scope: 56..118,
+                scope: 52..110,
             },
         ),
-        56..83,
+        52..79,
     ),
     (
         Heading(
             Heading {
                 level: 1,
                 text: "#     Some text in heading 2",
-                scope: 118..634,
+                scope: 110..604,
             },
         ),
-        118..146,
+        110..138,
     ),
     (
         Heading(
             Heading {
                 level: 2,
                 text: "## Heading with links",
-                scope: 150..634,
+                scope: 140..604,
             },
         ),
-        150..171,
+        140..161,
     ),
     (
         LinkRef(
@@ -417,7 +417,7 @@ mod test {
                 heading: None,
             },
         ),
-        196..205,
+        184..193,
     ),
     (
         LinkRef(
@@ -429,7 +429,7 @@ mod test {
                 ),
             },
         ),
-        235..263,
+        221..249,
     ),
     (
         LinkRef(
@@ -443,7 +443,7 @@ mod test {
                 ),
             },
         ),
-        301..327,
+        285..311,
     ),
     (
         LinkRef(
@@ -455,7 +455,7 @@ mod test {
                 heading: None,
             },
         ),
-        372..385,
+        355..368,
     ),
     (
         LinkRegular(
@@ -467,7 +467,7 @@ mod test {
                 title: None,
             },
         ),
-        411..421,
+        391..401,
     ),
     (
         LinkRegular(
@@ -477,7 +477,7 @@ mod test {
                 title: None,
             },
         ),
-        450..469,
+        429..448,
     ),
     (
         LinkRegular(
@@ -489,7 +489,7 @@ mod test {
                 title: None,
             },
         ),
-        498..503,
+        475..480,
     ),
     (
         LinkRegular(
@@ -499,7 +499,7 @@ mod test {
                 title: None,
             },
         ),
-        537..542,
+        513..518,
     ),
     (
         LinkRef(
@@ -509,7 +509,7 @@ mod test {
                 heading: None,
             },
         ),
-        602..605,
+        575..578,
     ),
 ]
 "###

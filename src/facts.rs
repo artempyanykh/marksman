@@ -13,8 +13,8 @@ use crate::{
     diag::{self, DiagWithLoc},
     store::{self, NoteFile, NoteIndex, NoteText},
     structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
-    text::{Offset, OffsetMap},
 };
+use lsp_text::{Offset, OffsetMap};
 
 #[salsa::query_group(FactsStorage)]
 pub trait Facts<'a>: salsa::Database {

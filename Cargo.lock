@@ -375,6 +375,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lsp-text"
+version = "0.1.0"
+dependencies = [
+ "k9",
+ "lsp-types",
+]
+
+[[package]]
 name = "lsp-types"
 version = "0.88.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1048,6 +1056,7 @@ dependencies = [
  "glob",
  "k9",
  "lsp-server",
+ "lsp-text",
  "lsp-types",
  "once_cell",
  "pulldown-cmark",

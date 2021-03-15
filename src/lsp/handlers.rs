@@ -19,13 +19,14 @@ use serde_json;
 
 use tracing::debug;
 
+use crate::util::text_matches_query;
 use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
     facts::{FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
     store::{NoteFile, NoteText, Version},
     structure::{Element, ElementWithLoc, NoteName},
-    text::{self, text_matches_query, OffsetMap},
 };
+use lsp_text::{self, OffsetMap};
 
 //////////////////////////////////////////
 // Text Sync
@@ -38,7 +39,7 @@ pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeT
         let mut final_text = note_text.content.to_string();
 
         for change in &changes.content_changes {
-            final_text = text::apply_change(
+            final_text = lsp_text::apply_change(
                 &final_text,
                 &OffsetMap::new(final_text.as_str()),
                 change.range,
@@ -185,7 +186,7 @@ pub fn completion_candidates(
             let cand_struct = cand.structure();
 
             if let Some((title, _)) = cand.title().map(|id| cand_struct.heading_by_id(id)) {
-                if !text::text_matches_query(&title.text, &partial_input) {
+                if !text_matches_query(&title.text, &partial_input) {
                     continue;
                 }
 
@@ -222,7 +223,7 @@ pub fn completion_candidates(
 
         let query = enclosing_link_ref.heading.clone().unwrap_or_default();
         let candidate_headings: Vec<_> =
-            cand.headings_matching(|hd| text::text_matches_query(&hd.text, &query));
+            cand.headings_matching(|hd| text_matches_query(&hd.text, &query));
         let candidate_headings = cand_struct.headings_with_ids(&candidate_headings);
 
         for (hd, _) in candidate_headings {

@@ -291,7 +291,7 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
                 let heading_span = el_span.start..(el_span.end - trimmed_on_right);
 
                 while let Some(last) = scoped_headings.last() {
-                    if last.0 > level as u8 {
+                    if last.0 >= level as u8 {
                         let last = scoped_headings.pop().unwrap();
                         let heading = Heading {
                             level: last.0,
@@ -372,7 +372,7 @@ mod test {
             Heading {
                 level: 1,
                 text: "# Some text in heading 1",
-                scope: 26..604,
+                scope: 26..110,
             },
         ),
         26..50,

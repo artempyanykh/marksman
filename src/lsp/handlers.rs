@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::Result;
 use glob::Pattern;
+
 use lsp_types::{
     CodeLens, Command, CompletionItem, DidChangeTextDocumentParams, Documentation, Hover,
     HoverContents, Location, MarkupContent, Position, PublishDiagnosticsParams, SemanticToken,

@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::Result;
 use glob::Pattern;
+use lsp_text::TextMap;
 
 use lsp_types::{
     CodeLens, Command, CompletionItem, DidChangeTextDocumentParams, Documentation, Hover,
@@ -26,7 +27,7 @@ use crate::{
     store::{NoteFile, NoteText, Version},
     structure::{Element, ElementWithLoc, NoteName},
 };
-use lsp_text::{self, OffsetMap};
+use lsp_text::{self, IndexedText, TextAdapter};
 
 //////////////////////////////////////////
 // Text Sync
@@ -35,16 +36,14 @@ use lsp_text::{self, OffsetMap};
 pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeTextDocumentParams) {
     if let Some(note_id) = facts.note_index().find_by_path(path) {
         let note = facts.note_facts(note_id);
-        let note_text = note.text();
-        let mut final_text = note_text.content.to_string();
+        let mut final_text = note.text().content.to_string();
 
-        for change in &changes.content_changes {
-            final_text = lsp_text::apply_change(
-                &final_text,
-                &OffsetMap::new(final_text.as_str()),
-                change.range,
-                &change.text,
-            );
+        for lsp_change in &changes.content_changes {
+            let indexed = IndexedText::new(final_text.as_ref());
+            let change = indexed
+                .lsp_change_to_change(lsp_change.clone())
+                .expect("Couldn't translate LSP document change event");
+            final_text = lsp_text::apply_change(&indexed, change);
         }
 
         let final_version = Version::Vs(changes.text_document.version);
@@ -280,10 +279,13 @@ pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Optio
             let note = facts.note_facts(note_id);
             let structure = note.structure();
             let (heading, _) = structure.heading_by_id(note.heading_with_text(&heading)?);
-            let content = &note.text().content[heading.scope.clone()];
+            let content = note
+                .indexed_text()
+                .substr(heading.scope.clone())?
+                .to_string();
             let documentation = Documentation::MarkupContent(MarkupContent {
                 kind: lsp_types::MarkupKind::Markdown,
-                value: content.to_string(),
+                value: content,
             });
 
             Some(CompletionItem {
@@ -318,19 +320,19 @@ pub fn hover(
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
         let target_struct = target_note.structure();
-        let target_text = target_note.text();
+        let target_text = target_note.indexed_text();
         let text = if let Some(heading) = &link_ref.heading {
             let (heading, _) =
                 target_struct.heading_by_id(target_note.heading_with_text(&heading)?);
 
-            &target_text.content[heading.scope.clone()]
+            target_text.substr(heading.scope.clone())?.to_string()
         } else {
-            &target_text.content[..]
+            target_text.text().to_string()
         };
 
         let markup = MarkupContent {
             kind: lsp_types::MarkupKind::Markdown,
-            value: text.to_string(),
+            value: text,
         };
 
         return Some(Hover {
@@ -592,9 +594,7 @@ pub fn code_lens_resolve(facts: &FactsDB, lens: &CodeLens) -> Option<CodeLens> {
 
     let heading_id = note.heading_with_text(&ref_data.heading_text)?;
     let (_, heading_range) = strukt.heading_by_id(heading_id);
-    let heading_lsp_pos = note
-        .indexed_text()
-        .offset_to_lsp_position(heading_range.start)?;
+    let heading_lsp_pos = note.indexed_text().pos_to_lsp_pos(&heading_range.start)?;
 
     debug!(
         "code_lens_resolve: note_id={:?}, heading_id={:?}",

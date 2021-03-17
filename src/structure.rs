@@ -1,3 +1,4 @@
+use lsp_text::{Pos, TextMap};
 use regex::Regex;
 
 use std::{
@@ -141,7 +142,7 @@ impl Structure {
         &self.elements[id.to_usize()]
     }
 
-    pub fn heading_by_id(&self, id: HeadingID) -> (&Heading, Range<usize>) {
+    pub fn heading_by_id(&self, id: HeadingID) -> (&Heading, Range<Pos>) {
         let el = &self.elements[id.0 as usize];
         if let (Element::Heading(hd), span) = el {
             (hd, span.clone())
@@ -150,7 +151,7 @@ impl Structure {
         }
     }
 
-    pub fn headings_with_ids(&self, ids: &[HeadingID]) -> Vec<(&Heading, Range<usize>)> {
+    pub fn headings_with_ids(&self, ids: &[HeadingID]) -> Vec<(&Heading, Range<Pos>)> {
         ids.iter().map(move |&id| self.heading_by_id(id)).collect()
     }
 
@@ -165,7 +166,7 @@ impl Structure {
         refs
     }
 
-    pub fn ref_by_id(&self, id: LinkRefID) -> (&LinkRef, Range<usize>) {
+    pub fn ref_by_id(&self, id: LinkRefID) -> (&LinkRef, Range<Pos>) {
         let el = &self.elements[id.0 as usize];
         if let (Element::LinkRef(lr), span) = el {
             (lr, span.clone())
@@ -174,12 +175,12 @@ impl Structure {
         }
     }
 
-    pub fn refs_with_ids(&self, ids: &[LinkRefID]) -> Vec<(&LinkRef, Range<usize>)> {
+    pub fn refs_with_ids(&self, ids: &[LinkRefID]) -> Vec<(&LinkRef, Range<Pos>)> {
         ids.iter().map(move |&id| self.ref_by_id(id)).collect()
     }
 }
 
-pub type ElementWithLoc = (Element, Range<usize>);
+pub type ElementWithLoc = (Element, Range<Pos>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeadingID(u32);
@@ -217,7 +218,7 @@ pub enum Element {
 pub struct Heading {
     pub level: u8,
     pub text: String,
-    pub scope: Range<usize>,
+    pub scope: Range<Pos>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -273,9 +274,10 @@ pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> LinkRegula
     LinkRegular { text, dest, title }
 }
 
-pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
+pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
     let mut callback = |_: BrokenLink<'_>| Some(("".into(), "".into()));
-    let parser = Parser::new_with_broken_link_callback(text, Options::all(), Some(&mut callback));
+    let parser =
+        Parser::new_with_broken_link_callback(index.text(), Options::all(), Some(&mut callback));
     let mut elements = Vec::new();
 
     let mut scoped_headings: Vec<(u8, String, Range<usize>)> = Vec::new();
@@ -283,7 +285,7 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
     for (event, el_span) in parser.into_offset_iter() {
         match event {
             Event::Start(Tag::Heading(level)) => {
-                let heading_text = &text[el_span.start..el_span.end];
+                let heading_text = &index.text()[el_span.start..el_span.end];
 
                 // Trim newlines, whitespaces on the right
                 let trim_right_text = heading_text.trim_end().to_string();
@@ -296,9 +298,14 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
                         let heading = Heading {
                             level: last.0,
                             text: last.1,
-                            scope: last.2.start..el_span.start,
+                            scope: index
+                                .offset_range_to_range(last.2.start..el_span.start)
+                                .unwrap(),
                         };
-                        elements.push((Element::Heading(heading), last.2));
+                        elements.push((
+                            Element::Heading(heading),
+                            index.offset_range_to_range(last.2).unwrap(),
+                        ));
                     } else {
                         break;
                     }
@@ -314,13 +321,13 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
                 | LinkType::CollapsedUnknown
                 | LinkType::Shortcut
                 | LinkType::ShortcutUnknown => {
-                    let link_text = text[el_span.start..el_span.end].trim();
+                    let link_text = &index.text()[el_span.start..el_span.end].trim();
                     let link = parse_link_ref(link_text)
                         .map(|r| Element::LinkRef(r))
                         .unwrap_or_else(|| {
                             Element::LinkRegular(parse_link_regular(link_text, dest, title))
                         });
-                    elements.push((link, el_span));
+                    elements.push((link, index.offset_range_to_range(el_span).unwrap()));
                 }
                 _ => (),
             },
@@ -332,9 +339,14 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
         let heading = Heading {
             level: remaining.0,
             text: remaining.1,
-            scope: remaining.2.start..text.len(),
+            scope: index
+                .offset_range_to_range(remaining.2.start..index.text().len())
+                .unwrap(),
         };
-        elements.push((Element::Heading(heading), remaining.2));
+        elements.push((
+            Element::Heading(heading),
+            index.offset_range_to_range(remaining.2).unwrap(),
+        ));
     }
 
     elements.sort_by_key(|(_, span)| span.start);
@@ -345,6 +357,7 @@ pub fn scrape(text: &str) -> Vec<ElementWithLoc> {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
+    use lsp_text::IndexedText;
 
     use super::*;
     use k9::{assert_equal, snapshot};
@@ -361,7 +374,7 @@ mod test {
 
     #[test]
     fn scrape_note() -> Result<()> {
-        let text = read_resource("example1.md")?;
+        let text = IndexedText::new(read_resource("example1.md")?);
         let elements = scrape(&text);
         snapshot!(
             elements,
@@ -372,40 +385,88 @@ mod test {
             Heading {
                 level: 1,
                 text: "# Some text in heading 1",
-                scope: 26..110,
+                scope: Pos {
+                    line: 2,
+                    col: 0,
+                }..Pos {
+                    line: 8,
+                    col: 0,
+                },
             },
         ),
-        26..50,
+        Pos {
+            line: 2,
+            col: 0,
+        }..Pos {
+            line: 2,
+            col: 24,
+        },
     ),
     (
         Heading(
             Heading {
                 level: 2,
                 text: "## Some text in heading 1-2",
-                scope: 52..110,
+                scope: Pos {
+                    line: 4,
+                    col: 0,
+                }..Pos {
+                    line: 8,
+                    col: 0,
+                },
             },
         ),
-        52..79,
+        Pos {
+            line: 4,
+            col: 0,
+        }..Pos {
+            line: 4,
+            col: 27,
+        },
     ),
     (
         Heading(
             Heading {
                 level: 1,
                 text: "#     Some text in heading 2",
-                scope: 110..604,
+                scope: Pos {
+                    line: 8,
+                    col: 0,
+                }..Pos {
+                    line: 30,
+                    col: 22,
+                },
             },
         ),
-        110..138,
+        Pos {
+            line: 8,
+            col: 0,
+        }..Pos {
+            line: 8,
+            col: 28,
+        },
     ),
     (
         Heading(
             Heading {
                 level: 2,
                 text: "## Heading with links",
-                scope: 140..604,
+                scope: Pos {
+                    line: 10,
+                    col: 0,
+                }..Pos {
+                    line: 30,
+                    col: 22,
+                },
             },
         ),
-        140..161,
+        Pos {
+            line: 10,
+            col: 0,
+        }..Pos {
+            line: 10,
+            col: 21,
+        },
     ),
     (
         LinkRef(
@@ -417,7 +478,13 @@ mod test {
                 heading: None,
             },
         ),
-        184..193,
+        Pos {
+            line: 12,
+            col: 21,
+        }..Pos {
+            line: 12,
+            col: 30,
+        },
     ),
     (
         LinkRef(
@@ -429,7 +496,13 @@ mod test {
                 ),
             },
         ),
-        221..249,
+        Pos {
+            line: 14,
+            col: 25,
+        }..Pos {
+            line: 14,
+            col: 53,
+        },
     ),
     (
         LinkRef(
@@ -443,7 +516,13 @@ mod test {
                 ),
             },
         ),
-        285..311,
+        Pos {
+            line: 16,
+            col: 33,
+        }..Pos {
+            line: 16,
+            col: 59,
+        },
     ),
     (
         LinkRef(
@@ -455,7 +534,13 @@ mod test {
                 heading: None,
             },
         ),
-        355..368,
+        Pos {
+            line: 17,
+            col: 42,
+        }..Pos {
+            line: 17,
+            col: 55,
+        },
     ),
     (
         LinkRegular(
@@ -467,7 +552,13 @@ mod test {
                 title: None,
             },
         ),
-        391..401,
+        Pos {
+            line: 20,
+            col: 19,
+        }..Pos {
+            line: 20,
+            col: 29,
+        },
     ),
     (
         LinkRegular(
@@ -477,7 +568,13 @@ mod test {
                 title: None,
             },
         ),
-        429..448,
+        Pos {
+            line: 21,
+            col: 26,
+        }..Pos {
+            line: 21,
+            col: 45,
+        },
     ),
     (
         LinkRegular(
@@ -489,7 +586,13 @@ mod test {
                 title: None,
             },
         ),
-        475..480,
+        Pos {
+            line: 23,
+            col: 24,
+        }..Pos {
+            line: 23,
+            col: 29,
+        },
     ),
     (
         LinkRegular(
@@ -499,7 +602,13 @@ mod test {
                 title: None,
             },
         ),
-        513..518,
+        Pos {
+            line: 24,
+            col: 31,
+        }..Pos {
+            line: 24,
+            col: 36,
+        },
     ),
     (
         LinkRef(
@@ -509,7 +618,13 @@ mod test {
                 heading: None,
             },
         ),
-        575..578,
+        Pos {
+            line: 27,
+            col: 28,
+        }..Pos {
+            line: 27,
+            col: 31,
+        },
     ),
 ]
 "###
@@ -520,16 +635,16 @@ mod test {
 
     #[test]
     fn scrape_eof() {
-        let elements = scrape("#");
+        let elements = scrape(&IndexedText::new("#"));
         assert_equal!(
             elements,
             vec![(
                 Element::Heading(Heading {
                     level: 1,
                     text: "#".to_string(),
-                    scope: 0..1
+                    scope: Pos::new(0, 0)..Pos::new(0, 1)
                 }),
-                0..1
+                Pos::new(0, 0)..Pos::new(0, 1)
             )]
         );
     }

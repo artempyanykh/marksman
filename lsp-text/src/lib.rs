@@ -1,40 +1,195 @@
-use std::{borrow::Borrow, ops::Range};
+use std::{borrow::Borrow, cmp::Ordering, ops::Range};
 
-use lsp_types::Position;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct OffsetMap<T>
-where
-    T: Borrow<str>,
-{
-    pub text: T,
-    line_ranges: Vec<Range<usize>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Pos {
+    line: u32,
+    /// Byte offset from the beginning of the line
+    col: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Offset {
-    Inner(usize),
-    End,
-}
-
-impl Offset {
-    pub fn to_usize(&self, text_len: usize) -> usize {
-        match self {
-            Offset::Inner(inner) => *inner,
-            Offset::End => text_len,
+impl Pos {
+    pub fn new(line: u32, col_offset: u32) -> Self {
+        Self {
+            line,
+            col: col_offset,
         }
     }
 }
 
-impl From<usize> for Offset {
-    fn from(v: usize) -> Self {
-        Self::Inner(v)
+impl PartialOrd for Pos {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
-impl<T: Borrow<str>> OffsetMap<T> {
+impl Ord for Pos {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let line_cmp = self.line.cmp(&other.line);
+        if line_cmp == Ordering::Equal {
+            self.col.cmp(&other.col)
+        } else {
+            line_cmp
+        }
+    }
+}
+
+pub struct TextChange {
+    range: Option<Range<Pos>>,
+    patch: String,
+}
+
+pub trait TextMap {
+    fn text(&self) -> &str;
+    fn offset_to_pos(&self, offset: usize) -> Option<Pos>;
+    fn offset_range_to_range(&self, offsets: Range<usize>) -> Option<Range<Pos>> {
+        let start = self.offset_to_pos(offsets.start)?;
+        let end = self.offset_to_pos(offsets.end)?;
+        Some(start..end)
+    }
+    fn line_range(&self, line: u32) -> Option<Range<Pos>>;
+    fn substr(&self, range: Range<Pos>) -> Option<&str>;
+}
+
+pub trait TextAdapter {
+    fn pos_to_lsp_pos(&self, pos: &Pos) -> Option<lsp_types::Position>;
+    fn lsp_pos_to_pos(&self, lsp_pos: &lsp_types::Position) -> Option<Pos>;
+    fn range_to_lsp_range(&self, range: &Range<Pos>) -> Option<lsp_types::Range>;
+    fn lsp_range_to_range(&self, lsp_range: &lsp_types::Range) -> Option<Range<Pos>>;
+    fn change_to_lsp_change(
+        &self,
+        change: TextChange,
+    ) -> Option<lsp_types::TextDocumentContentChangeEvent>;
+    fn lsp_change_to_change(
+        &self,
+        lsp_change: lsp_types::TextDocumentContentChangeEvent,
+    ) -> Option<TextChange>;
+}
+
+impl<T: TextMap> TextAdapter for T {
+    fn pos_to_lsp_pos(&self, pos: &Pos) -> Option<lsp_types::Position> {
+        let line_num = pos.line;
+        let line_range = self.line_range(line_num)?;
+        let line = self.substr(line_range)?;
+
+        let target_u8_offset = pos.col as usize;
+
+        let mut u8_offset: usize = 0;
+        let mut u16_offset: usize = 0;
+        let mut found = false;
+
+        for c in line.chars() {
+            if u8_offset == target_u8_offset {
+                found = true;
+                break;
+            } else {
+                u8_offset += c.len_utf8();
+                u16_offset += c.len_utf16();
+            }
+        }
+
+        // Handle "append"/"after eol" case
+        if !found && u8_offset == target_u8_offset {
+            found = true;
+        }
+
+        assert!(found, "Offset not found in line");
+        Some(lsp_types::Position::new(line_num as u32, u16_offset as u32))
+    }
+
+    fn lsp_pos_to_pos(&self, lsp_pos: &lsp_types::Position) -> Option<Pos> {
+        let line_range = self.line_range(lsp_pos.line)?;
+        let line = self.substr(line_range)?;
+
+        let mut u8_offset: usize = 0;
+        let mut u16_offset: usize = 0;
+        let mut found = false;
+
+        // Handle the case of artificial blank line
+        if lsp_pos.character == 0 {
+            found = true;
+        }
+
+        for c in line.chars() {
+            if u16_offset == lsp_pos.character as usize {
+                found = true;
+                break;
+            } else {
+                u16_offset += c.len_utf16();
+                u8_offset += c.len_utf8();
+            }
+        }
+
+        // Handle "append" case
+        if !found && u16_offset == lsp_pos.character as usize {
+            found = true;
+        }
+
+        assert!(found, "LSP pos not found in line");
+        Some(Pos::new(lsp_pos.line, u8_offset as u32))
+    }
+
+    fn range_to_lsp_range(&self, range: &Range<Pos>) -> Option<lsp_types::Range> {
+        Some(lsp_types::Range::new(
+            self.pos_to_lsp_pos(&range.start)?,
+            self.pos_to_lsp_pos(&range.end)?,
+        ))
+    }
+
+    fn lsp_range_to_range(&self, lsp_range: &lsp_types::Range) -> Option<Range<Pos>> {
+        Some(self.lsp_pos_to_pos(&lsp_range.start)?..self.lsp_pos_to_pos(&lsp_range.end)?)
+    }
+
+    fn change_to_lsp_change(
+        &self,
+        change: TextChange,
+    ) -> Option<lsp_types::TextDocumentContentChangeEvent> {
+        if let Some(range) = change.range {
+            let lsp_range = self.range_to_lsp_range(&range)?;
+            Some(lsp_types::TextDocumentContentChangeEvent {
+                range: Some(lsp_range),
+                range_length: None,
+                text: change.patch,
+            })
+        } else {
+            Some(lsp_types::TextDocumentContentChangeEvent {
+                range: None,
+                range_length: None,
+                text: change.patch,
+            })
+        }
+    }
+
+    fn lsp_change_to_change(
+        &self,
+        lsp_change: lsp_types::TextDocumentContentChangeEvent,
+    ) -> Option<TextChange> {
+        if let Some(lsp_range) = lsp_change.range {
+            let range = self.lsp_range_to_range(&lsp_range)?;
+            Some(TextChange {
+                range: Some(range),
+                patch: lsp_change.text,
+            })
+        } else {
+            Some(TextChange {
+                range: None,
+                patch: lsp_change.text,
+            })
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct IndexedText<T>
+where
+    T: Borrow<str>,
+{
+    pub text: T,
+    line_ranges: Vec<Range<u32>>, // u32 should be enough for upto 4GB files; show me a source file like this!
+}
+
+impl<T: Borrow<str>> IndexedText<T> {
     pub fn new(text: T) -> Self {
-        let mut line_ranges = Vec::new();
+        let mut line_ranges: Vec<Range<u32>> = Vec::new();
 
         let mut line_start: Option<usize> = None;
         let mut last_char: Option<(usize, char)> = None;
@@ -60,29 +215,29 @@ impl<T: Borrow<str>> OffsetMap<T> {
 
             if is_newline {
                 let start = line_start.expect("line_start should be always initialized");
-                assert!(
+                debug_assert!(
                     text.borrow().is_char_boundary(start),
                     "Start is not at char boundary"
                 );
                 let end = pos + c.len_utf8();
-                assert!(
+                debug_assert!(
                     text.borrow().is_char_boundary(end),
                     "End is not at char boundary"
                 );
 
-                line_ranges.push(start..end);
+                line_ranges.push(start as u32..end as u32);
                 line_start = None;
             }
         }
 
         // Handle a situation when there's no newline at the end
         if let (Some(start), Some((pos, c))) = (line_start, last_char) {
-            line_ranges.push(start..(pos + c.len_utf8()));
+            line_ranges.push(start as u32..(pos + c.len_utf8()) as u32);
         }
 
         // Insert an artificial blank line with an empty range
         if let Some((pos, c)) = last_char {
-            line_ranges.push(pos + c.len_utf8()..pos + c.len_utf8());
+            line_ranges.push((pos + c.len_utf8()) as u32..(pos + c.len_utf8()) as u32);
         }
 
         // Insert an artificial blank line for an empty string
@@ -90,117 +245,96 @@ impl<T: Borrow<str>> OffsetMap<T> {
             line_ranges.push(0..0);
         }
 
-        OffsetMap { text, line_ranges }
+        IndexedText { text, line_ranges }
     }
 
-    fn offset_to_line(&self, offset: usize) -> Option<usize> {
+    fn offset_to_line(&self, offset: usize) -> Option<u32> {
         if offset > self.text.borrow().len() {
             return None;
         } else if offset == self.text.borrow().len() {
-            Some(self.line_ranges.len().max(2) - 2)
+            Some((self.line_ranges.len().max(2) - 2) as u32)
         } else {
-            for (idx, range) in self.line_ranges.iter().enumerate() {
-                if offset >= range.start && offset < range.end {
-                    return Some(idx);
+            let line = self.line_ranges.binary_search_by(|r| {
+                if offset < r.start as usize {
+                    Ordering::Greater
+                } else if offset >= r.end as usize {
+                    Ordering::Less
+                } else if offset >= r.start as usize && offset < r.end as usize {
+                    Ordering::Equal
+                } else {
+                    panic!("Impossible case: offset={} and range={:?}", offset, r)
                 }
-            }
-            panic!("Couldn't translate u8 offset {} to line", offset)
+            });
+            Some(
+                line.unwrap_or_else(|_| panic!("Couldn't translate u8 offset {} to line", offset))
+                    as u32,
+            )
         }
     }
 
-    pub fn offset_to_lsp_position(&self, offset: usize) -> Option<Position> {
-        let text = self.text.borrow();
-
-        let line = self.offset_to_line(offset)?;
-        let line_range = self.line_ranges[line].clone();
-
-        let target_u8_offset = offset - line_range.start;
-        let mut u8_offset = 0;
-        let mut u16_offset = 0;
-        let mut found = false;
-
-        for c in text[line_range].chars() {
-            if u8_offset == target_u8_offset {
-                found = true;
-                break;
-            } else {
-                u8_offset += c.len_utf8();
-                u16_offset += c.len_utf16();
-            }
-        }
-
-        // Handle "append"/"after eol" case
-        if !found && u8_offset == target_u8_offset {
-            found = true;
-        }
-
-        assert!(found, "Offset not found in line");
-        Some(Position::new(line as u32, u16_offset as u32))
-    }
-
-    pub fn range_to_lsp_range(&self, span: &Range<usize>) -> Option<lsp_types::Range> {
-        let start = self.offset_to_lsp_position(span.start)?;
-        let end = self.offset_to_lsp_position(span.end)?;
-        Some(lsp_types::Range::new(start, end))
-    }
-
-    pub fn lsp_pos_to_offset(&self, lsp_pos: &Position) -> Option<Offset> {
-        let line_range = self.line_ranges.get(lsp_pos.line as usize)?.to_owned();
-
-        let mut u8_offset = line_range.start;
-        let mut u16_offset = 0;
-        let mut found = false;
-
-        // Handle the case of artificial blank line
-        if u16_offset == lsp_pos.character {
-            found = true;
-        }
-
-        for c in self.text.borrow()[line_range].chars() {
-            if u16_offset == lsp_pos.character {
-                found = true;
-                break;
-            } else {
-                u16_offset += c.len_utf16() as u32;
-                u8_offset += c.len_utf8();
-            }
-        }
-
-        // Handle "append" case
-        if !found && u16_offset == lsp_pos.character {
-            return Some(Offset::End);
-        }
-
-        assert!(found, "LSP pos not found in line");
-        Some(u8_offset.into())
+    fn pos_to_offset(&self, pos: &Pos) -> Option<usize> {
+        let line_range = self.line_ranges.get(pos.line as usize)?;
+        Some(line_range.start as usize + (pos.col as usize))
     }
 }
 
-pub fn apply_change<S: Borrow<str>>(
-    orig: &str,
-    orig_map: &OffsetMap<S>,
-    range: Option<lsp_types::Range>,
-    patch: &str,
-) -> String {
-    match range {
-        None => patch.to_string(),
+impl<T: Borrow<str>> TextMap for IndexedText<T> {
+    fn text(&self) -> &str {
+        self.text.borrow()
+    }
+
+    fn offset_to_pos(&self, offset: usize) -> Option<Pos> {
+        let line = self.offset_to_line(offset)?;
+        let range = &self.line_ranges[line as usize];
+        let char = offset - (range.start as usize);
+        Some(Pos {
+            line,
+            col: char as u32,
+        })
+    }
+
+    fn line_range(&self, line: u32) -> Option<Range<Pos>> {
+        let offset = self.line_ranges.get(line as usize)?;
+        Some(Pos::new(line, 0)..Pos::new(line, offset.end - offset.start))
+    }
+
+    fn substr(&self, range: Range<Pos>) -> Option<&str> {
+        let start_line = self.line_ranges.get(range.start.line as usize)?;
+        let end_line = self.line_ranges.get(range.end.line as usize)?;
+        let start_offset = start_line.start + range.start.col;
+        let end_offset = end_line.start + range.end.col;
+
+        Some(&self.text()[start_offset as usize..end_offset as usize])
+    }
+}
+
+pub fn apply_change<S: Borrow<str>>(text: &IndexedText<S>, change: TextChange) -> String {
+    match change.range {
+        None => change.patch.to_string(),
         Some(range) => {
-            let start_offset = orig_map.lsp_pos_to_offset(&range.start).unwrap();
-            let end_offset = orig_map.lsp_pos_to_offset(&range.end).unwrap();
+            let orig = text.text();
+
+            let offset_start = text.pos_to_offset(&range.start).unwrap();
+            let offset_end = text.pos_to_offset(&range.end).unwrap();
+            debug_assert!(
+                offset_start <= offset_end,
+                "Expected start <= end, got {}..{}",
+                offset_start,
+                offset_end
+            );
+            debug_assert!(
+                offset_end <= orig.len(),
+                "Expected end <= text.len(), got {} > {}",
+                offset_end,
+                orig.len()
+            );
 
             let mut new = orig.to_string();
-            match (start_offset, end_offset) {
-                (Offset::Inner(start_offset), Offset::End) => {
-                    new.replace_range(start_offset.., &patch)
-                }
-                (Offset::Inner(start_offset), Offset::Inner(end_offset)) => {
-                    new.replace_range(start_offset..end_offset, &patch)
-                }
-                (Offset::End, Offset::End) => new.push_str(&patch),
-                _ => panic!(
-                    "Bad range from VSCode: {:?} - {:?}",
-                    start_offset, end_offset
-                ),
+
+            if offset_start == text.text().len() {
+                new.push_str(&change.patch);
+            } else {
+                new.replace_range(offset_start..offset_end, &change.patch)
             }
             new
         }
@@ -219,7 +353,7 @@ mod tests {
         fn no_newline() {
             //          012
             let text = "Hi!";
-            let offsets = OffsetMap::new(text);
+            let offsets = IndexedText::new(text);
             assert_equal!(offsets.line_ranges, vec![0..3, 3..3]);
         }
 
@@ -227,7 +361,7 @@ mod tests {
         fn newline() {
             //          012 3
             let text = "Hi!\n";
-            let offsets = OffsetMap::new(text);
+            let offsets = IndexedText::new(text);
             assert_equal!(offsets.line_ranges, vec![0..4, 4..4]);
         }
 
@@ -235,7 +369,7 @@ mod tests {
         fn win_newline() {
             //          012 3 4
             let text = "Hi!\r\n";
-            let offsets = OffsetMap::new(text);
+            let offsets = IndexedText::new(text);
             assert_equal!(offsets.line_ranges, vec![0..5, 5..5]);
         }
 
@@ -243,38 +377,50 @@ mod tests {
         fn two_lines() {
             //          012 345678
             let text = "Hi!\nWorld";
-            let offsets = OffsetMap::new(text);
+            let offsets = IndexedText::new(text);
             assert_equal!(offsets.line_ranges, vec![0..4, 4..9, 9..9]);
         }
 
         #[test]
         fn eof_to_lsp() {
             let text = "H";
-            let offsets = OffsetMap::new(text);
-            assert_equal!(offsets.offset_to_lsp_position(1), Some(Position::new(0, 1)));
+            let text = IndexedText::new(text);
+            let pos = text.offset_to_pos(1).unwrap();
+            let lsp_pos = text.pos_to_lsp_pos(&pos);
+            assert_equal!(lsp_pos, Some(lsp_types::Position::new(0, 1)));
         }
 
         #[test]
         fn empty_lsp() {
             let text = "";
-            let offsets = OffsetMap::new(text);
-            assert_equal!(offsets.offset_to_lsp_position(0), Some(Position::new(0, 0)));
+            let text = IndexedText::new(text);
+            let pos = text.offset_to_pos(0).unwrap();
+            assert_equal!(
+                text.pos_to_lsp_pos(&pos),
+                Some(lsp_types::Position::new(0, 0))
+            );
         }
     }
+
     mod apply_change {
+        use lsp_types::TextDocumentContentChangeEvent;
+
         use super::*;
         #[test]
         fn within_line() {
             let text = "# Hello World";
-            let replaced = apply_change(
-                text,
-                &OffsetMap::new(text),
-                Some(lsp_types::Range::new(
+            let text = IndexedText::new(text);
+
+            let change = TextDocumentContentChangeEvent {
+                range: Some(lsp_types::Range::new(
                     lsp_types::Position::new(0, 2),
                     lsp_types::Position::new(0, 7),
                 )),
-                "Hi",
-            );
+                range_length: None,
+                text: "Hi".to_string(),
+            };
+            let change = text.lsp_change_to_change(change).unwrap();
+            let replaced = apply_change(&text, change);
             assert_equal!(&replaced, "# Hi World");
         }
 
@@ -282,15 +428,18 @@ mod tests {
         fn at_newline() {
             //          01 2
             let text = "Hi\n";
-            let replaced = apply_change(
-                text,
-                &OffsetMap::new(text),
-                Some(lsp_types::Range::new(
+            let text = IndexedText::new(text);
+
+            let change = TextDocumentContentChangeEvent {
+                range: Some(lsp_types::Range::new(
                     lsp_types::Position::new(0, 2),
                     lsp_types::Position::new(1, 0),
                 )),
-                "",
-            );
+                range_length: None,
+                text: "".to_string(),
+            };
+            let change = text.lsp_change_to_change(change).unwrap();
+            let replaced = apply_change(&text, change);
             assert_equal!(&replaced, "Hi");
         }
 
@@ -298,15 +447,18 @@ mod tests {
         fn at_linend() {
             //          01
             let text = "Hi";
-            let replaced = apply_change(
-                text,
-                &OffsetMap::new(text),
-                Some(lsp_types::Range::new(
+            let text = IndexedText::new(text);
+
+            let change = TextDocumentContentChangeEvent {
+                range: Some(lsp_types::Range::new(
                     lsp_types::Position::new(0, 2),
                     lsp_types::Position::new(0, 2),
                 )),
-                "\n",
-            );
+                range_length: None,
+                text: "\n".to_string(),
+            };
+            let change = text.lsp_change_to_change(change).unwrap();
+            let replaced = apply_change(&text, change);
             assert_equal!(&replaced, "Hi\n");
         }
     }

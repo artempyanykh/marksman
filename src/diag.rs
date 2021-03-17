@@ -3,6 +3,7 @@ use std::{
     ops::Range,
 };
 
+use lsp_text::{Pos, TextAdapter};
 use lsp_types::{Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url};
 use tracing::debug;
 
@@ -55,8 +56,7 @@ pub fn to_publish(
     Some(param)
 }
 
-// TODO: Use line + col for range as this is much better in terms of caching of results
-pub type DiagWithLoc = (Diag, Range<usize>);
+pub type DiagWithLoc = (Diag, Range<Pos>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Diag {

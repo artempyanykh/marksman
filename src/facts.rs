@@ -14,7 +14,7 @@ use crate::{
     store::{self, NoteFile, NoteIndex, NoteText},
     structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
 };
-use lsp_text::{Offset, OffsetMap};
+use lsp_text::{IndexedText, Pos, TextAdapter};
 
 #[salsa::query_group(FactsStorage)]
 pub trait Facts<'a>: salsa::Database {
@@ -25,7 +25,7 @@ pub trait Facts<'a>: salsa::Database {
     fn note_content(&self, note_file: NoteFile) -> NoteText;
 
     fn note_text(&self, note_id: NoteID) -> NoteText;
-    fn note_indexed_text(&self, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>>;
+    fn note_indexed_text(&self, note_id: NoteID) -> Arc<IndexedText<Arc<str>>>;
     fn note_structure(&self, note_id: NoteID) -> Structure;
     fn note_title(&self, note_id: NoteID) -> Option<HeadingID>;
     fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]>;
@@ -116,7 +116,7 @@ impl FactsDB {
 
 pub trait NoteFacts {
     fn text(&self) -> NoteText;
-    fn indexed_text(&self) -> Arc<OffsetMap<Arc<str>>>;
+    fn indexed_text(&self) -> Arc<IndexedText<Arc<str>>>;
     fn structure(&self) -> Structure;
     fn title(&self) -> Option<HeadingID>;
     fn elements(&self) -> Arc<[ElementID]>;
@@ -131,9 +131,9 @@ pub trait NoteFactsExt: NoteFacts {
     fn file(&self) -> NoteFile;
     fn headings_matching(&self, pred: impl Fn(&Heading) -> bool) -> Vec<HeadingID>;
     fn heading_with_text(&self, text: &str) -> Option<HeadingID>;
-    fn element_at_offset(&self, offset: usize) -> Option<ElementID>;
+    fn element_at_pos(&self, pos: Pos) -> Option<ElementID>;
     fn element_at_lsp_pos(&self, pos: &lsp_types::Position) -> Option<ElementID>;
-    fn elements_in_range(&self, range: &Range<Offset>) -> Vec<ElementID>;
+    fn elements_in_range(&self, range: &Range<Pos>) -> Vec<ElementID>;
     fn elements_in_lsp_range(&self, range: &lsp_types::Range) -> Option<Vec<ElementID>>;
 }
 pub struct NoteFactsDB<'a> {
@@ -152,7 +152,7 @@ impl<'a> NoteFacts for NoteFactsDB<'a> {
         self.db.note_text(self.id)
     }
 
-    fn indexed_text(&self) -> Arc<OffsetMap<Arc<str>>> {
+    fn indexed_text(&self) -> Arc<IndexedText<Arc<str>>> {
         self.db.note_indexed_text(self.id)
     }
 
@@ -211,50 +211,44 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
             .map(|x| *x)
     }
 
-    fn element_at_offset(&self, offset: usize) -> Option<ElementID> {
+    fn element_at_pos(&self, pos: Pos) -> Option<ElementID> {
         let structure = self.structure();
         structure
             .elements_with_loc()
             .into_iter()
-            .find_map(|(id, ewl)| {
-                if ewl.1.contains(&offset) {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
+            .find_map(
+                |(id, ewl)| {
+                    if ewl.1.contains(&pos) {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                },
+            )
     }
 
     fn element_at_lsp_pos(&self, pos: &lsp_types::Position) -> Option<ElementID> {
         let indexed_text = self.indexed_text();
-        let offset = match indexed_text.lsp_pos_to_offset(pos) {
-            Some(Offset::Inner(off)) => off,
-            _ => return None,
-        };
-        self.element_at_offset(offset)
+        let pos = indexed_text.lsp_pos_to_pos(pos)?;
+        self.element_at_pos(pos)
     }
 
-    fn elements_in_range(&self, range: &Range<Offset>) -> Vec<ElementID> {
-        let indexed_text = self.indexed_text();
-        let target_span = range.start.to_usize(indexed_text.text.len())
-            ..range.end.to_usize(indexed_text.text.len());
-
+    fn elements_in_range(&self, range: &Range<Pos>) -> Vec<ElementID> {
         let structure = self.structure();
-        let mut elements_in_offsets = Vec::new(); // strict inclusion
+        let mut els_in_range = Vec::new();
         for (id, ewl) in structure.elements_with_loc() {
-            if target_span.contains(&ewl.1.start) && target_span.contains(&ewl.1.end) {
-                elements_in_offsets.push(id);
+            // strict inclusion
+            if range.contains(&ewl.1.start) && range.contains(&ewl.1.end) {
+                els_in_range.push(id);
             }
         }
 
-        elements_in_offsets
+        els_in_range
     }
 
     fn elements_in_lsp_range(&self, lsp_range: &lsp_types::Range) -> Option<Vec<ElementID>> {
         let indexed_text = self.indexed_text();
-        let range = indexed_text.lsp_pos_to_offset(&lsp_range.start)?
-            ..indexed_text.lsp_pos_to_offset(&lsp_range.end)?;
-
+        let range = indexed_text.lsp_range_to_range(lsp_range)?;
         Some(self.elements_in_range(&range))
     }
 
@@ -274,14 +268,14 @@ fn note_text(db: &dyn Facts, note_id: NoteID) -> NoteText {
     db.note_content(file.clone())
 }
 
-fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<OffsetMap<Arc<str>>> {
+fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<IndexedText<Arc<str>>> {
     let note_text = db.note_text(note_id);
-    Arc::new(OffsetMap::new(note_text.content.clone()))
+    Arc::new(IndexedText::new(note_text.content.clone()))
 }
 
 fn note_structure(db: &dyn Facts, note_id: NoteID) -> Structure {
-    let text = db.note_text(note_id);
-    let elements = structure::scrape(&text.content);
+    let text = db.note_indexed_text(note_id);
+    let elements = structure::scrape(&*text);
     Structure::new(elements)
 }
 

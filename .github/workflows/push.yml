@@ -1,4 +1,4 @@
-name: Check Commit
+name: Build & Test
 
 on: 
   pull_request:

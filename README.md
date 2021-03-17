@@ -2,6 +2,8 @@
 
 _Delightful note taking in markdown..._
 
+[![Build & Test](https://github.com/artempyanykh/zeta-note/actions/workflows/push.yml/badge.svg?branch=main)](https://github.com/artempyanykh/zeta-note/actions/workflows/push.yml)
+
 **OBLIGATORY DISCLAIMER:**
 Zeta Note is a _work-in-progress_. For me it works fine, but there wasn't
 much testing and stability in general isn't guaranteed.

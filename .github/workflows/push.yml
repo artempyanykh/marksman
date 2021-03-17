@@ -6,8 +6,11 @@ on:
 
 jobs:
   check:
-    name: Validate on Linux
-    runs-on: ubuntu-latest
+    name: Validate on ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - name: Setup rust toolchian

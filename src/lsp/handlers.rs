@@ -10,15 +10,17 @@ use lsp_text::TextMap;
 
 use lsp_types::{
     CodeLens, CodeLensParams, Command, CompletionItem, CompletionParams,
-    DidChangeTextDocumentParams, Documentation, GotoDefinitionParams, Hover, HoverContents,
-    HoverParams, Location, MarkupContent, Position, PublishDiagnosticsParams, SemanticToken,
-    SemanticTokenType, SemanticTokensLegend, SemanticTokensParams, SemanticTokensRangeParams,
-    SymbolInformation, TextDocumentIdentifier, TextDocumentItem, Url,
+    DidChangeTextDocumentParams, DocumentLink, DocumentLinkParams, Documentation,
+    GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, Position,
+    PublishDiagnosticsParams, SemanticToken, SemanticTokenType, SemanticTokensLegend,
+    SemanticTokensParams, SemanticTokensRangeParams, SymbolInformation, TextDocumentIdentifier,
+    TextDocumentItem, Url,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
+use slug::slugify;
 use tracing::debug;
 
 use crate::util::text_matches_query;
@@ -37,6 +39,16 @@ use lsp_text::{self, IndexedText, TextAdapter};
 pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeTextDocumentParams) {
     if let Some(note_id) = facts.note_index().find_by_path(path) {
         let note = facts.note_facts(note_id);
+
+        let our_version = note.text().version;
+        let target_version = Version::Vs(changes.text_document.version - 1);
+        debug_assert!(
+            our_version == target_version,
+            "Document versions don't match: our({:?}), external({:?})",
+            our_version,
+            target_version
+        );
+
         let mut final_text = note.text().content.to_string();
 
         for lsp_change in &changes.content_changes {
@@ -669,4 +681,41 @@ pub fn code_lens_resolve(facts: &FactsDB, lens: &CodeLens) -> Option<CodeLens> {
         command: Some(command),
         ..lens.clone()
     })
+}
+
+//////////////////////////////////////////
+// Document Links
+/////////////////////////////////////////
+
+pub fn document_links(facts: &FactsDB, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
+    let path = params.text_document.uri.to_file_path().unwrap();
+    let note = facts.note_facts(facts.note_index().find_by_path(&path)?);
+    let strukt = note.structure();
+
+    let links = note
+        .valid_refs()
+        .iter()
+        .map(|(ref_id, target_note_id, _)| {
+            let (_, source_range) = strukt.ref_by_id(*ref_id);
+            let target_note = facts.note_facts(*target_note_id);
+
+            // Ideally, we need to use a custom command to open the link at the
+            // specified heading (if any)
+            // For now only go the the file and use "goto definition" for more
+            // granular navigation
+            let target = Url::from_file_path(target_note.file().path).unwrap();
+
+            DocumentLink {
+                range: note
+                    .indexed_text()
+                    .range_to_lsp_range(&source_range)
+                    .unwrap(),
+                target: Some(target),
+                tooltip: None,
+                data: None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Some(links)
 }

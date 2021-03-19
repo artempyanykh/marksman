@@ -14,14 +14,14 @@ use lsp_types::{
         PublishDiagnostics,
     },
     request::{
-        CodeLensRequest, CodeLensResolve, Completion, DocumentSymbolRequest, GotoDefinition,
-        HoverRequest, ResolveCompletionItem, SemanticTokensFullRequest, SemanticTokensRangeRequest,
-        WorkspaceSymbol,
+        CodeLensRequest, CodeLensResolve, Completion, DocumentLinkRequest, DocumentSymbolRequest,
+        GotoDefinition, HoverRequest, ResolveCompletionItem, SemanticTokensFullRequest,
+        SemanticTokensRangeRequest, WorkspaceSymbol,
     },
-    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionOptions, HoverProviderCapability,
-    InitializeParams, InitializeResult, OneOf, SemanticTokens, SemanticTokensFullOptions,
-    SemanticTokensOptions, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind,
+    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionOptions, DocumentLinkOptions,
+    HoverProviderCapability, InitializeParams, InitializeResult, OneOf, SemanticTokens,
+    SemanticTokensFullOptions, SemanticTokensOptions, ServerCapabilities, ServerInfo,
+    TextDocumentSyncCapability, TextDocumentSyncKind, WorkDoneProgressOptions,
 };
 
 use super::handlers;
@@ -134,6 +134,11 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
         });
     }
 
+    server_capabilities.document_link_provider = Some(DocumentLinkOptions {
+        resolve_provider: None,
+        work_done_progress_options: WorkDoneProgressOptions::default(),
+    });
+
     server_capabilities
 }
 
@@ -241,6 +246,9 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                     },
                     CodeLensResolve => params -> {
                         Ok(handlers::code_lens_resolve(&facts, &params).unwrap_or(params))
+                    },
+                    DocumentLinkRequest => params -> {
+                        Ok(handlers::document_links(&facts, params))
                     }
                 )
             }

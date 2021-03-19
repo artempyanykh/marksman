@@ -9,10 +9,11 @@ use glob::Pattern;
 use lsp_text::TextMap;
 
 use lsp_types::{
-    CodeLens, Command, CompletionItem, DidChangeTextDocumentParams, Documentation, Hover,
-    HoverContents, Location, MarkupContent, Position, PublishDiagnosticsParams, SemanticToken,
-    SemanticTokenType, SemanticTokensLegend, SymbolInformation, TextDocumentIdentifier,
-    TextDocumentItem, Url,
+    CodeLens, CodeLensParams, Command, CompletionItem, CompletionParams,
+    DidChangeTextDocumentParams, Documentation, GotoDefinitionParams, Hover, HoverContents,
+    HoverParams, Location, MarkupContent, Position, PublishDiagnosticsParams, SemanticToken,
+    SemanticTokenType, SemanticTokensLegend, SemanticTokensParams, SemanticTokensRangeParams,
+    SymbolInformation, TextDocumentIdentifier, TextDocumentItem, Url,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -149,14 +150,21 @@ pub enum CompletionType {
 pub fn completion_candidates(
     root: &Path,
     facts: &FactsDB,
-    current_tag: &PathBuf,
-    pos: &lsp_types::Position,
+    params: CompletionParams,
 ) -> Option<Vec<CompletionItem>> {
-    let encl_note_id = facts.note_index().find_by_path(current_tag)?;
+    let current_tag = params
+        .text_document_position
+        .text_document
+        .uri
+        .to_file_path()
+        .unwrap();
+    let pos = params.text_document_position.position;
+
+    let encl_note_id = facts.note_index().find_by_path(&current_tag)?;
     let encl_note = facts.note_facts(encl_note_id);
     let encl_structure = encl_note.structure();
 
-    let (enclosing_el, _) = encl_structure.elements_by_id(encl_note.element_at_lsp_pos(pos)?);
+    let (enclosing_el, _) = encl_structure.elements_by_id(encl_note.element_at_lsp_pos(&pos)?);
     let enclosing_link_ref = match enclosing_el {
         Element::LinkRef(r) => r,
         _ => return None,
@@ -208,7 +216,7 @@ pub fn completion_candidates(
         // tries to match a heading inside a note
         let target_note_name = match &enclosing_link_ref.note_name {
             Some(name) => name.clone(),
-            _ => NoteName::from_path(current_tag, root),
+            _ => NoteName::from_path(&current_tag, root),
         };
         let target_tag = match &enclosing_link_ref.note_name {
             Some(name) => name.to_path(root),
@@ -300,17 +308,20 @@ pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Optio
 // Hover, Go to
 /////////////////////////////////////////
 
-pub fn hover(
-    root: &Path,
-    facts: &FactsDB,
-    path: &PathBuf,
-    pos: &lsp_types::Position,
-) -> Option<Hover> {
-    let note_id = facts.note_index().find_by_path(path)?;
-    let note_name = NoteName::from_path(path, root);
+pub fn hover(root: &Path, facts: &FactsDB, params: HoverParams) -> Option<Hover> {
+    let path = params
+        .text_document_position_params
+        .text_document
+        .uri
+        .to_file_path()
+        .unwrap();
+    let pos = params.text_document_position_params.position;
+
+    let note_id = facts.note_index().find_by_path(&path)?;
+    let note_name = NoteName::from_path(&path, root);
     let note = facts.note_facts(note_id);
     let note_structure = note.structure();
-    let (hovered_el, span) = note_structure.elements_by_id(note.element_at_lsp_pos(pos)?);
+    let (hovered_el, span) = note_structure.elements_by_id(note.element_at_lsp_pos(&pos)?);
 
     if let Element::LinkRef(link_ref) = hovered_el {
         let range = note.indexed_text().range_to_lsp_range(&span);
@@ -347,19 +358,26 @@ pub fn hover(
 pub fn goto_definition(
     root: &Path,
     facts: &FactsDB,
-    path: &PathBuf,
-    pos: &lsp_types::Position,
+    params: GotoDefinitionParams,
 ) -> Option<Location> {
-    let source_id = facts.note_index().find_by_path(path)?;
+    let path = params
+        .text_document_position_params
+        .text_document
+        .uri
+        .to_file_path()
+        .unwrap();
+    let pos = params.text_document_position_params.position;
+
+    let source_id = facts.note_index().find_by_path(&path)?;
     let source_note = facts.note_facts(source_id);
     let souce_index = source_note.structure();
-    let (encl_el, _) = souce_index.elements_by_id(source_note.element_at_lsp_pos(pos)?);
+    let (encl_el, _) = souce_index.elements_by_id(source_note.element_at_lsp_pos(&pos)?);
 
     if let Element::LinkRef(link_ref) = encl_el {
         let target_note_name = link_ref
             .note_name
             .clone()
-            .unwrap_or_else(|| NoteName::from_path(path, root));
+            .unwrap_or_else(|| NoteName::from_path(&path, root));
 
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
@@ -414,19 +432,24 @@ pub fn semantic_tokens_legend() -> &'static SemanticTokensLegend {
 
 pub fn semantic_tokens_range(
     facts: &FactsDB,
-    path: &PathBuf,
-    range: &lsp_types::Range,
+    params: SemanticTokensRangeParams,
 ) -> Option<Vec<SemanticToken>> {
-    let note_id = facts.note_index().find_by_path(path)?;
+    let path = params.text_document.uri.to_file_path().unwrap();
+    let range = params.range;
+    let note_id = facts.note_index().find_by_path(&path)?;
     let note = facts.note_facts(note_id);
-    let element_ids = note.elements_in_lsp_range(range)?;
+    let element_ids = note.elements_in_lsp_range(&range)?;
     let strukt = note.structure();
     let elements = strukt.elements_with_ids(&element_ids).collect();
     Some(semantic_tokens_encode(note, elements))
 }
 
-pub fn semantic_tokens_full(facts: &FactsDB, path: &PathBuf) -> Option<Vec<SemanticToken>> {
-    let note_id = facts.note_index().find_by_path(path)?;
+pub fn semantic_tokens_full(
+    facts: &FactsDB,
+    params: SemanticTokensParams,
+) -> Option<Vec<SemanticToken>> {
+    let path = params.text_document.uri.to_file_path().unwrap();
+    let note_id = facts.note_index().find_by_path(&path)?;
     let note = facts.note_facts(note_id);
     let strukt = note.structure();
 
@@ -540,8 +563,9 @@ pub struct ReferenceData {
     heading_text: String,
 }
 
-pub fn code_lenses(facts: &FactsDB, path: &Path) -> Option<Vec<CodeLens>> {
-    let note = facts.note_facts(facts.note_index().find_by_path(path)?);
+pub fn code_lenses(facts: &FactsDB, params: CodeLensParams) -> Option<Vec<CodeLens>> {
+    let path = params.text_document.uri.to_file_path().unwrap();
+    let note = facts.note_facts(facts.note_index().find_by_path(&path)?);
 
     // Just generate dummy "references" lens for each heading
     // They will get resolved to actual commands separately
@@ -562,7 +586,7 @@ pub fn code_lenses(facts: &FactsDB, path: &Path) -> Option<Vec<CodeLens>> {
             None => continue,
         };
         let ref_data = ReferenceData {
-            note_path: path.to_path_buf(),
+            note_path: path.clone(),
             heading_text: heading.text.to_string(),
         };
         let lens = CodeLens {

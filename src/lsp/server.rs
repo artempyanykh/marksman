@@ -18,11 +18,13 @@ use lsp_types::{
         HoverRequest, ResolveCompletionItem, SemanticTokensFullRequest, SemanticTokensRangeRequest,
         WorkspaceSymbol,
     },
-    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionOptions, CompletionResponse,
-    GotoDefinitionResponse, HoverProviderCapability, InitializeParams, InitializeResult, OneOf,
+    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionItem, CompletionOptions,
+    CompletionParams, CompletionResponse, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DocumentSymbolParams, GotoDefinitionParams, GotoDefinitionResponse,
+    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, OneOf,
     SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensRangeResult,
     SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind,
+    TextDocumentSyncKind, WorkspaceSymbolParams,
 };
 
 use super::handlers;
@@ -194,193 +196,82 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                     return Ok(());
                 }
 
-                if let Ok((id, params)) = cast_r::<DocumentSymbolRequest>(req.clone()) {
-                    let file = params.text_document.uri.to_file_path().unwrap();
-                    let result = handlers::document_symbols(&facts, &file, "");
-                    let result = serde_json::to_value(&result).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<WorkspaceSymbol>(req.clone()) {
-                    let result = handlers::workspace_symbols(&facts, &params.query);
-                    let result = serde_json::to_value(&result).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<Completion>(req.clone()) {
-                    let path = params
-                        .text_document_position
-                        .text_document
-                        .uri
-                        .to_file_path()
-                        .unwrap();
-                    let pos = params.text_document_position.position;
-                    let candidates = handlers::completion_candidates(&root, &facts, &path, &pos)
-                        .unwrap_or_default();
-                    let result = Some(CompletionResponse::Array(candidates));
-                    let result = serde_json::to_value(&result).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<ResolveCompletionItem>(req.clone()) {
-                    let resolved = handlers::completion_resolve(&facts, &params)
-                        .unwrap_or_else(|| params.clone());
-                    let result = serde_json::to_value(resolved).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<HoverRequest>(req.clone()) {
-                    let path = params
-                        .text_document_position_params
-                        .text_document
-                        .uri
-                        .to_file_path()
-                        .unwrap();
-                    let position = params.text_document_position_params.position;
-                    let hover = handlers::hover(&root, &facts, &path, &position);
-                    let result = serde_json::to_value(hover).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<GotoDefinition>(req.clone()) {
-                    let path = params
-                        .text_document_position_params
-                        .text_document
-                        .uri
-                        .to_file_path()
-                        .unwrap();
-                    let position = params.text_document_position_params.position;
-                    let result = handlers::goto_definition(&root, &facts, &path, &position)
-                        .map(|loc| GotoDefinitionResponse::Scalar(loc));
-                    let result = serde_json::to_value(result).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<SemanticTokensFullRequest>(req.clone()) {
-                    let path = params.text_document.uri.to_file_path().unwrap();
-                    let tokens = handlers::semantic_tokens_full(&facts, &path);
-                    let result = tokens.map(|tv| {
-                        SemanticTokensResult::Tokens(SemanticTokens {
-                            data: tv,
-                            ..SemanticTokens::default()
-                        })
-                    });
-                    let result = serde_json::to_value(result).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<SemanticTokensRangeRequest>(req.clone()) {
-                    let path = params.text_document.uri.to_file_path().unwrap();
-                    let range = params.range;
-                    let tokens = handlers::semantic_tokens_range(&facts, &path, &range);
-                    let result = tokens.map(|tv| {
-                        SemanticTokensRangeResult::Tokens(SemanticTokens {
-                            data: tv,
-                            ..SemanticTokens::default()
-                        })
-                    });
-                    let result = serde_json::to_value(result).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<CodeLensRequest>(req.clone()) {
-                    let path = params.text_document.uri.to_file_path().unwrap();
-                    let lenses = handlers::code_lenses(&facts, &path);
-                    let result = serde_json::to_value(lenses).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
-
-                if let Ok((id, params)) = cast_r::<CodeLensResolve>(req.clone()) {
-                    let resolved_lens =
-                        handlers::code_lens_resolve(&facts, &params).unwrap_or(params);
-                    let result = serde_json::to_value(resolved_lens).unwrap();
-                    let resp = Response {
-                        id,
-                        result: Some(result),
-                        error: None,
-                    };
-                    connection.sender.send(Message::Response(resp))?;
-                    continue;
-                }
+                handle_request!(
+                    connection,
+                    req,
+                    DocumentSymbolRequest => params -> {
+                        let file = params.text_document.uri.to_file_path().unwrap();
+                        let symbols = handlers::document_symbols(&facts, &file, "");
+                        Ok(Some(symbols.into()))
+                    },
+                    WorkspaceSymbol => params -> {
+                        Ok(Some(handlers::workspace_symbols(&facts, &params.query).into()))
+                    },
+                    Completion => params -> {
+                        let candidates = handlers::completion_candidates(&root, &facts, params)
+                            .unwrap_or_default();
+                        Ok(Some(candidates.into()))
+                    },
+                    ResolveCompletionItem => params -> {
+                        Ok(handlers::completion_resolve(&facts, &params).unwrap_or_else(|| params))
+                    },
+                    HoverRequest => params -> {
+                        Ok(handlers::hover(&root, &facts, params))
+                    },
+                    GotoDefinition => params -> {
+                        Ok(handlers::goto_definition(&root, &facts, params).map(|loc| loc.into()))
+                    },
+                    SemanticTokensFullRequest => params -> {
+                        let tokens = handlers::semantic_tokens_full(&facts, params).map(|tv| {
+                            SemanticTokens {
+                                data: tv,
+                                ..SemanticTokens::default()
+                            }.into()
+                        });
+                        Ok(tokens)
+                    },
+                    SemanticTokensRangeRequest => params -> {
+                        let tokens = handlers::semantic_tokens_range(&facts, params).map(|tv| {
+                            SemanticTokens {
+                                data: tv,
+                                ..SemanticTokens::default()
+                            }.into()
+                        });
+                        Ok(tokens)
+                    },
+                    CodeLensRequest => params -> {
+                        Ok(handlers::code_lenses(&facts, params))
+                    },
+                    CodeLensResolve => params -> {
+                        Ok(handlers::code_lens_resolve(&facts, &params).unwrap_or(params))
+                    }
+                )
             }
             Message::Response(_) => {}
             Message::Notification(not) => {
-                if let Ok(params) = cast_n::<DidOpenTextDocument>(not.clone()) {
-                    let path = params
-                        .text_document
-                        .uri
-                        .to_file_path()
-                        .expect("Failed to turn uri into path");
-                    handlers::note_open(&mut facts, &root, &path, &params.text_document);
-                }
-
-                if let Ok(params) = cast_n::<DidCloseTextDocument>(not.clone()) {
-                    handlers::note_close(&mut facts, &root, &params.text_document, &ignores)
-                        .await?;
-                }
-
-                if let Ok(params) = cast_n::<DidChangeTextDocument>(not.clone()) {
-                    let path = params
-                        .text_document
-                        .uri
-                        .to_file_path()
-                        .expect("Failed to turn uri into path");
-                    handlers::note_apply_changes(&mut facts, &path, &params);
-                }
+                handle_notification!(
+                    not,
+                    DidOpenTextDocument => params -> {
+                        let path = params
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .expect("Failed to turn uri into path");
+                        handlers::note_open(&mut facts, &root, &path, &params.text_document);
+                    },
+                    DidCloseTextDocument => params -> {
+                        handlers::note_close(&mut facts, &root, &params.text_document, &ignores)
+                            .await.unwrap();
+                    },
+                    DidChangeTextDocument => params -> {
+                        let path = params
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .expect("Failed to turn uri into path");
+                        handlers::note_apply_changes(&mut facts, &path, &params);
+                    }
+                )
             }
         }
     }
@@ -389,20 +280,4 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
     not_handle.await?;
 
     Ok(())
-}
-
-fn cast_r<R>(req: lsp_server::Request) -> Result<(RequestId, R::Params), lsp_server::Request>
-where
-    R: lsp_types::request::Request,
-    R::Params: serde::de::DeserializeOwned,
-{
-    req.extract(R::METHOD)
-}
-
-fn cast_n<N>(notif: lsp_server::Notification) -> Result<N::Params, lsp_server::Notification>
-where
-    N: lsp_types::notification::Notification,
-    N::Params: serde::de::DeserializeOwned,
-{
-    notif.extract(N::METHOD)
 }

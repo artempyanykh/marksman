@@ -15,8 +15,8 @@ async fn main() -> Result<()> {
         .init();
 
     info!("Starting zeta-note LSP server");
-    let (connection, io_threads, ctx) = lsp::comm::init_connection()?;
-    lsp::comm::main_loop(connection, ctx).await?;
+    let (connection, io_threads, ctx) = lsp::server::init_connection()?;
+    lsp::server::main_loop(connection, ctx).await?;
     io_threads.join()?;
     info!("Shutting down zeta-note LSP server");
 

@@ -1,2 +1,2 @@
-pub mod comm;
 pub mod handlers;
+pub mod server;

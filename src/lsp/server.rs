@@ -19,9 +19,10 @@ use lsp_types::{
         WorkspaceSymbol,
     },
     ClientCapabilities, ClientInfo, CodeLensOptions, CompletionOptions, CompletionResponse,
-    GotoDefinitionResponse, HoverProviderCapability, InitializeParams, OneOf, SemanticTokens,
-    SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensRangeResult,
-    SemanticTokensResult, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    GotoDefinitionResponse, HoverProviderCapability, InitializeParams, InitializeResult, OneOf,
+    SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensRangeResult,
+    SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+    TextDocumentSyncKind,
 };
 
 use super::handlers;
@@ -64,16 +65,20 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
         experimental,
     };
 
-    let server_caps = mk_server_caps(&ctx);
+    let capabilities = mk_server_caps(&ctx);
+    let server_info = ServerInfo {
+        name: "zeta-note".to_string(),
+        ..ServerInfo::default()
+    };
 
-    let server_init_data = serde_json::json!({
-        "capabilities": server_caps,
-        "serverInfo": {
-            "name": "zeta-note",
-        }
-    });
+    let init_result = InitializeResult {
+        capabilities,
+        server_info: Some(server_info),
+        ..InitializeResult::default()
+    };
 
-    connection.initialize_finish(id, server_init_data)?;
+    let init_result = serde_json::to_value(init_result).unwrap();
+    connection.initialize_finish(id, init_result)?;
 
     Ok((connection, io_threads, ctx))
 }

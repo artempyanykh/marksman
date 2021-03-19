@@ -7,7 +7,7 @@ use tracing::info;
 use crate::{diag::DiagCollection, facts, store};
 
 use anyhow::{anyhow, Result};
-use lsp_server::{Connection, IoThreads, Message, RequestId, Response};
+use lsp_server::{Connection, IoThreads, Message};
 use lsp_types::{
     notification::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification,
@@ -18,13 +18,10 @@ use lsp_types::{
         HoverRequest, ResolveCompletionItem, SemanticTokensFullRequest, SemanticTokensRangeRequest,
         WorkspaceSymbol,
     },
-    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionItem, CompletionOptions,
-    CompletionParams, CompletionResponse, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DocumentSymbolParams, GotoDefinitionParams, GotoDefinitionResponse,
-    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, OneOf,
-    SemanticTokens, SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensRangeResult,
-    SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind, WorkspaceSymbolParams,
+    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionOptions, HoverProviderCapability,
+    InitializeParams, InitializeResult, OneOf, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensOptions, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+    TextDocumentSyncKind,
 };
 
 use super::handlers;

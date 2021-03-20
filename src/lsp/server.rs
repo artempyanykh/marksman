@@ -37,6 +37,8 @@ pub struct Ctx {
 pub struct ExperimentalCapabilities {
     #[serde(default)]
     code_lens_show_references: bool,
+    #[serde(default)]
+    follow_links: bool,
 }
 
 pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
@@ -134,10 +136,12 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
         });
     }
 
-    server_capabilities.document_link_provider = Some(DocumentLinkOptions {
-        resolve_provider: None,
-        work_done_progress_options: WorkDoneProgressOptions::default(),
-    });
+    if ctx.experimental.follow_links {
+        server_capabilities.document_link_provider = Some(DocumentLinkOptions {
+            resolve_provider: None,
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        });
+    }
 
     server_capabilities
 }

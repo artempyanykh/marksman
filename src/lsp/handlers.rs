@@ -20,7 +20,6 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use slug::slugify;
 use tracing::debug;
 
 use crate::util::text_matches_query;
@@ -692,30 +691,55 @@ pub fn document_links(facts: &FactsDB, params: DocumentLinkParams) -> Option<Vec
     let note = facts.note_facts(facts.note_index().find_by_path(&path)?);
     let strukt = note.structure();
 
-    let links = note
-        .valid_refs()
-        .iter()
-        .map(|(ref_id, target_note_id, _)| {
-            let (_, source_range) = strukt.ref_by_id(*ref_id);
-            let target_note = facts.note_facts(*target_note_id);
+    let mut links = Vec::new();
 
-            // Ideally, we need to use a custom command to open the link at the
-            // specified heading (if any)
-            // For now only go the the file and use "goto definition" for more
-            // granular navigation
-            let target = Url::from_file_path(target_note.file().path).unwrap();
+    for (ref_id, target_note_id, target_heading_id) in note.valid_refs().iter() {
+        let (_, source_range) = strukt.ref_by_id(*ref_id);
+        let target_note = facts.note_facts(*target_note_id);
+        let target_strukt = target_note.structure();
+        let target_heading_id = match target_heading_id.or(target_note.title()) {
+            Some(id) => id,
+            _ => continue,
+        };
+        let (_, target_range) = target_strukt.heading_by_id(target_heading_id);
+        let target_range = target_note
+            .indexed_text()
+            .range_to_lsp_range(&target_range)
+            .unwrap();
 
-            DocumentLink {
-                range: note
-                    .indexed_text()
-                    .range_to_lsp_range(&source_range)
-                    .unwrap(),
-                target: Some(target),
-                tooltip: None,
-                data: None,
-            }
-        })
-        .collect::<Vec<_>>();
+        let from_loc = Location {
+            uri: Url::from_file_path(note.file().path).unwrap(),
+            range: note
+                .indexed_text()
+                .range_to_lsp_range(&source_range)
+                .unwrap(),
+        };
+        let to_loc = Location {
+            uri: Url::from_file_path(target_note.file().path).unwrap(),
+            range: target_range,
+        };
+
+        let data = serde_json::json!({
+            "from": &from_loc,
+            "to": &to_loc,
+        });
+        let data = serde_json::to_string(&data).unwrap();
+
+        let mut target = Url::parse("command:zetaNote.followLink").unwrap();
+        target.query_pairs_mut().append_key_only(&data);
+
+        let link = DocumentLink {
+            range: note
+                .indexed_text()
+                .range_to_lsp_range(&source_range)
+                .unwrap(),
+            target: Some(target),
+            tooltip: None,
+            data: None,
+        };
+
+        links.push(link)
+    }
 
     Some(links)
 }

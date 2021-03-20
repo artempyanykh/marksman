@@ -52,7 +52,7 @@ Existing editor integrations<sup>[3](#fn3)</sup>:
 - ✅ Hover prevew for references.
 - ✅ Diagnostics about broken references.
 - ✅ Code Lens with "# references" on headings.
-- 🗓 Support links in titles.
+- ✅ Support references in titles.
 - 🗓 Rename refactor.
 - 🗓 Support for Jupyter notebooks.
 - 🗓 Custom parser for more fine-grained note structure.

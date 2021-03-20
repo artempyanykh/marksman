@@ -14,7 +14,7 @@ use crate::{
     store::{self, NoteFile, NoteIndex, NoteText},
     structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
 };
-use lsp_text::{IndexedText, Pos, TextAdapter};
+use lsp_text::{IndexedText, Pos, TextAdapter, TextMap};
 
 #[salsa::query_group(FactsStorage)]
 pub trait Facts<'a>: salsa::Database {
@@ -213,10 +213,12 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
 
     fn element_at_pos(&self, pos: Pos) -> Option<ElementID> {
         let structure = self.structure();
-        structure
+        let text = self.indexed_text();
+
+        let mut candidates = structure
             .elements_with_loc()
             .into_iter()
-            .find_map(
+            .filter_map(
                 |(id, ewl)| {
                     if ewl.1.contains(&pos) {
                         Some(id)
@@ -225,6 +227,20 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
                     }
                 },
             )
+            .collect::<Vec<_>>();
+
+        // Since elements can overlap (e.g. a link within a heading) try to find
+        // the most specific element
+        candidates.sort_by_key(|id| {
+            let (_, range) = structure.element_by_id(*id);
+            let text_len = text
+                .substr(range.clone())
+                .map(|s| s.len())
+                .unwrap_or_default();
+            text_len
+        });
+
+        candidates.first().cloned()
     }
 
     fn element_at_lsp_pos(&self, pos: &lsp_types::Position) -> Option<ElementID> {

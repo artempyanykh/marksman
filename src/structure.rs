@@ -138,7 +138,7 @@ impl Structure {
         headings
     }
 
-    pub fn elements_by_id(&self, id: ElementID) -> &ElementWithLoc {
+    pub fn element_by_id(&self, id: ElementID) -> &ElementWithLoc {
         &self.elements[id.to_usize()]
     }
 

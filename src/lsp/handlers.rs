@@ -175,7 +175,7 @@ pub fn completion_candidates(
     let encl_note = facts.note_facts(encl_note_id);
     let encl_structure = encl_note.structure();
 
-    let (enclosing_el, _) = encl_structure.elements_by_id(encl_note.element_at_lsp_pos(&pos)?);
+    let (enclosing_el, _) = encl_structure.element_by_id(encl_note.element_at_lsp_pos(&pos)?);
     let enclosing_link_ref = match enclosing_el {
         Element::LinkRef(r) => r,
         _ => return None,
@@ -332,7 +332,7 @@ pub fn hover(root: &Path, facts: &FactsDB, params: HoverParams) -> Option<Hover>
     let note_name = NoteName::from_path(&path, root);
     let note = facts.note_facts(note_id);
     let note_structure = note.structure();
-    let (hovered_el, span) = note_structure.elements_by_id(note.element_at_lsp_pos(&pos)?);
+    let (hovered_el, span) = note_structure.element_by_id(note.element_at_lsp_pos(&pos)?);
 
     if let Element::LinkRef(link_ref) = hovered_el {
         let range = note.indexed_text().range_to_lsp_range(&span);
@@ -382,7 +382,7 @@ pub fn goto_definition(
     let source_id = facts.note_index().find_by_path(&path)?;
     let source_note = facts.note_facts(source_id);
     let souce_index = source_note.structure();
-    let (encl_el, _) = souce_index.elements_by_id(source_note.element_at_lsp_pos(&pos)?);
+    let (encl_el, _) = souce_index.element_by_id(source_note.element_at_lsp_pos(&pos)?);
 
     if let Element::LinkRef(link_ref) = encl_el {
         let target_note_name = link_ref

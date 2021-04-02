@@ -131,8 +131,8 @@ impl Version {
     }
 }
 
-pub async fn read_note(path: &Path, ignores: &[Pattern]) -> Result<Option<NoteText>> {
-    if is_note_file(path, ignores) {
+pub async fn read_note(path: &Path, root: &Path, ignores: &[Pattern]) -> Result<Option<NoteText>> {
+    if is_note_file(path, root, ignores) {
         let content = fs::read_to_string(path).await?;
         let meta = fs::metadata(path).await?;
         let version = Version::Fs(meta.modified()?);
@@ -155,7 +155,7 @@ async fn find_notes_inner<'a>(root_path: &Path, ignores: &[Pattern]) -> Result<V
         while let Some(entry) = dir_contents.next_entry().await? {
             let entry_type = entry.file_type().await?;
             let entry_path = entry.path();
-            if entry_type.is_file() && is_note_file(&entry_path, ignores) {
+            if entry_type.is_file() && is_note_file(&entry_path, root_path, ignores) {
                 found_files.push(entry_path);
             } else if entry_type.is_dir() {
                 remaining_dirs.push(entry_path);
@@ -165,8 +165,8 @@ async fn find_notes_inner<'a>(root_path: &Path, ignores: &[Pattern]) -> Result<V
     Ok(found_files)
 }
 
-fn is_note_file(path: &Path, ignores: &[Pattern]) -> bool {
-    let path_str = match path.to_str() {
+fn is_note_file(path: &Path, root: &Path, ignores: &[Pattern]) -> bool {
+    let path_str = match path.strip_prefix(root).ok().and_then(|p| p.to_str()) {
         Some(str) => str,
         _ => return false,
     };
@@ -192,6 +192,7 @@ pub async fn find_ignores(root_path: &Path) -> Result<Vec<Pattern>> {
 
     for ignore in &supported_ignores {
         let file = root_path.join(ignore);
+
         if file.exists() {
             debug!("Found ignore file: {}", file.display());
 
@@ -199,6 +200,17 @@ pub async fn find_ignores(root_path: &Path) -> Result<Vec<Pattern>> {
             let mut patterns = Vec::new();
             for line in content.lines() {
                 if let Ok(pat) = Pattern::new(line) {
+                    patterns.push(pat);
+                }
+
+                // Because 'glob' searches for a "full match" we need to add a
+                // _catch-all_ tail to all patterns
+                let rest_pattern = if line.ends_with('/') {
+                    line.to_string() + "**/*"
+                } else {
+                    line.to_string() + "/**/*"
+                };
+                if let Ok(pat) = Pattern::new(&rest_pattern) {
                     patterns.push(pat);
                 }
             }

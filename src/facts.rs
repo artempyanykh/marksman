@@ -91,7 +91,7 @@ impl FactsDB {
     }
 
     pub async fn with_file(&mut self, root: &Path, path: &Path, ignores: &[Pattern]) -> Result<()> {
-        let note = store::read_note(path, ignores).await?;
+        let note = store::read_note(path, root, ignores).await?;
         if let Some(note) = note {
             let note_file = NoteFile::new(root, path);
             self.insert_note(note_file, note);

@@ -27,7 +27,8 @@ tracing-subscriber = "0.2.16"
 url = "2.2.0"
 
 [dev-dependencies]
-k9 = "0.10.3"
+insta = "1.7.1"
+pretty_assertions = "0.7.1"
 
 [workspace]
 members = ["lsp-text"]

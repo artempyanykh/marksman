@@ -9,4 +9,4 @@ license-file = "../LICENSE"
 lsp-types = "0.88.0"
 
 [dev-dependencies]
-k9 = "0.10.3"
+pretty_assertions = "0.7.1"

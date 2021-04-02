@@ -1,0 +1,253 @@
+---
+source: src/structure.rs
+expression: elements
+
+---
+[
+    (
+        Heading(
+            Heading {
+                level: 1,
+                text: "# Some text in heading 1",
+                scope: Pos {
+                    line: 2,
+                    col: 0,
+                }..Pos {
+                    line: 8,
+                    col: 0,
+                },
+            },
+        ),
+        Pos {
+            line: 2,
+            col: 0,
+        }..Pos {
+            line: 2,
+            col: 24,
+        },
+    ),
+    (
+        Heading(
+            Heading {
+                level: 2,
+                text: "## Some text in heading 1-2",
+                scope: Pos {
+                    line: 4,
+                    col: 0,
+                }..Pos {
+                    line: 8,
+                    col: 0,
+                },
+            },
+        ),
+        Pos {
+            line: 4,
+            col: 0,
+        }..Pos {
+            line: 4,
+            col: 27,
+        },
+    ),
+    (
+        Heading(
+            Heading {
+                level: 1,
+                text: "#     Some text in heading 2",
+                scope: Pos {
+                    line: 8,
+                    col: 0,
+                }..Pos {
+                    line: 30,
+                    col: 22,
+                },
+            },
+        ),
+        Pos {
+            line: 8,
+            col: 0,
+        }..Pos {
+            line: 8,
+            col: 28,
+        },
+    ),
+    (
+        Heading(
+            Heading {
+                level: 2,
+                text: "## Heading with links",
+                scope: Pos {
+                    line: 10,
+                    col: 0,
+                }..Pos {
+                    line: 30,
+                    col: 22,
+                },
+            },
+        ),
+        Pos {
+            line: 10,
+            col: 0,
+        }..Pos {
+            line: 10,
+            col: 21,
+        },
+    ),
+    (
+        LinkRef(
+            LinkRef {
+                text: "[:noteid]",
+                note_name: Some(
+                    noteid,
+                ),
+                heading: None,
+            },
+        ),
+        Pos {
+            line: 12,
+            col: 21,
+        }..Pos {
+            line: 12,
+            col: 30,
+        },
+    ),
+    (
+        LinkRef(
+            LinkRef {
+                text: "[:@# Some text in heading 1]",
+                note_name: None,
+                heading: Some(
+                    "# Some text in heading 1",
+                ),
+            },
+        ),
+        Pos {
+            line: 14,
+            col: 25,
+        }..Pos {
+            line: 14,
+            col: 53,
+        },
+    ),
+    (
+        LinkRef(
+            LinkRef {
+                text: "[:othernote@#Some heading]",
+                note_name: Some(
+                    othernote,
+                ),
+                heading: Some(
+                    "#Some heading",
+                ),
+            },
+        ),
+        Pos {
+            line: 16,
+            col: 33,
+        }..Pos {
+            line: 16,
+            col: 59,
+        },
+    ),
+    (
+        LinkRef(
+            LinkRef {
+                text: "[:othernote@]",
+                note_name: Some(
+                    othernote,
+                ),
+                heading: None,
+            },
+        ),
+        Pos {
+            line: 17,
+            col: 42,
+        }..Pos {
+            line: 17,
+            col: 55,
+        },
+    ),
+    (
+        LinkRegular(
+            LinkRegular {
+                text: "[foo][bar]",
+                dest: Some(
+                    "https://bar.com",
+                ),
+                title: None,
+            },
+        ),
+        Pos {
+            line: 20,
+            col: 19,
+        }..Pos {
+            line: 20,
+            col: 29,
+        },
+    ),
+    (
+        LinkRegular(
+            LinkRegular {
+                text: "[foo][non-existent]",
+                dest: None,
+                title: None,
+            },
+        ),
+        Pos {
+            line: 21,
+            col: 26,
+        }..Pos {
+            line: 21,
+            col: 45,
+        },
+    ),
+    (
+        LinkRegular(
+            LinkRegular {
+                text: "[bar]",
+                dest: Some(
+                    "https://bar.com",
+                ),
+                title: None,
+            },
+        ),
+        Pos {
+            line: 23,
+            col: 24,
+        }..Pos {
+            line: 23,
+            col: 29,
+        },
+    ),
+    (
+        LinkRegular(
+            LinkRegular {
+                text: "[foo]",
+                dest: None,
+                title: None,
+            },
+        ),
+        Pos {
+            line: 24,
+            col: 31,
+        }..Pos {
+            line: 24,
+            col: 36,
+        },
+    ),
+    (
+        LinkRef(
+            LinkRef {
+                text: "[:]",
+                note_name: None,
+                heading: None,
+            },
+        ),
+        Pos {
+            line: 27,
+            col: 28,
+        }..Pos {
+            line: 27,
+            col: 31,
+        },
+    ),
+]

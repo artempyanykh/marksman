@@ -343,18 +343,16 @@ pub fn apply_change<S: Borrow<str>>(text: &IndexedText<S>, change: TextChange) -
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use k9::assert_equal;
-
     mod offset_map {
-        use super::*;
+        use crate::*;
+        use pretty_assertions::assert_eq;
 
         #[test]
         fn no_newline() {
             //          012
             let text = "Hi!";
             let offsets = IndexedText::new(text);
-            assert_equal!(offsets.line_ranges, vec![0..3, 3..3]);
+            assert_eq!(offsets.line_ranges, vec![0..3, 3..3]);
         }
 
         #[test]
@@ -362,7 +360,7 @@ mod tests {
             //          012 3
             let text = "Hi!\n";
             let offsets = IndexedText::new(text);
-            assert_equal!(offsets.line_ranges, vec![0..4, 4..4]);
+            assert_eq!(offsets.line_ranges, vec![0..4, 4..4]);
         }
 
         #[test]
@@ -370,7 +368,7 @@ mod tests {
             //          012 3 4
             let text = "Hi!\r\n";
             let offsets = IndexedText::new(text);
-            assert_equal!(offsets.line_ranges, vec![0..5, 5..5]);
+            assert_eq!(offsets.line_ranges, vec![0..5, 5..5]);
         }
 
         #[test]
@@ -378,7 +376,7 @@ mod tests {
             //          012 345678
             let text = "Hi!\nWorld";
             let offsets = IndexedText::new(text);
-            assert_equal!(offsets.line_ranges, vec![0..4, 4..9, 9..9]);
+            assert_eq!(offsets.line_ranges, vec![0..4, 4..9, 9..9]);
         }
 
         #[test]
@@ -387,7 +385,7 @@ mod tests {
             let text = IndexedText::new(text);
             let pos = text.offset_to_pos(1).unwrap();
             let lsp_pos = text.pos_to_lsp_pos(&pos);
-            assert_equal!(lsp_pos, Some(lsp_types::Position::new(0, 1)));
+            assert_eq!(lsp_pos, Some(lsp_types::Position::new(0, 1)));
         }
 
         #[test]
@@ -395,7 +393,7 @@ mod tests {
             let text = "";
             let text = IndexedText::new(text);
             let pos = text.offset_to_pos(0).unwrap();
-            assert_equal!(
+            assert_eq!(
                 text.pos_to_lsp_pos(&pos),
                 Some(lsp_types::Position::new(0, 0))
             );
@@ -403,9 +401,10 @@ mod tests {
     }
 
     mod apply_change {
+        use crate::*;
         use lsp_types::TextDocumentContentChangeEvent;
+        use pretty_assertions::assert_eq;
 
-        use super::*;
         #[test]
         fn within_line() {
             let text = "# Hello World";
@@ -421,7 +420,7 @@ mod tests {
             };
             let change = text.lsp_change_to_change(change).unwrap();
             let replaced = apply_change(&text, change);
-            assert_equal!(&replaced, "# Hi World");
+            assert_eq!(&replaced, "# Hi World");
         }
 
         #[test]
@@ -440,7 +439,7 @@ mod tests {
             };
             let change = text.lsp_change_to_change(change).unwrap();
             let replaced = apply_change(&text, change);
-            assert_equal!(&replaced, "Hi");
+            assert_eq!(&replaced, "Hi");
         }
 
         #[test]
@@ -459,7 +458,7 @@ mod tests {
             };
             let change = text.lsp_change_to_change(change).unwrap();
             let replaced = apply_change(&text, change);
-            assert_equal!(&replaced, "Hi\n");
+            assert_eq!(&replaced, "Hi\n");
         }
     }
 }

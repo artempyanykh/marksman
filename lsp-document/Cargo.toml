@@ -6,7 +6,7 @@ edition = "2018"
 description = "Helpers to convert between LSP documents and Rust strings"
 readme = "README.md"
 repository = "https://github.com/artempyanykh/zeta-note/tree/main/lsp-document"
-license-file = "LICENSE"
+license = "MIT"
 
 [dependencies]
 lsp-types = "0.88.0"

@@ -3,7 +3,10 @@ name = "lsp-document"
 version = "0.1.0"
 authors = ["Artem Pyanykh <artem.pyanykh@gmail.com>"]
 edition = "2018"
-license-file = "../LICENSE"
+description = "Helpers to convert between LSP documents and Rust strings"
+readme = "README.md"
+repository = "https://github.com/artempyanykh/zeta-note/tree/main/lsp-document"
+license-file = "LICENSE"
 
 [dependencies]
 lsp-types = "0.88.0"

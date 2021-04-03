@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "lsp-document"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "lsp-types",
  "pretty_assertions",

@@ -1,5 +1,5 @@
 [package]
-name = "lsp-text"
+name = "lsp-document"
 version = "0.1.0"
 authors = ["Artem Pyanykh <artem.pyanykh@gmail.com>"]
 edition = "2018"

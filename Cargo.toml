@@ -6,7 +6,7 @@ edition = "2018"
 license-file = "LICENSE"
 
 [dependencies]
-lsp-text = { path = "lsp-text"}
+lsp-document = { path = "lsp-document"}
 
 anyhow = "1.0"
 clap = "3.0.0-beta.2"
@@ -31,4 +31,4 @@ insta = "1.7.1"
 pretty_assertions = "0.7.1"
 
 [workspace]
-members = ["lsp-text"]
+members = ["lsp-document"]

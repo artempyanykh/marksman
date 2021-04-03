@@ -3,7 +3,7 @@ use std::{
     ops::Range,
 };
 
-use lsp_text::{Pos, TextAdapter};
+use lsp_document::{Pos, TextAdapter};
 use lsp_types::{Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url};
 use tracing::debug;
 

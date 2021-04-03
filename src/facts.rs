@@ -14,7 +14,7 @@ use crate::{
     store::{self, NoteFile, NoteIndex, NoteText},
     structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
 };
-use lsp_text::{IndexedText, Pos, TextAdapter, TextMap};
+use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 
 #[salsa::query_group(FactsStorage)]
 pub trait Facts<'a>: salsa::Database {

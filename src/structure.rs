@@ -1,4 +1,4 @@
-use lsp_text::{Pos, TextMap};
+use lsp_document::{Pos, TextMap};
 use regex::Regex;
 
 use std::{
@@ -357,7 +357,7 @@ pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use lsp_text::IndexedText;
+    use lsp_document::IndexedText;
 
     use super::*;
     use pretty_assertions::assert_eq;

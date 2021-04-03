@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use glob::Pattern;
-use lsp_text::TextMap;
+use lsp_document::TextMap;
 
 use lsp_types::{
     CodeLens, CodeLensParams, Command, CompletionItem, CompletionParams,
@@ -29,7 +29,7 @@ use crate::{
     store::{NoteFile, NoteText, Version},
     structure::{Element, ElementWithLoc, NoteName},
 };
-use lsp_text::{self, IndexedText, TextAdapter};
+use lsp_document::{self, IndexedText, TextAdapter};
 
 //////////////////////////////////////////
 // Text Sync
@@ -55,7 +55,7 @@ pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeT
             let change = indexed
                 .lsp_change_to_change(lsp_change.clone())
                 .expect("Couldn't translate LSP document change event");
-            final_text = lsp_text::apply_change(&indexed, change);
+            final_text = lsp_document::apply_change(&indexed, change);
         }
 
         let final_version = Version::Vs(changes.text_document.version);

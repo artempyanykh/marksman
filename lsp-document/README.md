@@ -1,5 +1,7 @@
 # `lsp-document`
 
+[![Docs](https://docs.rs/lsp-document/badge.svg)](https://docs.rs/lsp-document)
+
 Helpers to convert between LSP representations of text documents and Rust strings.
 
 ## TL;DR:

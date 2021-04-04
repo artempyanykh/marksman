@@ -1,18 +1,107 @@
+//! Helpers to convert between LSP representations of text documents and Rust
+//! strings.
+//!
+//! ## Motivation:
+//! LSP uses UTF16-encoded strings while Rust's strings are UTF8-encoded. This
+//! means that text offsets in LSP and in Rust are different:
+//! - LSP offsets are in 16-bit code-units and each character is either 1 or 2 of those,
+//! - Rust strings are indexed in bytes and each character takes from 1 to 4 bytes.
+//!
+//! To ensure that LSP client and server "talk" about the same part of a text
+//! document we need a translation layer.
+//!
+//! ## Structure
+//! There are two traits that define the basic functionality on text documents:
+//! - [`TextMap`] defines operations to convert between byte offsets and [`Pos`]'s
+//!   inside a UTF8-encoded string.
+//! - [`TextAdapter`] defines operations to convert between LSP positions, native
+//!   positions, and derived types.
+//!
+//! The work-horse struct that implements both of these traits is
+//! [`IndexedText`]. It wraps the original text and can act as a replacement for
+//! [`String`] where relevant. The struct is generic in the type of text it
+//! wraps, however, so depending on the use-case it can be either:
+//! - `IndexedText<&str>` when you don't really need an ownership of the original
+//!   text, or
+//! - `IndexedText<Arc<str>>` otherwise.
+//!
+//! ## Example usage
+//!
+//! Below is a an example where the original text is `&'static str`.
+//!
+//! ```rust
+//! use lsp_document::{TextMap, TextAdapter, Pos, IndexedText};
+//! use lsp_types::Position;
+//!
+//! // Character width
+//! // U16:     1111111111111 1111111111 1 11 1 1 111111111 21
+//! // U8:      1111111111111 1222122221 1 13 3 3 111111111 41
+//! // U8 offset
+//! //          0         1       2      3       4          5
+//! //          0123456789012 3468013579 0 12 5 8 123456789 04
+//! let text = "Hello, world!\nКак дела?\r\n做得好\nThis is 💣!";
+//! let text = IndexedText::new(text);
+//! //
+//! // Examples of using TextMap methods
+//! //
+//! // Pos of 💣 from its offset
+//! assert_eq!(text.offset_to_pos(50).unwrap(), Pos::new(3, 8));
+//! // Raw line range info
+//! assert_eq!(text.line_range(2).unwrap(), Pos::new(2, 0)..Pos::new(2, 10));
+//! // Extracting part of text between two positions
+//! assert_eq!(text.substr(Pos::new(1, 7)..Pos::new(1, 15)).unwrap(), "дела");
+//!
+//! //
+//! // Example of using TextAdapter methods
+//! //
+//! // Pos of `!` after 💣
+//! assert_eq!(text.lsp_pos_to_pos(&Position::new(3, 10)).unwrap(), Pos::new(3, 12));
+//! assert_eq!(text.pos_to_lsp_pos(&Pos::new(3, 12)).unwrap(), Position::new(3, 10));
+//! ```
+
 use std::{borrow::Borrow, cmp::Ordering, ops::Range};
 
+/// Native position inside a text document/string. Points to a valid position
+/// **before** the character inside a UTF8-encoded string.
+///
+/// ## Why use [`Pos`] instead of raw `usize` offset
+///
+/// This depends on the use-case. Often raw `usize` or a newtype wrapper around
+/// `usize` is sufficient. However, raw byte offsets are not stable at all when a
+/// text document changes.
+///
+/// Usually, a text document is an input to later stages of the pipelines. Let's
+/// take a simple incremental pipeline:
+/// ```text
+/// text: string ->
+///  symbols: Symbol { ..., start: usize, end: usize } ->
+///  diagnostics: Diag { ..., start: usize, end: usize }
+/// ```
+///
+/// Now, any change to `text` on line N will shift all `start` and `end` offsets,
+/// which will invalidate all symbols and diagnostics following the change and
+/// require recomputation.
+///
+/// However, if `start` and `end` are [`Pos`]es then only the line where the
+/// change was made is affected. Symbols and diagnostic for other lines won't be
+/// invalidated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pos {
-    line: u32,
-    /// Byte offset from the beginning of the line
-    col: u32,
+    /// 0-indexed line inside the text document.
+    pub line: u32,
+    /// 0-indexed byte offset from the beginning of the.
+    /// The offset is at a valid char boundary.
+    pub col: u32,
 }
 
 impl Pos {
-    pub fn new(line: u32, col_offset: u32) -> Self {
-        Self {
-            line,
-            col: col_offset,
-        }
+    /// Create a new [`Pos`]. This method shouldn't be required to use most of
+    /// the time!
+    ///
+    /// `line` is 0-indexed, `col` is a 0-indexed byte-offset from the beginning
+    /// of the line to a **valid char position**.
+    pub fn new(line: u32, col: u32) -> Self {
+        Self { line, col }
     }
 }
 
@@ -33,11 +122,22 @@ impl Ord for Pos {
     }
 }
 
+/// Native representation of a change that replaces a part of the target text.
+///
+/// Can be converted to and from [`lsp_types::TextDocumentContentChangeEvent`] by
+/// [`TextAdapter`].
 pub struct TextChange {
-    range: Option<Range<Pos>>,
-    patch: String,
+    /// Specifies the part of the text that needs to be replaced. When `None` the
+    /// whole text needs to be replaced.
+    pub range: Option<Range<Pos>>,
+    /// The replacement text.
+    pub patch: String,
 }
 
+/// Defines operations to convert between byte offsets and native [`Pos`].
+///
+/// Most operations return an [`Option`] where [`None`] signals that the
+/// conversion wasn't successful.
 pub trait TextMap {
     fn text(&self) -> &str;
     fn offset_to_pos(&self, offset: usize) -> Option<Pos>;
@@ -50,6 +150,11 @@ pub trait TextMap {
     fn substr(&self, range: Range<Pos>) -> Option<&str>;
 }
 
+/// Defines operations to convert between native text types and [`lsp_types`].
+/// The trait is automatically derived for any type that implements [`TextMap`].
+///
+/// Most operations return an [`Option`] where [`None`] signals that the
+/// conversion wasn't successful.
 pub trait TextAdapter {
     fn pos_to_lsp_pos(&self, pos: &Pos) -> Option<lsp_types::Position>;
     fn lsp_pos_to_pos(&self, lsp_pos: &lsp_types::Position) -> Option<Pos>;
@@ -178,13 +283,22 @@ impl<T: TextMap> TextAdapter for T {
     }
 }
 
+/// A combo of [`TextMap`] + [`TextAdapter`]. Wraps the original text and
+/// provides all the conversion methods.
+///
+/// Generic over the type of the text it wraps. Can be used with e.g. `&str`,
+/// `String`, or `Arc<str>`, depending on whether ownership is needed and if it
+/// needs to be unique or shared.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IndexedText<T>
 where
     T: Borrow<str>,
 {
-    pub text: T,
-    line_ranges: Vec<Range<u32>>, // u32 should be enough for upto 4GB files; show me a source file like this!
+    /// The original text
+    text: T,
+    /// Range of start-end offsets for all lines in the `text`. [`u32`] should be
+    /// enough for upto 4GB files; show me a source file like this!
+    line_ranges: Vec<Range<u32>>,
 }
 
 impl<T: Borrow<str>> IndexedText<T> {
@@ -308,6 +422,7 @@ impl<T: Borrow<str>> TextMap for IndexedText<T> {
     }
 }
 
+/// Applies a [`TextChange`] to [`IndexedText`] returning a new text as [`String`].
 pub fn apply_change<S: Borrow<str>>(text: &IndexedText<S>, change: TextChange) -> String {
     match change.range {
         None => change.patch.to_string(),

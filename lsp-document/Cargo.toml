@@ -1,6 +1,6 @@
 [package]
 name = "lsp-document"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Artem Pyanykh <artem.pyanykh@gmail.com>"]
 edition = "2018"
 description = "Helpers to convert between LSP documents and Rust strings"

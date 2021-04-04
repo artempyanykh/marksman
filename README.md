@@ -26,7 +26,8 @@ But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note
 3. **Go To Definition**, **Hover** preview, **Code Lenses**, and
    **Diagnostics** simplify navigating and maintaining notes.
 
-Existing editor integrations<sup>[3](#fn3)</sup>:
+## Existing editor integrations<sup>[3](#fn3)</sup>:
+
 - VSCode via [Zeta Note VSCode][zn-vscode].
 
 
@@ -82,6 +83,9 @@ has LSP support: Emacs, Vim, Neovim, etc.
 <span id="fn3">\[3\]</span>: Since Zeta Note is a regular Language Server most of the functionality
 works out of the box with any LSP client. The only thing that requires custom
 handling is "Code Lenses" due to how these are defined in LSP spec.
+
+<span id="fn4">\[4\]</span>: [rust-analyzer](https://github.com/rust-analyzer/rust-analyzer) was a huge
+source of inspiration for how to implement various parts of an LSP server in Rust. Thank you!
 
 [zettel-wiki]: https://en.wikipedia.org/wiki/Zettelkasten
 [roam]: https://roamresearch.com

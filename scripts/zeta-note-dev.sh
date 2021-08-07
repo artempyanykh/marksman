@@ -11,6 +11,4 @@ cd "$PROJECT_DIR" || exit
 cargo build
 popd || exit
 
-"$PROJECT_DIR/target/debug/zeta-note" "$@"
-
-
+RUST_LOG=zeta_node=debug,lsp_server=debug RUST_BACKTRACE=1 "$PROJECT_DIR/target/debug/zeta-note" "$@"

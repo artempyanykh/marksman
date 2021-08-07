@@ -18,7 +18,7 @@ use lsp_types::{
         GotoDefinition, HoverRequest, ResolveCompletionItem, SemanticTokensFullRequest,
         SemanticTokensRangeRequest, WorkspaceSymbol,
     },
-    ClientCapabilities, ClientInfo, CodeLensOptions, CompletionOptions, DocumentLinkOptions,
+    ClientCapabilities, CodeLensOptions, CompletionOptions, DocumentLinkOptions,
     HoverProviderCapability, InitializeParams, InitializeResult, OneOf, SemanticTokens,
     SemanticTokensFullOptions, SemanticTokensOptions, ServerCapabilities, ServerInfo,
     TextDocumentSyncCapability, TextDocumentSyncKind, WorkDoneProgressOptions,
@@ -26,9 +26,28 @@ use lsp_types::{
 
 use super::handlers;
 
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum ClientName {
+    VSCode,
+    Neovim,
+    Other,
+}
+
+impl ClientName {
+    pub fn from_str(name: &str) -> ClientName {
+        if name == "Visual Studio Code" {
+            ClientName::VSCode
+        } else if name == "Neovim" {
+            ClientName::Neovim
+        } else {
+            ClientName::Other
+        }
+    }
+}
+
 pub struct Ctx {
     pub root: PathBuf,
-    pub is_vscode: bool,
+    pub client_name: ClientName,
     pub experimental: ExperimentalCapabilities,
 }
 
@@ -52,17 +71,17 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
         .to_file_path()
         .map_err(|_| anyhow!("`root_uri` couldn't be converted to path"))?;
 
-    let is_vscode = init_params
+    let client_name = init_params
         .client_info
         .as_ref()
-        .map(is_vscode)
-        .unwrap_or(false);
+        .map(|info| ClientName::from_str(info.name.as_str()))
+        .unwrap_or(ClientName::Other);
 
     let experimental = extract_experimental(&init_params.capabilities);
 
     let ctx = Ctx {
         root,
-        is_vscode,
+        client_name,
         experimental,
     };
 
@@ -84,10 +103,6 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
     Ok((connection, io_threads, ctx))
 }
 
-fn is_vscode(client_info: &ClientInfo) -> bool {
-    client_info.name == "Visual Studio Code"
-}
-
 fn extract_experimental(cap: &ClientCapabilities) -> ExperimentalCapabilities {
     cap.experimental
         .as_ref()
@@ -101,7 +116,7 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
     // VSCode already has Markdown built-in language features, which can't be
     // turned off https://github.com/microsoft/vscode/issues/118817
     // To avoid conflicts don't enable symbol providers for VSCode
-    if !ctx.is_vscode {
+    if ctx.client_name != ClientName::VSCode {
         server_capabilities.document_symbol_provider = Some(OneOf::Left(true));
         server_capabilities.workspace_symbol_provider = Some(OneOf::Left(true));
     }
@@ -278,7 +293,7 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                             .uri
                             .to_file_path()
                             .expect("Failed to turn uri into path");
-                        handlers::note_apply_changes(&mut facts, &path, &params);
+                        handlers::note_apply_changes(&mut facts, ctx.client_name, &path, &params);
                     }
                 )
             }

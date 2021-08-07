@@ -22,6 +22,7 @@ use serde_json;
 
 use tracing::debug;
 
+use crate::lsp::server::ClientName;
 use crate::util::text_matches_query;
 use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
@@ -35,18 +36,32 @@ use lsp_document::{self, IndexedText, TextAdapter};
 // Text Sync
 /////////////////////////////////////////
 
-pub fn note_apply_changes(facts: &mut FactsDB, path: &Path, changes: &DidChangeTextDocumentParams) {
+pub fn note_apply_changes(
+    facts: &mut FactsDB,
+    client_name: ClientName,
+    path: &Path,
+    changes: &DidChangeTextDocumentParams,
+) {
     if let Some(note_id) = facts.note_index().find_by_path(path) {
         let note = facts.note_facts(note_id);
 
         let our_version = note.text().version;
-        let target_version = Version::Vs(changes.text_document.version - 1);
-        debug_assert!(
-            our_version == target_version,
-            "Document versions don't match: our({:?}), external({:?})",
-            our_version,
-            target_version
-        );
+        // The problem with neovim's LSP is that text document versions are not consecutive:
+        // * First notification is didOpen with version 0.
+        // - Second notification is didChange with version 4.
+        // - The version number increases by 2 when you make a change after an "Undo".
+        // No idea whether this is a quirk in their text sync implementation but
+        // the sync itself works fine or if the partial sync is borked, but it
+        // seems we can't use this consistency check for Neovim.
+        if !(client_name == ClientName::Neovim) {
+            let target_version = Version::Vs(changes.text_document.version - 1);
+            debug_assert!(
+                our_version == target_version,
+                "Document versions don't match: our({:?}), external({:?})",
+                our_version,
+                target_version
+            );
+        }
 
         let mut final_text = note.text().content.to_string();
 

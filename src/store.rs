@@ -139,7 +139,7 @@ pub async fn read_note(path: &Path, root: &Path, ignores: &[Pattern]) -> Result<
 
         Ok(Some(NoteText::new(version, content.into())))
     } else {
-        return Ok(None);
+        Ok(None)
     }
 }
 
@@ -184,7 +184,7 @@ fn is_note_file(path: &Path, root: &Path, ignores: &[Pattern]) -> bool {
         }
     }
 
-    return true;
+    true
 }
 
 pub async fn find_ignores(root_path: &Path) -> Result<Vec<Pattern>> {

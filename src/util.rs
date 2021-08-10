@@ -28,5 +28,5 @@ pub fn text_matches_query(text: &str, query: &str) -> bool {
         };
     }
 
-    return true;
+    true
 }

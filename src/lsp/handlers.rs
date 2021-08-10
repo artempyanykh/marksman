@@ -206,7 +206,7 @@ pub fn completion_candidates(
         let partial_input = enclosing_link_ref
             .note_name
             .clone()
-            .map(NoteName::into_string)
+            .map(|n| n.to_string())
             .unwrap_or_default();
 
         for candidate_id in facts.note_index().ids() {
@@ -246,7 +246,7 @@ pub fn completion_candidates(
         };
         let target_tag = match &enclosing_link_ref.note_name {
             Some(name) => name.to_path(root),
-            _ => current_tag.to_path_buf(),
+            _ => current_tag,
         };
         debug!("Mathing headings inside {:?}...", target_tag);
 
@@ -350,17 +350,16 @@ pub fn hover(root: &Path, facts: &FactsDB, params: HoverParams) -> Option<Hover>
     let (hovered_el, span) = note_structure.element_by_id(note.element_at_lsp_pos(&pos)?);
 
     if let Element::LinkRef(link_ref) = hovered_el {
-        let range = note.indexed_text().range_to_lsp_range(&span);
+        let range = note.indexed_text().range_to_lsp_range(span);
 
-        let target_note_name = link_ref.note_name.clone().unwrap_or_else(|| note_name);
+        let target_note_name = link_ref.note_name.clone().unwrap_or(note_name);
 
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
         let target_struct = target_note.structure();
         let target_text = target_note.indexed_text();
         let text = if let Some(heading) = &link_ref.heading {
-            let (heading, _) =
-                target_struct.heading_by_id(target_note.heading_with_text(&heading)?);
+            let (heading, _) = target_struct.heading_by_id(target_note.heading_with_text(heading)?);
 
             target_text.substr(heading.scope.clone())?.to_string()
         } else {
@@ -505,7 +504,7 @@ fn semantic_tokens_encode(
             Element::LinkRef(..) => SemanticTokenType::PROPERTY,
             _ => continue,
         };
-        let el_pos = note.indexed_text().range_to_lsp_range(&el_span).unwrap();
+        let el_pos = note.indexed_text().range_to_lsp_range(el_span).unwrap();
         // Can't handle multiline tokens properly so skip.
         // Would be nice to improve at some point
         if el_pos.end.line > el_pos.start.line {
@@ -554,7 +553,7 @@ pub fn diag(
         let note = facts.note_facts(note_id);
         let file = note.file();
         let diag = note.diag();
-        let diag: HashSet<DiagWithLoc> = diag.iter().map(|d| d.clone()).collect();
+        let diag: HashSet<DiagWithLoc> = diag.iter().cloned().collect();
 
         let changed_for_file = if let Some(prev_set) = prev_diag_col.store.get(&file) {
             *prev_set != diag

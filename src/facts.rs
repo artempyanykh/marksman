@@ -60,15 +60,15 @@ pub struct FactsDB(FactsDBInternal);
 impl FactsDB {
     pub fn empty() -> Self {
         let mut db = Self::default();
-        db.0.set_note_index((), NoteIndex::default().into());
+        db.0.set_note_index((), NoteIndex::default());
         db
     }
 
     pub fn insert_note(&mut self, note_file: NoteFile, note: NoteText) {
         let idx = self.note_index();
         let new_idx = idx.with_note_file(note_file.clone());
-        self.0.set_note_index((), new_idx.into());
-        self.0.set_note_content(note_file, note.into());
+        self.0.set_note_index((), new_idx);
+        self.0.set_note_content(note_file, note);
     }
 
     pub fn remove_note(&self) {
@@ -77,7 +77,7 @@ impl FactsDB {
 
     pub fn update_note(&mut self, note_id: NoteID, note: NoteText) {
         let file = self.note_index().find_by_id(note_id);
-        self.0.set_note_content(file.clone(), note.into());
+        self.0.set_note_content(file, note);
     }
 
     pub async fn from_files(root: &Path, files: &[PathBuf], ignores: &[Pattern]) -> Result<Self> {
@@ -206,9 +206,7 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
     }
 
     fn heading_with_text(&self, text: &str) -> Option<HeadingID> {
-        self.headings_matching(|h| h.text == text)
-            .first()
-            .map(|x| *x)
+        self.headings_matching(|h| h.text == text).first().copied()
     }
 
     fn element_at_pos(&self, pos: Pos) -> Option<ElementID> {
@@ -281,12 +279,12 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
 
 fn note_text(db: &dyn Facts, note_id: NoteID) -> NoteText {
     let file = db.note_index(()).find_by_id(note_id);
-    db.note_content(file.clone())
+    db.note_content(file)
 }
 
 fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<IndexedText<Arc<str>>> {
     let note_text = db.note_text(note_id);
-    Arc::new(IndexedText::new(note_text.content.clone()))
+    Arc::new(IndexedText::new(note_text.content))
 }
 
 fn note_structure(db: &dyn Facts, note_id: NoteID) -> Structure {
@@ -308,7 +306,7 @@ fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
     db.note_headings(note_id)
         .iter()
         .find(|id| index.heading_by_id(**id).0.level == 1)
-        .map(|x| *x)
+        .copied()
 }
 
 fn note_refs(db: &dyn Facts, note_id: NoteID) -> Arc<[LinkRefID]> {
@@ -330,15 +328,14 @@ fn note_valid_refs(
             let target_note_name = linkref
                 .note_name
                 .clone()
-                .unwrap_or(cur_note.file().name.deref().clone());
+                .unwrap_or_else(|| cur_note.file().name.deref().clone());
 
             if let Some(target_id) = db.note_index(()).find_by_name(&target_note_name) {
                 let target_note = NoteFactsDB::new(db, target_id);
                 match &linkref.heading {
-                    Some(heading_text) => match target_note.heading_with_text(&heading_text) {
-                        Some(id) => Some((rid, target_id, Some(id))),
-                        _ => None,
-                    },
+                    Some(heading_text) => target_note
+                        .heading_with_text(heading_text)
+                        .map(|id| (rid, target_id, Some(id))),
                     _ => Some((rid, target_id, target_note.title())),
                 }
             } else {

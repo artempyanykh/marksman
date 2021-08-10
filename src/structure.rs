@@ -53,14 +53,6 @@ impl NoteName {
     pub fn to_str(&self) -> &str {
         &self.0
     }
-
-    pub fn to_string(&self) -> String {
-        self.0.clone()
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -323,7 +315,7 @@ pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
                 | LinkType::ShortcutUnknown => {
                     let link_text = &index.text()[el_span.start..el_span.end].trim();
                     let link = parse_link_ref(link_text)
-                        .map(|r| Element::LinkRef(r))
+                        .map(Element::LinkRef)
                         .unwrap_or_else(|| {
                             Element::LinkRegular(parse_link_regular(link_text, dest, title))
                         });

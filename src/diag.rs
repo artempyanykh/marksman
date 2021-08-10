@@ -44,7 +44,7 @@ pub fn to_publish(
                 ..Diagnostic::default()
             })
         })
-        .filter_map(|x| x)
+        .flatten()
         .collect();
 
     let param = PublishDiagnosticsParams {
@@ -95,7 +95,7 @@ pub fn check_title(note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
     let duplicates = strukt.headings_with_ids(&hd_ids).into_iter().skip(1);
 
     let duplicate_diags = duplicates
-        .map(|(t, r)| (Diag::DupTitle { title: t.clone() }, r.clone()))
+        .map(|(t, r)| (Diag::DupTitle { title: t.clone() }, r))
         .collect::<Vec<_>>();
 
     debug!("check_title: reporting {}", duplicate_diags.len());
@@ -137,7 +137,7 @@ pub fn check_headings(note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
 
     let duplicate_diags = duplicates
         .into_iter()
-        .map(|(h, r)| (Diag::DupHeading { heading: h.clone() }, r.clone()))
+        .map(|(h, r)| (Diag::DupHeading { heading: h.clone() }, r))
         .collect::<Vec<_>>();
 
     debug!("check_headings: reporting {}", duplicate_diags.len());
@@ -155,13 +155,13 @@ pub fn check_refs(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<DiagWithLo
         let target_name = link_ref
             .note_name
             .clone()
-            .unwrap_or((*note.file().name).clone());
+            .unwrap_or_else(|| (*note.file().name).clone());
         let target_id = facts.note_index(()).find_by_name(&target_name);
         match target_id {
             Some(id) => {
                 let target_note = NoteFactsDB::new(facts, id);
                 if let Some(heading) = &link_ref.heading {
-                    if let None = target_note.heading_with_text(&heading) {
+                    if target_note.heading_with_text(heading).is_none() {
                         diags.push((
                             Diag::BrokenRefHeading {
                                 ref_note: target_name,

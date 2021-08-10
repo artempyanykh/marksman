@@ -34,7 +34,7 @@ pub enum ClientName {
 }
 
 impl ClientName {
-    pub fn from_str(name: &str) -> ClientName {
+    pub fn parse(name: &str) -> ClientName {
         if name == "Visual Studio Code" {
             ClientName::VSCode
         } else if name == "Neovim" {
@@ -67,14 +67,14 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
     let init_params: InitializeParams = serde_json::from_value(params).unwrap();
     let root = init_params
         .root_uri
-        .ok_or(anyhow!("Expected a `root_uri` parameter"))?
+        .ok_or_else(|| anyhow!("Expected a `root_uri` parameter"))?
         .to_file_path()
         .map_err(|_| anyhow!("`root_uri` couldn't be converted to path"))?;
 
     let client_name = init_params
         .client_info
         .as_ref()
-        .map(|info| ClientName::from_str(info.name.as_str()))
+        .map(|info| ClientName::parse(info.name.as_str()))
         .unwrap_or(ClientName::Other);
 
     let experimental = extract_experimental(&init_params.capabilities);
@@ -94,7 +94,6 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
     let init_result = InitializeResult {
         capabilities,
         server_info: Some(server_info),
-        ..InitializeResult::default()
     };
 
     let init_result = serde_json::to_value(init_result).unwrap();
@@ -167,11 +166,11 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
     let root = &ctx.root;
     info!("Starting zeta-note main loop at {}", root.display());
 
-    let ignores = store::find_ignores(&root).await?;
-    let note_files = store::find_notes(&root, &ignores).await?;
+    let ignores = store::find_ignores(root).await?;
+    let note_files = store::find_notes(root, &ignores).await?;
     info!("Found {} note files", note_files.len());
 
-    let mut facts = facts::FactsDB::from_files(&root, &note_files, &ignores).await?;
+    let mut facts = facts::FactsDB::from_files(root, &note_files, &ignores).await?;
     let mut diag_col = DiagCollection::default();
     let mut last_note_count = facts.note_index().size();
 
@@ -226,21 +225,21 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                         Ok(Some(symbols.into()))
                     },
                     WorkspaceSymbol => params -> {
-                        Ok(Some(handlers::workspace_symbols(&facts, &params.query).into()))
+                        Ok(Some(handlers::workspace_symbols(&facts, &params.query)))
                     },
                     Completion => params -> {
-                        let candidates = handlers::completion_candidates(&root, &facts, params)
+                        let candidates = handlers::completion_candidates(root, &facts, params)
                             .unwrap_or_default();
                         Ok(Some(candidates.into()))
                     },
                     ResolveCompletionItem => params -> {
-                        Ok(handlers::completion_resolve(&facts, &params).unwrap_or_else(|| params))
+                        Ok(handlers::completion_resolve(&facts, &params).unwrap_or(params))
                     },
                     HoverRequest => params -> {
-                        Ok(handlers::hover(&root, &facts, params))
+                        Ok(handlers::hover(root, &facts, params))
                     },
                     GotoDefinition => params -> {
-                        Ok(handlers::goto_definition(&root, &facts, params).map(|loc| loc.into()))
+                        Ok(handlers::goto_definition(root, &facts, params).map(|loc| loc.into()))
                     },
                     SemanticTokensFullRequest => params -> {
                         let tokens = handlers::semantic_tokens_full(&facts, params).map(|tv| {
@@ -281,10 +280,10 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                             .uri
                             .to_file_path()
                             .expect("Failed to turn uri into path");
-                        handlers::note_open(&mut facts, &root, &path, &params.text_document);
+                        handlers::note_open(&mut facts, root, &path, &params.text_document);
                     },
                     DidCloseTextDocument => params -> {
-                        handlers::note_close(&mut facts, &root, &params.text_document, &ignores)
+                        handlers::note_close(&mut facts, root, &params.text_document, &ignores)
                             .await.unwrap();
                     },
                     DidChangeTextDocument => params -> {

@@ -363,26 +363,27 @@ impl<T: Borrow<str>> IndexedText<T> {
     }
 
     fn offset_to_line(&self, offset: usize) -> Option<u32> {
-        if offset > self.text.borrow().len() {
-            return None;
-        } else if offset == self.text.borrow().len() {
-            Some((self.line_ranges.len().max(2) - 2) as u32)
-        } else {
-            let line = self.line_ranges.binary_search_by(|r| {
-                if offset < r.start as usize {
-                    Ordering::Greater
-                } else if offset >= r.end as usize {
-                    Ordering::Less
-                } else if offset >= r.start as usize && offset < r.end as usize {
-                    Ordering::Equal
-                } else {
-                    panic!("Impossible case: offset={} and range={:?}", offset, r)
-                }
-            });
-            Some(
-                line.unwrap_or_else(|_| panic!("Couldn't translate u8 offset {} to line", offset))
-                    as u32,
-            )
+        match offset.cmp(&self.text.borrow().len()) {
+            Ordering::Greater => None,
+            Ordering::Equal => Some((self.line_ranges.len().max(2) - 2) as u32),
+            Ordering::Less => {
+                let line = self.line_ranges.binary_search_by(|r| {
+                    if offset < r.start as usize {
+                        Ordering::Greater
+                    } else if offset >= r.end as usize {
+                        Ordering::Less
+                    } else if offset >= r.start as usize && offset < r.end as usize {
+                        Ordering::Equal
+                    } else {
+                        panic!("Impossible case: offset={} and range={:?}", offset, r)
+                    }
+                });
+                Some(
+                    line.unwrap_or_else(|_| {
+                        panic!("Couldn't translate u8 offset {} to line", offset)
+                    }) as u32,
+                )
+            }
         }
     }
 
@@ -425,7 +426,7 @@ impl<T: Borrow<str>> TextMap for IndexedText<T> {
 /// Applies a [`TextChange`] to [`IndexedText`] returning a new text as [`String`].
 pub fn apply_change<S: Borrow<str>>(text: &IndexedText<S>, change: TextChange) -> String {
     match change.range {
-        None => change.patch.to_string(),
+        None => change.patch,
         Some(range) => {
             let orig = text.text();
 

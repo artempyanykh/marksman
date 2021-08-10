@@ -39,7 +39,10 @@ async fn main() -> Result<()> {
 
     match opts.command {
         Some(Command::Serve(ServeCmd {})) | None => {
-            info!("Starting zeta-note LSP server");
+            info!(
+                "Starting zeta-note LSP server v{}",
+                env!("CARGO_PKG_VERSION")
+            );
             let (connection, io_threads, ctx) = lsp::server::init_connection()?;
             lsp::server::main_loop(connection, ctx).await?;
             io_threads.join()?;

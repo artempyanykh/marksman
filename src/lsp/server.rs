@@ -190,26 +190,6 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
     });
 
     for msg in &connection.receiver {
-        let current_notes_count = facts.note_index().size();
-        if current_notes_count != last_note_count {
-            pending_not_tx
-                .send(handlers::status_notification(current_notes_count))
-                .await?;
-            last_note_count = current_notes_count;
-        }
-
-        if let Some((publish_params, new_col)) = handlers::diag(&facts, &diag_col) {
-            diag_col = new_col;
-            for param in publish_params {
-                let param = serde_json::to_value(param).unwrap();
-                let not = lsp_server::Notification {
-                    method: PublishDiagnostics::METHOD.to_string(),
-                    params: param,
-                };
-                pending_not_tx.send(not).await?;
-            }
-        }
-
         match msg {
             Message::Request(req) => {
                 if connection.handle_shutdown(&req)? {
@@ -295,6 +275,33 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                         handlers::note_apply_changes(&mut facts, ctx.client_name, &path, &params);
                     }
                 )
+            }
+        }
+
+        // Diagnostics and change of status should be updated after we process the message.
+        // Doing otherwise may lead to stale diagnostics shown on the file:
+        // 1. We receive a didChange notification.
+        // 2. We produce diagnostics based on the previous state of the document (stale).
+        // 3. We process the notification (diagnostics are still stale).
+        // 4. We need one more message to update diagnostics based on the notification received on step 1.
+
+        let current_notes_count = facts.note_index().size();
+        if current_notes_count != last_note_count {
+            pending_not_tx
+                .send(handlers::status_notification(current_notes_count))
+                .await?;
+            last_note_count = current_notes_count;
+        }
+
+        if let Some((publish_params, new_col)) = handlers::diag(&facts, &diag_col) {
+            diag_col = new_col;
+            for param in publish_params {
+                let param = serde_json::to_value(param).unwrap();
+                let not = lsp_server::Notification {
+                    method: PublishDiagnostics::METHOD.to_string(),
+                    params: param,
+                };
+                pending_not_tx.send(not).await?;
             }
         }
     }

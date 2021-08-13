@@ -35,7 +35,7 @@ pub enum ClientName {
 
 impl ClientName {
     pub fn parse(name: &str) -> ClientName {
-        if name == "Visual Studio Code" {
+        if name.contains("Visual Studio Code") {
             ClientName::VSCode
         } else if name == "Neovim" {
             ClientName::Neovim

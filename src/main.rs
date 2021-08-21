@@ -1,7 +1,7 @@
 use anyhow::Result;
 
+use atty;
 use tracing::info;
-
 use tracing_subscriber::EnvFilter;
 
 use zeta_note::lsp;
@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
+        .with_ansi(atty::is(atty::Stream::Stderr))
         .init();
 
     let opts = Opts::parse();

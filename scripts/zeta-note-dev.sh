@@ -11,4 +11,5 @@ cd "$PROJECT_DIR" || exit
 cargo build
 popd || exit
 
-RUST_LOG=zeta_note=debug,lsp_server=debug RUST_BACKTRACE=1 "$PROJECT_DIR/target/debug/zeta-note" "$@"
+exec /usr/bin/env NO_COLOR=1 RUST_LOG=zeta_note=trace,lsp_server=trace RUST_BACKTRACE=1 \
+    "$PROJECT_DIR/target/debug/zeta-note" "$@"

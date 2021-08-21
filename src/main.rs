@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use atty;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -27,8 +26,11 @@ pub struct ServeCmd {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::default().add_directive("zeta_note=info".parse().unwrap()));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::default()
+            .add_directive("zeta_note=debug".parse().unwrap())
+            .add_directive("lsp_server=debug".parse().unwrap())
+    });
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)

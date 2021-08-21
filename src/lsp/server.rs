@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use std::default::Default;
-use tracing::info;
+use tracing::{info, trace};
 
 use crate::{diag::DiagCollection, facts, store};
 
@@ -61,10 +61,14 @@ pub struct ExperimentalCapabilities {
 }
 
 pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
+    trace!("init_connection: start");
+
     let (connection, io_threads) = Connection::stdio();
 
     let (id, params) = connection.initialize_start()?;
     let init_params: InitializeParams = serde_json::from_value(params).unwrap();
+    trace!("init_connection: received init params");
+
     let root = init_params
         .root_uri
         .ok_or_else(|| anyhow!("Expected a `root_uri` parameter"))?
@@ -97,7 +101,10 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
     };
 
     let init_result = serde_json::to_value(init_result).unwrap();
+
+    trace!("init_connection: finalizing init");
     connection.initialize_finish(id, init_result)?;
+    trace!("init_connection: finish");
 
     Ok((connection, io_threads, ctx))
 }
@@ -260,7 +267,9 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                             .uri
                             .to_file_path()
                             .expect("Failed to turn uri into path");
-                        handlers::note_open(&mut facts, root, &path, &params.text_document);
+                        if path.starts_with(root) {
+                            handlers::note_open(&mut facts, root, &path, &params.text_document);
+                        }
                     },
                     DidCloseTextDocument => params -> {
                         handlers::note_close(&mut facts, root, &params.text_document, &ignores)

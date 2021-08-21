@@ -23,13 +23,7 @@ pub struct NoteFile {
 
 impl NoteFile {
     pub fn new(root: &Path, path: &Path) -> Self {
-        let name: NoteName = path
-            .strip_prefix(root)
-            .unwrap_or(path)
-            .with_extension("")
-            .to_string_lossy()
-            .to_string()
-            .into();
+        let name: NoteName = NoteName::from_path(path, root);
 
         Self {
             root: root.into(),

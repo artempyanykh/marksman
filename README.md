@@ -54,6 +54,7 @@ But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note
 - ✅ Diagnostics about broken references.
 - ✅ Code Lens with "# references" on headings.
 - ✅ Support references in titles.
+- ✅ Support multi-folder workspaces.
 - 🗓 Rename refactor.
 - 🗓 Support for Jupyter notebooks.
 - 🗓 Custom parser for more fine-grained note structure.

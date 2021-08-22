@@ -12,7 +12,67 @@ use tokio::fs;
 
 use tracing::debug;
 
-use crate::structure::{NoteID, NoteName};
+use crate::{
+    facts::{self, FactsDB},
+    store,
+    structure::{NoteID, NoteName},
+};
+
+pub struct Workspace {
+    pub folders: Vec<(NoteFolder, FactsDB, Vec<Pattern>)>,
+}
+
+impl Workspace {
+    pub async fn new(input_folders: &[NoteFolder]) -> Result<Workspace> {
+        let mut output_folders = Vec::with_capacity(input_folders.len());
+
+        for f in input_folders {
+            let ignores = store::find_ignores(&f.root).await?;
+            let note_files = store::find_notes(&f.root, &ignores).await?;
+            debug!(
+                "Workspace {}: found {} note files",
+                f.root.display(),
+                note_files.len()
+            );
+            let facts = facts::FactsDB::from_files(&f.root, &note_files, &ignores).await?;
+            output_folders.push((f.clone(), facts, ignores));
+        }
+
+        Ok(Workspace {
+            folders: output_folders,
+        })
+    }
+
+    pub fn note_count(&self) -> usize {
+        self.folders
+            .iter()
+            .map(|(_, facts, _)| facts.note_index().size())
+            .sum()
+    }
+
+    pub fn owning_folder(&self, file: &Path) -> Option<(&NoteFolder, &FactsDB)> {
+        self.folders
+            .iter()
+            .find(|(folder, _, _)| file.starts_with(&folder.root))
+            .map(|(folder, facts, _)| (folder, facts))
+    }
+
+    pub fn owning_folder_mut(
+        &mut self,
+        file: &Path,
+    ) -> Option<(&mut NoteFolder, &mut FactsDB, &[Pattern])> {
+        self.folders
+            .iter_mut()
+            .find(|(folder, _, _)| file.starts_with(&folder.root))
+            .map(|(folder, facts, ignores)| (folder, facts, ignores.as_slice()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NoteFolder {
+    pub root: PathBuf,
+    pub name: String,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct NoteFile {

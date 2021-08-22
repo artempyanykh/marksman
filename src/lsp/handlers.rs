@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use glob::Pattern;
+
 use lsp_document::TextMap;
 
 use lsp_types::{
@@ -22,14 +22,14 @@ use serde_json;
 
 use tracing::debug;
 
-use crate::lsp::server::ClientName;
 use crate::util::text_matches_query;
 use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
-    facts::{FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
+    facts::{NoteFacts, NoteFactsDB, NoteFactsExt},
     store::{NoteFile, NoteText, Version},
     structure::{Element, ElementWithLoc, NoteName},
 };
+use crate::{lsp::server::ClientName, store::Workspace};
 use lsp_document::{self, IndexedText, TextAdapter};
 
 //////////////////////////////////////////
@@ -37,11 +37,16 @@ use lsp_document::{self, IndexedText, TextAdapter};
 /////////////////////////////////////////
 
 pub fn note_apply_changes(
-    facts: &mut FactsDB,
+    workspace: &mut Workspace,
     client_name: ClientName,
     path: &Path,
     changes: &DidChangeTextDocumentParams,
 ) {
+    let (_, facts, _) = match workspace.owning_folder_mut(path) {
+        Some(x) => x,
+        _ => return,
+    };
+
     if let Some(note_id) = facts.note_index().find_by_path(path) {
         let note = facts.note_facts(note_id);
 
@@ -79,20 +84,21 @@ pub fn note_apply_changes(
     }
 }
 
-pub fn note_open(facts: &mut FactsDB, root: &Path, path: &Path, document: &TextDocumentItem) {
-    let note = NoteText::new(Version::Vs(document.version), document.text.clone().into());
-    let note_file = NoteFile::new(root, path);
-    facts.insert_note(note_file, note);
+pub fn note_open(workspace: &mut Workspace, path: &Path, document: &TextDocumentItem) {
+    if let Some((folder, facts, _)) = workspace.owning_folder_mut(path) {
+        let note = NoteText::new(Version::Vs(document.version), document.text.clone().into());
+        let note_file = NoteFile::new(&folder.root, path);
+        facts.insert_note(note_file, note);
+    }
 }
 
-pub async fn note_close(
-    facts: &mut FactsDB,
-    root: &Path,
-    id: &TextDocumentIdentifier,
-    ignores: &[Pattern],
-) -> Result<()> {
+pub async fn note_close(workspace: &mut Workspace, id: &TextDocumentIdentifier) -> Result<()> {
     let path = id.uri.to_file_path().expect("Failed to turn uri into path");
-    facts.with_file(root, &path, ignores).await
+    if let Some((folder, facts, ignores)) = workspace.owning_folder_mut(&path) {
+        facts.with_file(&folder.root, &path, ignores).await
+    } else {
+        Ok(())
+    }
 }
 
 pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
@@ -108,10 +114,15 @@ pub fn status_notification(num_notes: usize) -> lsp_server::Notification {
 /////////////////////////////////////////
 
 #[allow(deprecated)]
-pub fn document_symbols(facts: &FactsDB, path: &Path, query: &str) -> Vec<SymbolInformation> {
+pub fn document_symbols(workspace: &Workspace, path: &Path, query: &str) -> Vec<SymbolInformation> {
     debug!("document_symbols: start");
 
     let mut symbols = Vec::new();
+
+    let (_, facts) = match workspace.owning_folder(path) {
+        Some(x) => x,
+        _ => return symbols,
+    };
 
     let note_id = match facts.note_index().find_by_path(path) {
         Some(t) => t,
@@ -147,12 +158,14 @@ pub fn document_symbols(facts: &FactsDB, path: &Path, query: &str) -> Vec<Symbol
     symbols
 }
 
-pub fn workspace_symbols(facts: &FactsDB, query: &str) -> Vec<SymbolInformation> {
+pub fn workspace_symbols(workspace: &Workspace, query: &str) -> Vec<SymbolInformation> {
     let mut symbols = Vec::new();
-    let note_index = facts.note_index();
-    let files = note_index.files();
-    for nf in files {
-        symbols.append(&mut document_symbols(facts, &nf.path, query));
+    for (_, facts, _) in &workspace.folders {
+        let note_index = facts.note_index();
+        let files = note_index.files();
+        for nf in files {
+            symbols.append(&mut document_symbols(workspace, &nf.path, query));
+        }
     }
 
     symbols
@@ -165,17 +178,18 @@ pub fn workspace_symbols(facts: &FactsDB, query: &str) -> Vec<SymbolInformation>
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Clone)]
 pub enum CompletionType {
     NoteCompletion {
+        root: PathBuf,
         note_name: NoteName,
     },
     HeadingCompletion {
+        root: PathBuf,
         note_name: NoteName,
         heading: String,
     },
 }
 
 pub fn completion_candidates(
-    root: &Path,
-    facts: &FactsDB,
+    workspace: &Workspace,
     params: CompletionParams,
 ) -> Option<Vec<CompletionItem>> {
     let current_tag = params
@@ -185,6 +199,9 @@ pub fn completion_candidates(
         .to_file_path()
         .unwrap();
     let pos = params.text_document_position.position;
+
+    let (folder, facts) = workspace.owning_folder(&current_tag)?;
+    let root = &folder.root;
 
     let encl_note_id = facts.note_index().find_by_path(&current_tag)?;
     let encl_note = facts.note_facts(encl_note_id);
@@ -225,6 +242,7 @@ pub fn completion_candidates(
 
                 let name = NoteName::from_path(&cand.file().path, root);
                 let data = serde_json::to_value(CompletionType::NoteCompletion {
+                    root: root.clone(),
                     note_name: name.clone(),
                 })
                 .unwrap();
@@ -266,6 +284,7 @@ pub fn completion_candidates(
                 continue;
             }
             let data = serde_json::to_value(CompletionType::HeadingCompletion {
+                root: root.clone(),
                 note_name: target_note_name.clone(),
                 heading: hd.text.to_string(),
             })
@@ -286,7 +305,10 @@ pub fn completion_candidates(
     }
 }
 
-pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Option<CompletionItem> {
+pub fn completion_resolve(
+    workspace: &Workspace,
+    unresolved: &CompletionItem,
+) -> Option<CompletionItem> {
     let completion_type = unresolved
         .data
         .clone()
@@ -294,7 +316,8 @@ pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Optio
         .and_then(Result::ok)?;
 
     match completion_type {
-        CompletionType::NoteCompletion { note_name, .. } => {
+        CompletionType::NoteCompletion { root, note_name } => {
+            let (_, facts) = workspace.owning_folder(&root)?;
             let note_id = facts.note_index().find_by_name(&note_name)?;
             let note = facts.note_facts(note_id);
 
@@ -308,7 +331,12 @@ pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Optio
                 ..unresolved.clone()
             })
         }
-        CompletionType::HeadingCompletion { note_name, heading } => {
+        CompletionType::HeadingCompletion {
+            root,
+            note_name,
+            heading,
+        } => {
+            let (_, facts) = workspace.owning_folder(&root)?;
             let note_id = facts.note_index().find_by_name(&note_name)?;
             let note = facts.note_facts(note_id);
             let structure = note.structure();
@@ -334,7 +362,7 @@ pub fn completion_resolve(facts: &FactsDB, unresolved: &CompletionItem) -> Optio
 // Hover, Go to
 /////////////////////////////////////////
 
-pub fn hover(root: &Path, facts: &FactsDB, params: HoverParams) -> Option<Hover> {
+pub fn hover(workspace: &Workspace, params: HoverParams) -> Option<Hover> {
     let path = params
         .text_document_position_params
         .text_document
@@ -342,6 +370,9 @@ pub fn hover(root: &Path, facts: &FactsDB, params: HoverParams) -> Option<Hover>
         .to_file_path()
         .unwrap();
     let pos = params.text_document_position_params.position;
+
+    let (folder, facts) = workspace.owning_folder(&path)?;
+    let root = &folder.root;
 
     let note_id = facts.note_index().find_by_path(&path)?;
     let note_name = NoteName::from_path(&path, root);
@@ -380,11 +411,7 @@ pub fn hover(root: &Path, facts: &FactsDB, params: HoverParams) -> Option<Hover>
     None
 }
 
-pub fn goto_definition(
-    root: &Path,
-    facts: &FactsDB,
-    params: GotoDefinitionParams,
-) -> Option<Location> {
+pub fn goto_definition(workspace: &Workspace, params: GotoDefinitionParams) -> Option<Location> {
     let path = params
         .text_document_position_params
         .text_document
@@ -392,6 +419,9 @@ pub fn goto_definition(
         .to_file_path()
         .unwrap();
     let pos = params.text_document_position_params.position;
+
+    let (folder, facts) = workspace.owning_folder(&path)?;
+    let root = &folder.root;
 
     let source_id = facts.note_index().find_by_path(&path)?;
     let source_note = facts.note_facts(source_id);
@@ -456,10 +486,11 @@ pub fn semantic_tokens_legend() -> &'static SemanticTokensLegend {
 }
 
 pub fn semantic_tokens_range(
-    facts: &FactsDB,
+    workspace: &Workspace,
     params: SemanticTokensRangeParams,
 ) -> Option<Vec<SemanticToken>> {
     let path = params.text_document.uri.to_file_path().unwrap();
+    let (_, facts) = workspace.owning_folder(&path)?;
     let range = params.range;
     let note_id = facts.note_index().find_by_path(&path)?;
     let note = facts.note_facts(note_id);
@@ -470,10 +501,11 @@ pub fn semantic_tokens_range(
 }
 
 pub fn semantic_tokens_full(
-    facts: &FactsDB,
+    workspace: &Workspace,
     params: SemanticTokensParams,
 ) -> Option<Vec<SemanticToken>> {
     let path = params.text_document.uri.to_file_path().unwrap();
+    let (_, facts) = workspace.owning_folder(&path)?;
     let note_id = facts.note_index().find_by_path(&path)?;
     let note = facts.note_facts(note_id);
     let strukt = note.structure();
@@ -539,7 +571,7 @@ fn semantic_tokens_encode(
 /////////////////////////////////////////
 
 pub fn diag(
-    facts: &FactsDB,
+    workspace: &Workspace,
     prev_diag_col: &DiagCollection,
 ) -> Option<(Vec<PublishDiagnosticsParams>, DiagCollection)> {
     debug!("Diagnostic check initiated");
@@ -549,26 +581,28 @@ pub fn diag(
     let mut new_col = DiagCollection::default();
     let mut diag_params = Vec::new();
 
-    for note_id in facts.note_index().ids() {
-        let note = facts.note_facts(note_id);
-        let file = note.file();
-        let diag = note.diag();
-        let diag: HashSet<DiagWithLoc> = diag.iter().cloned().collect();
+    for (_, facts, _) in &workspace.folders {
+        for note_id in facts.note_index().ids() {
+            let note = facts.note_facts(note_id);
+            let file = note.file();
+            let diag = note.diag();
+            let diag: HashSet<DiagWithLoc> = diag.iter().cloned().collect();
 
-        let changed_for_file = if let Some(prev_set) = prev_diag_col.store.get(&file) {
-            *prev_set != diag
-        } else {
-            true
-        };
+            let changed_for_file = if let Some(prev_set) = prev_diag_col.store.get(&file) {
+                *prev_set != diag
+            } else {
+                true
+            };
 
-        if changed_for_file {
-            changed = true;
-            if let Some(param) = diag::to_publish(&file, &diag, facts) {
-                diag_params.push(param);
+            if changed_for_file {
+                changed = true;
+                if let Some(param) = diag::to_publish(&file, &diag, facts) {
+                    diag_params.push(param);
+                }
             }
-        }
 
-        new_col.store.insert(file, diag);
+            new_col.store.insert(file, diag);
+        }
     }
 
     if changed {
@@ -588,8 +622,9 @@ pub struct ReferenceData {
     heading_text: String,
 }
 
-pub fn code_lenses(facts: &FactsDB, params: CodeLensParams) -> Option<Vec<CodeLens>> {
+pub fn code_lenses(workspace: &Workspace, params: CodeLensParams) -> Option<Vec<CodeLens>> {
     let path = params.text_document.uri.to_file_path().unwrap();
+    let (_, facts) = workspace.owning_folder(&path)?;
     let note = facts.note_facts(facts.note_index().find_by_path(&path)?);
 
     // Just generate dummy "references" lens for each heading
@@ -633,11 +668,12 @@ pub struct ShowReferencesData {
     locations: Vec<Location>,
 }
 
-pub fn code_lens_resolve(facts: &FactsDB, lens: &CodeLens) -> Option<CodeLens> {
+pub fn code_lens_resolve(workspace: &Workspace, lens: &CodeLens) -> Option<CodeLens> {
     debug!("code_lens_resolve: start");
 
     let lens_data = lens.data.clone()?;
     let ref_data: ReferenceData = serde_json::from_value(lens_data).ok()?;
+    let (_, facts) = workspace.owning_folder(&ref_data.note_path)?;
     let note = facts.note_facts(facts.note_index().find_by_path(&ref_data.note_path)?);
     let strukt = note.structure();
 
@@ -700,8 +736,12 @@ pub fn code_lens_resolve(facts: &FactsDB, lens: &CodeLens) -> Option<CodeLens> {
 // Document Links
 /////////////////////////////////////////
 
-pub fn document_links(facts: &FactsDB, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
+pub fn document_links(
+    workspace: &Workspace,
+    params: DocumentLinkParams,
+) -> Option<Vec<DocumentLink>> {
     let path = params.text_document.uri.to_file_path().unwrap();
+    let (_, facts) = workspace.owning_folder(&path)?;
     let note = facts.note_facts(facts.note_index().find_by_path(&path)?);
     let strukt = note.structure();
 

@@ -2,9 +2,12 @@ use std::{path::PathBuf, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use std::default::Default;
-use tracing::{info, trace};
+use tracing::{debug, info, trace};
 
-use crate::{diag::DiagCollection, facts, store};
+use crate::{
+    diag::DiagCollection,
+    store::{self, NoteFolder},
+};
 
 use anyhow::{anyhow, Result};
 use lsp_server::{Connection, IoThreads, Message};
@@ -22,6 +25,7 @@ use lsp_types::{
     HoverProviderCapability, InitializeParams, InitializeResult, OneOf, SemanticTokens,
     SemanticTokensFullOptions, SemanticTokensOptions, ServerCapabilities, ServerInfo,
     TextDocumentSyncCapability, TextDocumentSyncKind, WorkDoneProgressOptions,
+    WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 
 use super::handlers;
@@ -49,6 +53,7 @@ pub struct Ctx {
     pub root: PathBuf,
     pub client_name: ClientName,
     pub experimental: ExperimentalCapabilities,
+    pub folders: Vec<NoteFolder>,
 }
 
 #[derive(Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -71,9 +76,12 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
 
     let root = init_params
         .root_uri
+        .clone()
         .ok_or_else(|| anyhow!("Expected a `root_uri` parameter"))?
         .to_file_path()
         .map_err(|_| anyhow!("`root_uri` couldn't be converted to path"))?;
+
+    let folders = extract_workspace_folders(&init_params);
 
     let client_name = init_params
         .client_info
@@ -87,6 +95,7 @@ pub fn init_connection() -> Result<(Connection, IoThreads, Ctx)> {
         root,
         client_name,
         experimental,
+        folders,
     };
 
     let capabilities = mk_server_caps(&ctx);
@@ -126,6 +135,14 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
         server_capabilities.document_symbol_provider = Some(OneOf::Left(true));
         server_capabilities.workspace_symbol_provider = Some(OneOf::Left(true));
     }
+
+    server_capabilities.workspace = Some(WorkspaceServerCapabilities {
+        workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+            supported: Some(true),
+            change_notifications: None,
+        }),
+        file_operations: None,
+    });
 
     server_capabilities.text_document_sync = Some(TextDocumentSyncCapability::Kind(
         TextDocumentSyncKind::Incremental,
@@ -167,19 +184,47 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
     server_capabilities
 }
 
+pub fn extract_workspace_folders(init_params: &InitializeParams) -> Vec<NoteFolder> {
+    if let Some(folders) = &init_params.workspace_folders {
+        folders
+            .iter()
+            .map(|f| NoteFolder {
+                root: f
+                    .uri
+                    .to_file_path()
+                    .expect("Failed to turn URI into a path"),
+                name: f.name.clone(),
+            })
+            .collect()
+    } else {
+        let root = init_params
+            .root_uri
+            .clone()
+            .expect("Expected a `root_uri` parameter")
+            .to_file_path()
+            .expect("`root_uri` couldn't be converted to path");
+        let root_folder = NoteFolder {
+            root: root.clone(),
+            name: root
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| root.to_string_lossy().to_string()),
+        };
+
+        vec![root_folder]
+    }
+}
+
 pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
     let connection = Arc::new(connection);
 
-    let root = &ctx.root;
-    info!("Starting zeta-note main loop at {}", root.display());
+    info!("Starting zeta-note main loop at {}", ctx.root.display());
+    debug!("Folders in the workspace: {:?}", ctx.folders);
 
-    let ignores = store::find_ignores(root).await?;
-    let note_files = store::find_notes(root, &ignores).await?;
-    info!("Found {} note files", note_files.len());
+    let mut workspace = store::Workspace::new(&ctx.folders).await?;
 
-    let mut facts = facts::FactsDB::from_files(root, &note_files, &ignores).await?;
     let mut diag_col = DiagCollection::default();
-    let mut last_note_count = facts.note_index().size();
+    let mut last_note_count = workspace.note_count();
 
     let (pending_not_tx, mut pending_not_rx) = tokio::sync::mpsc::channel(100);
     pending_not_tx
@@ -208,28 +253,28 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                     req,
                     DocumentSymbolRequest => params -> {
                         let file = params.text_document.uri.to_file_path().unwrap();
-                        let symbols = handlers::document_symbols(&facts, &file, "");
+                        let symbols = handlers::document_symbols(&workspace, &file, "");
                         Ok(Some(symbols.into()))
                     },
                     WorkspaceSymbol => params -> {
-                        Ok(Some(handlers::workspace_symbols(&facts, &params.query)))
+                        Ok(Some(handlers::workspace_symbols(&workspace, &params.query)))
                     },
                     Completion => params -> {
-                        let candidates = handlers::completion_candidates(root, &facts, params)
+                        let candidates = handlers::completion_candidates(&workspace, params)
                             .unwrap_or_default();
                         Ok(Some(candidates.into()))
                     },
                     ResolveCompletionItem => params -> {
-                        Ok(handlers::completion_resolve(&facts, &params).unwrap_or(params))
+                        Ok(handlers::completion_resolve(&workspace, &params).unwrap_or(params))
                     },
                     HoverRequest => params -> {
-                        Ok(handlers::hover(root, &facts, params))
+                        Ok(handlers::hover(&workspace, params))
                     },
                     GotoDefinition => params -> {
-                        Ok(handlers::goto_definition(root, &facts, params).map(|loc| loc.into()))
+                        Ok(handlers::goto_definition(&workspace, params).map(|loc| loc.into()))
                     },
                     SemanticTokensFullRequest => params -> {
-                        let tokens = handlers::semantic_tokens_full(&facts, params).map(|tv| {
+                        let tokens = handlers::semantic_tokens_full(&workspace, params).map(|tv| {
                             SemanticTokens {
                                 data: tv,
                                 ..SemanticTokens::default()
@@ -238,7 +283,7 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                         Ok(tokens)
                     },
                     SemanticTokensRangeRequest => params -> {
-                        let tokens = handlers::semantic_tokens_range(&facts, params).map(|tv| {
+                        let tokens = handlers::semantic_tokens_range(&workspace, params).map(|tv| {
                             SemanticTokens {
                                 data: tv,
                                 ..SemanticTokens::default()
@@ -247,13 +292,13 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                         Ok(tokens)
                     },
                     CodeLensRequest => params -> {
-                        Ok(handlers::code_lenses(&facts, params))
+                        Ok(handlers::code_lenses(&workspace, params))
                     },
                     CodeLensResolve => params -> {
-                        Ok(handlers::code_lens_resolve(&facts, &params).unwrap_or(params))
+                        Ok(handlers::code_lens_resolve(&workspace, &params).unwrap_or(params))
                     },
                     DocumentLinkRequest => params -> {
-                        Ok(handlers::document_links(&facts, params))
+                        Ok(handlers::document_links(&workspace, params))
                     }
                 )
             }
@@ -267,12 +312,10 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                             .uri
                             .to_file_path()
                             .expect("Failed to turn uri into path");
-                        if path.starts_with(root) {
-                            handlers::note_open(&mut facts, root, &path, &params.text_document);
-                        }
+                        handlers::note_open(&mut workspace, &path, &params.text_document);
                     },
                     DidCloseTextDocument => params -> {
-                        handlers::note_close(&mut facts, root, &params.text_document, &ignores)
+                        handlers::note_close(&mut workspace, &params.text_document)
                             .await.unwrap();
                     },
                     DidChangeTextDocument => params -> {
@@ -281,7 +324,7 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                             .uri
                             .to_file_path()
                             .expect("Failed to turn uri into path");
-                        handlers::note_apply_changes(&mut facts, ctx.client_name, &path, &params);
+                        handlers::note_apply_changes(&mut workspace, ctx.client_name, &path, &params);
                     }
                 )
             }
@@ -294,7 +337,7 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
         // 3. We process the notification (diagnostics are still stale).
         // 4. We need one more message to update diagnostics based on the notification received on step 1.
 
-        let current_notes_count = facts.note_index().size();
+        let current_notes_count = workspace.note_count();
         if current_notes_count != last_note_count {
             pending_not_tx
                 .send(handlers::status_notification(current_notes_count))
@@ -302,7 +345,7 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
             last_note_count = current_notes_count;
         }
 
-        if let Some((publish_params, new_col)) = handlers::diag(&facts, &diag_col) {
+        if let Some((publish_params, new_col)) = handlers::diag(&workspace, &diag_col) {
             diag_col = new_col;
             for param in publish_params {
                 let param = serde_json::to_value(param).unwrap();

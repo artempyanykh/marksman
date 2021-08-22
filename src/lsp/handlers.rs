@@ -14,7 +14,7 @@ use lsp_types::{
     GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, Position,
     PublishDiagnosticsParams, SemanticToken, SemanticTokenType, SemanticTokensLegend,
     SemanticTokensParams, SemanticTokensRangeParams, SymbolInformation, TextDocumentIdentifier,
-    TextDocumentItem, Url,
+    TextDocumentItem, Url, WorkspaceFoldersChangeEvent,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,6 @@ use serde_json;
 
 use tracing::debug;
 
-use crate::util::text_matches_query;
 use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
     facts::{NoteFacts, NoteFactsDB, NoteFactsExt},
@@ -30,7 +29,32 @@ use crate::{
     structure::{Element, ElementWithLoc, NoteName},
 };
 use crate::{lsp::server::ClientName, store::Workspace};
+use crate::{store::NoteFolder, util::text_matches_query};
 use lsp_document::{self, IndexedText, TextAdapter};
+
+//////////////////////////////////////////
+// Workspace
+/////////////////////////////////////////
+
+pub async fn note_change_workspace_folders(
+    workspace: &mut Workspace,
+    event: &WorkspaceFoldersChangeEvent,
+) -> Result<()> {
+    for removed in &event.removed {
+        let path = removed
+            .uri
+            .to_file_path()
+            .expect("Couldn't convert URI to a file path");
+        workspace.remove_folder(&path)
+    }
+
+    for added in &event.added {
+        let folder = NoteFolder::from_workspace_folder(added);
+        workspace.add_folder(folder).await?;
+    }
+
+    Ok(())
+}
 
 //////////////////////////////////////////
 // Text Sync

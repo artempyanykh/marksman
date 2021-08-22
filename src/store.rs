@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use glob::Pattern;
+use lsp_types::WorkspaceFolder;
 
 use std::{
     collections::HashSet,
@@ -18,29 +19,19 @@ use crate::{
     structure::{NoteID, NoteName},
 };
 
+#[derive(Default)]
 pub struct Workspace {
     pub folders: Vec<(NoteFolder, FactsDB, Vec<Pattern>)>,
 }
 
 impl Workspace {
     pub async fn new(input_folders: &[NoteFolder]) -> Result<Workspace> {
-        let mut output_folders = Vec::with_capacity(input_folders.len());
-
+        let mut workspace = Workspace::default();
         for f in input_folders {
-            let ignores = store::find_ignores(&f.root).await?;
-            let note_files = store::find_notes(&f.root, &ignores).await?;
-            debug!(
-                "Workspace {}: found {} note files",
-                f.root.display(),
-                note_files.len()
-            );
-            let facts = facts::FactsDB::from_files(&f.root, &note_files, &ignores).await?;
-            output_folders.push((f.clone(), facts, ignores));
+            workspace.add_folder(f.clone()).await?;
         }
 
-        Ok(Workspace {
-            folders: output_folders,
-        })
+        Ok(workspace)
     }
 
     pub fn note_count(&self) -> usize {
@@ -66,12 +57,62 @@ impl Workspace {
             .find(|(folder, _, _)| file.starts_with(&folder.root))
             .map(|(folder, facts, ignores)| (folder, facts, ignores.as_slice()))
     }
+
+    pub fn remove_folder(&mut self, path: &Path) {
+        if let Some((idx, _)) = self
+            .folders
+            .iter()
+            .enumerate()
+            .find(|(_, (folder, _, _))| folder.root == path)
+        {
+            self.folders.remove(idx);
+        }
+    }
+
+    pub async fn add_folder(&mut self, folder: NoteFolder) -> Result<()> {
+        if self.owning_folder(&folder.root).is_some() {
+            return Ok(());
+        }
+
+        let ignores = store::find_ignores(&folder.root).await?;
+        let note_files = store::find_notes(&folder.root, &ignores).await?;
+        debug!(
+            "Workspace {}: found {} note files",
+            folder.root.display(),
+            note_files.len()
+        );
+        let facts = facts::FactsDB::from_files(&folder.root, &note_files, &ignores).await?;
+        self.folders.push((folder, facts, ignores));
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct NoteFolder {
     pub root: PathBuf,
     pub name: String,
+}
+
+impl NoteFolder {
+    pub fn from_workspace_folder(workspace_folder: &WorkspaceFolder) -> NoteFolder {
+        NoteFolder {
+            root: workspace_folder
+                .uri
+                .to_file_path()
+                .expect("Failed to turn URI into a path"),
+            name: workspace_folder.name.clone(),
+        }
+    }
+
+    pub fn from_root_path(root: &Path) -> NoteFolder {
+        NoteFolder {
+            root: root.to_path_buf(),
+            name: root
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| root.to_string_lossy().to_string()),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]

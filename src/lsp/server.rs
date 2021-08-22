@@ -13,8 +13,8 @@ use anyhow::{anyhow, Result};
 use lsp_server::{Connection, IoThreads, Message};
 use lsp_types::{
     notification::{
-        DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification,
-        PublishDiagnostics,
+        DidChangeTextDocument, DidChangeWorkspaceFolders, DidCloseTextDocument,
+        DidOpenTextDocument, Notification, PublishDiagnostics,
     },
     request::{
         CodeLensRequest, CodeLensResolve, Completion, DocumentLinkRequest, DocumentSymbolRequest,
@@ -139,7 +139,7 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
     server_capabilities.workspace = Some(WorkspaceServerCapabilities {
         workspace_folders: Some(WorkspaceFoldersServerCapabilities {
             supported: Some(true),
-            change_notifications: None,
+            change_notifications: Some(OneOf::Left(true)),
         }),
         file_operations: None,
     });
@@ -188,13 +188,7 @@ pub fn extract_workspace_folders(init_params: &InitializeParams) -> Vec<NoteFold
     if let Some(folders) = &init_params.workspace_folders {
         folders
             .iter()
-            .map(|f| NoteFolder {
-                root: f
-                    .uri
-                    .to_file_path()
-                    .expect("Failed to turn URI into a path"),
-                name: f.name.clone(),
-            })
+            .map(NoteFolder::from_workspace_folder)
             .collect()
     } else {
         let root = init_params
@@ -203,15 +197,8 @@ pub fn extract_workspace_folders(init_params: &InitializeParams) -> Vec<NoteFold
             .expect("Expected a `root_uri` parameter")
             .to_file_path()
             .expect("`root_uri` couldn't be converted to path");
-        let root_folder = NoteFolder {
-            root: root.clone(),
-            name: root
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| root.to_string_lossy().to_string()),
-        };
 
-        vec![root_folder]
+        vec![NoteFolder::from_root_path(&root)]
     }
 }
 
@@ -325,6 +312,9 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                             .to_file_path()
                             .expect("Failed to turn uri into path");
                         handlers::note_apply_changes(&mut workspace, ctx.client_name, &path, &params);
+                    },
+                    DidChangeWorkspaceFolders => params -> {
+                        handlers::note_change_workspace_folders(&mut workspace, &params.event).await.unwrap();
                     }
                 )
             }

@@ -29,6 +29,7 @@ But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
 - VSCode via [Zeta Note VSCode][zn-vscode].
+- Neovim 0.5+ via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#zeta_note).
 
 
 ## Screenshots

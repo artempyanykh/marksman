@@ -31,6 +31,23 @@ But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note
 - VSCode via [Zeta Note VSCode][zn-vscode].
 - Neovim 0.5+ via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#zeta_note).
 
+## How to install
+
+### Option 1: use pre-built binary
+
+1. Go to [Releases](https://github.com/artempyanykh/zeta-note/releases) page: each release has pre-built binaries for Linux, MacOS, and Windows. Download the binary for your OS.
+2. Rename the binary and make it executable:
+    * MacOS: `mv zeta-note-macos zeta-note && chmod +x zeta-note`
+    * Linux: `mv zeta-note-linux zeta-note && chmod +x zeta-note`
+    * Windows: rename `zeta-note-windows.exe` to `zeta-note.exe`.
+3. Place the binary somewhere in your `PATH`. 
+    * XDG recommends using `$HOME/.local/bin/` (make sure this folder is in your `PATH`).
+
+### Option 2: build from source
+0. Install Rust and Cargo via [rustup](https://rustup.rs/).
+1. Clone the repository: `git clone https://github.com/artempyanykh/zeta-note.git`
+2. Inside `zeta-note` folder run `cargo install --path .`
+3. The binary will be installed under `$HOME/.cargo/bin` (make sure this folder is in your `PATH`).
 
 ## Screenshots
 

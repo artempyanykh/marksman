@@ -5,8 +5,8 @@ use tracing_subscriber::EnvFilter;
 
 use zeta_note::lsp;
 
-use clap::{crate_version, Clap};
-#[derive(Clap)]
+use clap::{crate_version, Parser};
+#[derive(Parser)]
 #[clap(version = crate_version!())]
 /// Markdown LSP server for easy note-taking with cross-references and diagnostics
 pub struct Opts {
@@ -14,13 +14,13 @@ pub struct Opts {
     pub command: Option<Command>,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub enum Command {
     /// Start LSP server inside the current directory
     Serve(ServeCmd),
 }
 
-#[derive(Clap, Default)]
+#[derive(Parser, Default)]
 #[clap(alias = "s")]
 pub struct ServeCmd {}
 

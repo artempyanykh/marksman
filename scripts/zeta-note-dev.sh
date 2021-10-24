@@ -8,7 +8,21 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_DIR="$( dirname "$SCRIPT_DIR" )"
 
 cd "$PROJECT_DIR" || exit
-cargo build
+
+if test -z "$(type -P cargo)"; then
+    echo "warn: cargo is not in PATH; trying to locate under a known location..." >&2
+    KNOWN_CARGO_BIN="$HOME/.cargo/bin"
+
+    if test -f "$KNOWN_CARGO_BIN/cargo"; then
+        echo "warn: found cargo under $KNOWN_CARGO_BIN, adding to PATH." >&2
+        export PATH="$KNOWN_CARGO_BIN:$PATH"
+    else
+        echo "error: no known cargo installation on the system." >&2
+        exit
+    fi
+fi
+
+cargo build || exit
 popd || exit
 
 exec /usr/bin/env NO_COLOR=1 RUST_LOG=zeta_note=trace,lsp_server=trace RUST_BACKTRACE=1 \

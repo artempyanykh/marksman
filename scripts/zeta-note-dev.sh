@@ -25,5 +25,5 @@ fi
 cargo build || exit
 popd || exit
 
-exec /usr/bin/env NO_COLOR=1 RUST_LOG=zeta_note=trace,lsp_server=trace RUST_BACKTRACE=1 \
-    "$PROJECT_DIR/target/debug/zeta-note" "$@"
+NO_COLOR=1 TERM=dumb RUST_LOG=zeta_note=trace,lsp_server=trace RUST_BACKTRACE=1 \
+    exec "$PROJECT_DIR/target/debug/zeta-note" "$@"

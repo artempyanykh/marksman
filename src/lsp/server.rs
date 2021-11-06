@@ -145,7 +145,7 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
     });
 
     server_capabilities.text_document_sync = Some(TextDocumentSyncCapability::Kind(
-        TextDocumentSyncKind::Incremental,
+        TextDocumentSyncKind::INCREMENTAL,
     ));
 
     server_capabilities.completion_provider = Some(CompletionOptions {

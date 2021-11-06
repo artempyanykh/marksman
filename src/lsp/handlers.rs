@@ -170,7 +170,7 @@ pub fn document_symbols(workspace: &Workspace, path: &Path, query: &str) -> Vec<
         let location = lsp_types::Location::new(uri, lsp_range);
         let symbol = lsp_types::SymbolInformation {
             name: hd.text.clone(),
-            kind: lsp_types::SymbolKind::String,
+            kind: lsp_types::SymbolKind::STRING,
             tags: None,
             deprecated: None,
             location,
@@ -272,7 +272,7 @@ pub fn completion_candidates(
                 .unwrap();
                 candidates.push(CompletionItem {
                     label: title.text.clone(),
-                    kind: Some(lsp_types::CompletionItemKind::File),
+                    kind: Some(lsp_types::CompletionItemKind::FILE),
                     detail: Some(name.to_string()),
                     insert_text: Some(name.to_string()),
                     data: Some(data),
@@ -315,7 +315,7 @@ pub fn completion_candidates(
             .unwrap();
             candidates.push(CompletionItem {
                 label: hd.text.to_string(),
-                kind: Some(lsp_types::CompletionItemKind::Text),
+                kind: Some(lsp_types::CompletionItemKind::TEXT),
                 data: Some(data),
                 ..CompletionItem::default()
             })

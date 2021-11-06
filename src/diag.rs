@@ -39,7 +39,7 @@ pub fn to_publish(
 
             Some(Diagnostic {
                 range,
-                severity: Some(DiagnosticSeverity::Error),
+                severity: Some(DiagnosticSeverity::ERROR),
                 message: d.to_message(),
                 ..Diagnostic::default()
             })

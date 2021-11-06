@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "lsp-document"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "lsp-types",
  "pretty_assertions",
@@ -414,9 +414,9 @@ dependencies = [
 
 [[package]]
 name = "lsp-types"
-version = "0.89.2"
+version = "0.90.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "852e0dedfd52cc32325598b2631e0eba31b7b708959676a9f837042f276b09a2"
+checksum = "6f3734ab1d7d157fc0c45110e06b587c31cd82bea2ccfd6b563cbff0aaeeb1d3"
 dependencies = [
  "bitflags",
  "serde",
@@ -1121,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "zeta-note"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "atty",

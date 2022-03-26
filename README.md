@@ -33,7 +33,16 @@ But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note
 
 ## How to install
 
-### Option 1: use pre-built binary
+### Option 1: via `cargo install`
+
+Given you have Rust and Cargo installed, run 
+```
+cargo install zeta-note
+```
+
+The binary will be built and installed under a local Cargo folder (usually, `$HOME/.cargo/bin`).
+
+### Option 2: use pre-built binary
 
 1. Go to [Releases](https://github.com/artempyanykh/zeta-note/releases) page: each release has pre-built binaries for Linux, MacOS, and Windows. Download the binary for your OS.
 2. Rename the binary and make it executable:
@@ -43,7 +52,7 @@ But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note
 3. Place the binary somewhere in your `PATH`. 
     * XDG recommends using `$HOME/.local/bin/` (make sure this folder is in your `PATH`).
 
-### Option 2: build from source
+### Option 3: build from source
 0. Install Rust and Cargo via [rustup](https://rustup.rs/).
 1. Clone the repository: `git clone https://github.com/artempyanykh/zeta-note.git`
 2. Inside `zeta-note` folder run `cargo install --path .`

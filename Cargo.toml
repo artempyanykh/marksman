@@ -4,6 +4,11 @@ version = "0.1.7"
 authors = ["Artem Pyanykh <artem.pyanykh@gmail.com>"]
 edition = "2021"
 license-file = "LICENSE"
+homepage = "https://github.com/artempyanykh/zeta-note"
+repository = "https://github.com/artempyanykh/zeta-note"
+description = "Markdown LSP server for easy note-taking with cross-references and diagnostics"
+categories = ["command-line-utilities"]
+keywords = ["language", "server", "lsp", "vscode", "markdown", "md"]
 
 [dependencies]
 lsp-document = { path = "lsp-document"}

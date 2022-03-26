@@ -5,9 +5,9 @@ use tracing_subscriber::EnvFilter;
 
 use zeta_note::lsp;
 
-use clap::{crate_version, Parser};
+use clap::Parser;
 #[derive(Parser)]
-#[clap(version = crate_version!())]
+#[clap(version = clap::crate_version!())]
 /// Markdown LSP server for easy note-taking with cross-references and diagnostics
 pub struct Opts {
     #[clap(subcommand)]

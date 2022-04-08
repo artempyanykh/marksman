@@ -62,8 +62,8 @@ pub type DiagWithLoc = (Diag, Range<Pos>);
 pub enum Diag {
     DupTitle { title: Heading },
     DupHeading { heading: Heading },
-    BrokenRefNote { ref_note: NoteName },
-    BrokenRefHeading { ref_note: NoteName, heading: String },
+    BrokenInternLinkToNote { linked_note: NoteName },
+    BrokenInternLinkToHeading { linked_note: NoteName, heading: String },
 }
 
 impl Diag {
@@ -74,12 +74,12 @@ impl Diag {
                 title.text
             ),
             Diag::DupHeading { heading } => format!("Duplicate heading `{}`", heading.text),
-            Diag::BrokenRefNote { ref_note } => {
-                format!("Reference to non-existent note `{}`", ref_note)
+            Diag::BrokenInternLinkToNote { linked_note } => {
+                format!("Reference to non-existent note `{}`", linked_note)
             }
-            Diag::BrokenRefHeading { ref_note, heading } => format!(
+            Diag::BrokenInternLinkToHeading { linked_note, heading } => format!(
                 "Reference to non-existent heading `{}`{}",
-                ref_note, heading
+                linked_note, heading
             ),
         }
     }
@@ -144,15 +144,15 @@ pub fn check_headings(note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
     duplicate_diags
 }
 
-pub fn check_refs(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
+pub fn check_intern_links(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
     let mut diags = Vec::new();
 
     let strukt = note.structure();
-    let ref_ids = note.refs();
-    let refs = strukt.refs_with_ids(&ref_ids);
+    let intern_link_ids = note.intern_link_ids();
+    let intern_links = strukt.intern_links_with_ids(&intern_link_ids);
 
-    for (link_ref, range) in refs {
-        let target_name = link_ref
+    for (intern_link, range) in intern_links {
+        let target_name = intern_link
             .note_name
             .clone()
             .unwrap_or_else(|| (*note.file().name).clone());
@@ -160,11 +160,11 @@ pub fn check_refs(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<DiagWithLo
         match target_id {
             Some(id) => {
                 let target_note = NoteFactsDB::new(facts, id);
-                if let Some(heading) = &link_ref.heading {
+                if let Some(heading) = &intern_link.heading {
                     if target_note.heading_with_text(heading).is_none() {
                         diags.push((
-                            Diag::BrokenRefHeading {
-                                ref_note: target_name,
+                            Diag::BrokenInternLinkToHeading {
+                                linked_note: target_name,
                                 heading: heading.to_string(),
                             },
                             range,
@@ -174,8 +174,8 @@ pub fn check_refs(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<DiagWithLo
             }
             _ => {
                 diags.push((
-                    Diag::BrokenRefNote {
-                        ref_note: target_name,
+                    Diag::BrokenInternLinkToNote {
+                        linked_note: target_name,
                     },
                     range,
                 ));

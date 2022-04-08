@@ -1,7 +1,6 @@
 ---
 source: src/structure.rs
 expression: elements
-
 ---
 [
     (
@@ -93,8 +92,8 @@ expression: elements
         },
     ),
     (
-        LinkRef(
-            LinkRef {
+        InternLink(
+            InternLink {
                 text: "[:noteid]",
                 note_name: Some(
                     noteid,
@@ -111,8 +110,8 @@ expression: elements
         },
     ),
     (
-        LinkRef(
-            LinkRef {
+        InternLink(
+            InternLink {
                 text: "[:@# Some text in heading 1]",
                 note_name: None,
                 heading: Some(
@@ -129,8 +128,8 @@ expression: elements
         },
     ),
     (
-        LinkRef(
-            LinkRef {
+        InternLink(
+            InternLink {
                 text: "[:othernote@#Some heading]",
                 note_name: Some(
                     othernote,
@@ -149,8 +148,8 @@ expression: elements
         },
     ),
     (
-        LinkRef(
-            LinkRef {
+        InternLink(
+            InternLink {
                 text: "[:othernote@]",
                 note_name: Some(
                     othernote,
@@ -167,8 +166,8 @@ expression: elements
         },
     ),
     (
-        LinkRegular(
-            LinkRegular {
+        ExternLink(
+            ExternLink {
                 text: "[foo][bar]",
                 dest: Some(
                     "https://bar.com",
@@ -185,8 +184,8 @@ expression: elements
         },
     ),
     (
-        LinkRegular(
-            LinkRegular {
+        ExternLink(
+            ExternLink {
                 text: "[foo][non-existent]",
                 dest: None,
                 title: None,
@@ -201,8 +200,8 @@ expression: elements
         },
     ),
     (
-        LinkRegular(
-            LinkRegular {
+        ExternLink(
+            ExternLink {
                 text: "[bar]",
                 dest: Some(
                     "https://bar.com",
@@ -219,8 +218,8 @@ expression: elements
         },
     ),
     (
-        LinkRegular(
-            LinkRegular {
+        ExternLink(
+            ExternLink {
                 text: "[foo]",
                 dest: None,
                 title: None,
@@ -235,8 +234,8 @@ expression: elements
         },
     ),
     (
-        LinkRef(
-            LinkRef {
+        InternLink(
+            InternLink {
                 text: "[:]",
                 note_name: None,
                 heading: None,

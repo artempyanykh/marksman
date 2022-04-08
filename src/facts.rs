@@ -12,7 +12,7 @@ use salsa;
 use crate::{
     diag::{self, DiagWithLoc},
     store::{self, NoteFile, NoteIndex, NoteText},
-    structure::{self, ElementID, Heading, HeadingID, LinkRefID, NoteID, Structure},
+    structure::{self, ElementID, Heading, HeadingID, InternLinkID, NoteID, Structure},
 };
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 
@@ -30,13 +30,13 @@ pub trait Facts<'a>: salsa::Database {
     fn note_title(&self, note_id: NoteID) -> Option<HeadingID>;
     fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]>;
     fn note_headings(&self, note_id: NoteID) -> Arc<[HeadingID]>;
-    fn note_refs(&self, note_id: NoteID) -> Arc<[LinkRefID]>;
-    fn note_valid_refs(&self, note_id: NoteID) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]>;
-    fn note_refs_to_heading(
+    fn note_intern_links(&self, note_id: NoteID) -> Arc<[InternLinkID]>;
+    fn note_valid_intern_links(&self, note_id: NoteID) -> Arc<[(InternLinkID, NoteID, Option<HeadingID>)]>;
+    fn note_intern_links_to_heading(
         &self,
         note_id: NoteID,
         headind_id: HeadingID,
-    ) -> Arc<[(NoteID, LinkRefID)]>;
+    ) -> Arc<[(NoteID, InternLinkID)]>;
     fn note_diag(&self, note_id: NoteID) -> Arc<[DiagWithLoc]>;
 }
 
@@ -121,9 +121,9 @@ pub trait NoteFacts {
     fn title(&self) -> Option<HeadingID>;
     fn elements(&self) -> Arc<[ElementID]>;
     fn headings(&self) -> Arc<[HeadingID]>;
-    fn refs(&self) -> Arc<[LinkRefID]>;
-    fn valid_refs(&self) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]>;
-    fn refs_to_heading(&self, heading_id: HeadingID) -> Arc<[(NoteID, LinkRefID)]>;
+    fn intern_link_ids(&self) -> Arc<[InternLinkID]>;
+    fn valid_intern_links(&self) -> Arc<[(InternLinkID, NoteID, Option<HeadingID>)]>;
+    fn intern_links_to_heading(&self, heading_id: HeadingID) -> Arc<[(NoteID, InternLinkID)]>;
     fn diag(&self) -> Arc<[DiagWithLoc]>;
 }
 pub trait NoteFactsExt: NoteFacts {
@@ -172,20 +172,20 @@ impl<'a> NoteFacts for NoteFactsDB<'a> {
         self.db.note_headings(self.id)
     }
 
-    fn refs(&self) -> Arc<[LinkRefID]> {
-        self.db.note_refs(self.id)
+    fn intern_link_ids(&self) -> Arc<[InternLinkID]> {
+        self.db.note_intern_links(self.id)
     }
 
     fn diag(&self) -> Arc<[DiagWithLoc]> {
         self.db.note_diag(self.id)
     }
 
-    fn valid_refs(&self) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]> {
-        self.db.note_valid_refs(self.id)
+    fn valid_intern_links(&self) -> Arc<[(InternLinkID, NoteID, Option<HeadingID>)]> {
+        self.db.note_valid_intern_links(self.id)
     }
 
-    fn refs_to_heading(&self, heading_id: HeadingID) -> Arc<[(NoteID, LinkRefID)]> {
-        self.db.note_refs_to_heading(self.id, heading_id)
+    fn intern_links_to_heading(&self, heading_id: HeadingID) -> Arc<[(NoteID, InternLinkID)]> {
+        self.db.note_intern_links_to_heading(self.id, heading_id)
     }
 }
 
@@ -309,30 +309,30 @@ fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
         .copied()
 }
 
-fn note_refs(db: &dyn Facts, note_id: NoteID) -> Arc<[LinkRefID]> {
-    db.note_structure(note_id).refs().into()
+fn note_intern_links(db: &dyn Facts, note_id: NoteID) -> Arc<[InternLinkID]> {
+    db.note_structure(note_id).intern_links().into()
 }
 
-fn note_valid_refs(
+fn note_valid_intern_links(
     db: &dyn Facts,
     note_id: NoteID,
-) -> Arc<[(LinkRefID, NoteID, Option<HeadingID>)]> {
+) -> Arc<[(InternLinkID, NoteID, Option<HeadingID>)]> {
     let cur_note = NoteFactsDB::new(db, note_id);
     let cur_strukt = cur_note.structure();
 
     cur_note
-        .refs()
+        .intern_link_ids()
         .iter()
         .filter_map(|&rid| {
-            let (linkref, _) = cur_strukt.ref_by_id(rid);
-            let target_note_name = linkref
+            let (intern_link, _) = cur_strukt.intern_link_by_id(rid);
+            let target_note_name = intern_link
                 .note_name
                 .clone()
                 .unwrap_or_else(|| cur_note.file().name.deref().clone());
 
             if let Some(target_id) = db.note_index(()).find_by_name(&target_note_name) {
                 let target_note = NoteFactsDB::new(db, target_id);
-                match &linkref.heading {
+                match &intern_link.heading {
                     Some(heading_text) => target_note
                         .heading_with_text(heading_text)
                         .map(|id| (rid, target_id, Some(id))),
@@ -346,29 +346,29 @@ fn note_valid_refs(
         .into()
 }
 
-fn note_refs_to_heading(
+fn note_intern_links_to_heading(
     db: &dyn Facts,
     note_id: NoteID,
     heading_id: HeadingID,
-) -> Arc<[(NoteID, LinkRefID)]> {
+) -> Arc<[(NoteID, InternLinkID)]> {
     let encl_note = NoteFactsDB::new(db, note_id);
     let encl_note_title = encl_note.title();
-    let is_ref_to_title = encl_note_title.filter(|&tid| tid == heading_id).is_some();
-    let mut found_refs = Vec::new();
+    let is_link_to_title = encl_note_title.filter(|&tid| tid == heading_id).is_some();
+    let mut found_links = Vec::new();
 
     for cur_id in db.note_index(()).ids() {
         let cur_note = NoteFactsDB::new(db, cur_id);
-        for (cur_rid, ref_to_note_id, ref_to_head_id) in cur_note.valid_refs().iter() {
-            if *ref_to_note_id == note_id {
-                match ref_to_head_id {
+        for (cur_rid, link_to_note_id, link_to_head_id) in cur_note.valid_intern_links().iter() {
+            if *link_to_note_id == note_id {
+                match link_to_head_id {
                     Some(targ_hd_id) => {
                         if *targ_hd_id == heading_id {
-                            found_refs.push((cur_id, *cur_rid))
+                            found_links.push((cur_id, *cur_rid))
                         }
                     }
                     _ => {
-                        if is_ref_to_title {
-                            found_refs.push((cur_id, *cur_rid))
+                        if is_link_to_title {
+                            found_links.push((cur_id, *cur_rid))
                         }
                     }
                 }
@@ -376,7 +376,7 @@ fn note_refs_to_heading(
         }
     }
 
-    found_refs.into()
+    found_links.into()
 }
 
 fn note_diag(db: &dyn Facts, note_id: NoteID) -> Arc<[DiagWithLoc]> {
@@ -384,7 +384,7 @@ fn note_diag(db: &dyn Facts, note_id: NoteID) -> Arc<[DiagWithLoc]> {
     let mut diags = Vec::new();
     diags.append(&mut diag::check_title(&note_facts));
     diags.append(&mut diag::check_headings(&note_facts));
-    diags.append(&mut diag::check_refs(db, &note_facts));
+    diags.append(&mut diag::check_intern_links(db, &note_facts));
 
     diags.into()
 }

@@ -232,19 +232,19 @@ pub fn completion_candidates(
     let encl_structure = encl_note.structure();
 
     let (enclosing_el, _) = encl_structure.element_by_id(encl_note.element_at_lsp_pos(&pos)?);
-    let enclosing_link_ref = match enclosing_el {
-        Element::LinkRef(r) => r,
+    let enclosing_link = match enclosing_el {
+        Element::InternLink(r) => r,
         _ => return None,
     };
 
     let tries_to_match_note =
-        enclosing_link_ref.heading.is_none() && !enclosing_link_ref.text.contains('@');
+        enclosing_link.heading.is_none() && !enclosing_link.text.contains('@');
 
     let mut candidates = Vec::new();
 
     if tries_to_match_note {
         debug!("Mathing notes...");
-        let partial_input = enclosing_link_ref
+        let partial_input = enclosing_link
             .note_name
             .clone()
             .map(|n| n.to_string())
@@ -282,11 +282,11 @@ pub fn completion_candidates(
         }
     } else {
         // tries to match a heading inside a note
-        let target_note_name = match &enclosing_link_ref.note_name {
+        let target_note_name = match &enclosing_link.note_name {
             Some(name) => name.clone(),
             _ => NoteName::from_path(&current_tag, root),
         };
-        let target_tag = match &enclosing_link_ref.note_name {
+        let target_tag = match &enclosing_link.note_name {
             Some(name) => name.to_path(root),
             _ => current_tag,
         };
@@ -296,7 +296,7 @@ pub fn completion_candidates(
         let cand = facts.note_facts(cand_id);
         let cand_struct = cand.structure();
 
-        let query = enclosing_link_ref.heading.clone().unwrap_or_default();
+        let query = enclosing_link.heading.clone().unwrap_or_default();
         let candidate_headings: Vec<_> =
             cand.headings_matching(|hd| text_matches_query(&hd.text, &query));
         let candidate_headings = cand_struct.headings_with_ids(&candidate_headings);
@@ -404,16 +404,16 @@ pub fn hover(workspace: &Workspace, params: HoverParams) -> Option<Hover> {
     let note_structure = note.structure();
     let (hovered_el, span) = note_structure.element_by_id(note.element_at_lsp_pos(&pos)?);
 
-    if let Element::LinkRef(link_ref) = hovered_el {
+    if let Element::InternLink(intern_link) = hovered_el {
         let range = note.indexed_text().range_to_lsp_range(span);
 
-        let target_note_name = link_ref.note_name.clone().unwrap_or(note_name);
+        let target_note_name = intern_link.note_name.clone().unwrap_or(note_name);
 
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
         let target_struct = target_note.structure();
         let target_text = target_note.indexed_text();
-        let text = if let Some(heading) = &link_ref.heading {
+        let text = if let Some(heading) = &intern_link.heading {
             let (heading, _) = target_struct.heading_by_id(target_note.heading_with_text(heading)?);
 
             target_text.substr(heading.scope.clone())?.to_string()
@@ -452,8 +452,8 @@ pub fn goto_definition(workspace: &Workspace, params: GotoDefinitionParams) -> O
     let souce_index = source_note.structure();
     let (encl_el, _) = souce_index.element_by_id(source_note.element_at_lsp_pos(&pos)?);
 
-    if let Element::LinkRef(link_ref) = encl_el {
-        let target_note_name = link_ref
+    if let Element::InternLink(intern_link) = encl_el {
+        let target_note_name = intern_link
             .note_name
             .clone()
             .unwrap_or_else(|| NoteName::from_path(&path, root));
@@ -461,7 +461,7 @@ pub fn goto_definition(workspace: &Workspace, params: GotoDefinitionParams) -> O
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
         let target_struct = target_note.structure();
-        let (_, target_range) = if let Some(link_heading) = &link_ref.heading {
+        let (_, target_range) = if let Some(link_heading) = &intern_link.heading {
             target_struct.heading_by_id(target_note.heading_with_text(link_heading)?)
         } else {
             target_struct.heading_by_id(target_note.title()?)
@@ -489,7 +489,7 @@ pub fn semantic_token_type_mapping(tok_type: &SemanticTokenType) -> u32 {
         // Heading
         0
     } else if *tok_type == SemanticTokenType::PROPERTY {
-        // LinkRef
+        // Reference
         1
     } else {
         unimplemented!("Unsupported token type: {}", tok_type.as_str())
@@ -557,7 +557,7 @@ fn semantic_tokens_encode(
         let token_type = match el {
             // SemanticTokenType::CLASS but skip for now as markdown syntax highlighting is already good eneough for headings
             Element::Heading(..) => continue,
-            Element::LinkRef(..) => SemanticTokenType::PROPERTY,
+            Element::InternLink(..) => SemanticTokenType::PROPERTY,
             _ => continue,
         };
         let el_pos = note.indexed_text().range_to_lsp_range(el_span).unwrap();
@@ -659,7 +659,7 @@ pub fn code_lenses(workspace: &Workspace, params: CodeLensParams) -> Option<Vec<
 
     for &h_id in &strukt.headings() {
         // Don't generate lenses for headings with no references
-        let ref_count = note.refs_to_heading(h_id).len();
+        let ref_count = note.intern_links_to_heading(h_id).len();
         if ref_count == 0 {
             continue;
         }
@@ -710,16 +710,16 @@ pub fn code_lens_resolve(workspace: &Workspace, lens: &CodeLens) -> Option<CodeL
         note.id, heading_id
     );
 
-    let references = note.refs_to_heading(heading_id);
+    let references = note.intern_links_to_heading(heading_id);
     debug!("code_lens_resolve: found {} references", references.len());
 
     let mut locations: Vec<Location> = Vec::new();
-    for (src_note_id, src_ref_id) in references.iter() {
+    for (src_note_id, src_link_id) in references.iter() {
         let src_note = facts.note_facts(*src_note_id);
         let src_indexed_text = src_note.indexed_text();
         let src_strukt = src_note.structure();
 
-        let (_, src_range) = src_strukt.ref_by_id(*src_ref_id);
+        let (_, src_range) = src_strukt.intern_link_by_id(*src_link_id);
         let lsp_range = match src_indexed_text.range_to_lsp_range(&src_range) {
             Some(r) => r,
             _ => continue,
@@ -771,8 +771,8 @@ pub fn document_links(
 
     let mut links = Vec::new();
 
-    for (ref_id, target_note_id, target_heading_id) in note.valid_refs().iter() {
-        let (_, source_range) = strukt.ref_by_id(*ref_id);
+    for (intern_link_id, target_note_id, target_heading_id) in note.valid_intern_links().iter() {
+        let (_, source_range) = strukt.intern_link_by_id(*intern_link_id);
         let target_note = facts.note_facts(*target_note_id);
         let target_strukt = target_note.structure();
         let target_heading_id = match target_heading_id.or(target_note.title()) {

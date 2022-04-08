@@ -91,8 +91,8 @@ impl Structure {
         for (idx, (el, _)) in self.elements.iter().enumerate() {
             match el {
                 Element::Heading(..) => els.push(ElementID::Heading(HeadingID(idx as u32))),
-                Element::LinkRef(..) => els.push(ElementID::Ref(LinkRefID(idx as u32))),
-                Element::LinkRegular(..) => (),
+                Element::InternLink(..) => els.push(ElementID::InternLink(InternLinkID(idx as u32))),
+                Element::ExternLink(..) => (),
             }
         }
 
@@ -104,8 +104,8 @@ impl Structure {
         for (idx, ewl) in self.elements.iter().enumerate() {
             match ewl.0 {
                 Element::Heading(..) => els.push((ElementID::Heading(HeadingID(idx as u32)), ewl)),
-                Element::LinkRef(..) => els.push((ElementID::Ref(LinkRefID(idx as u32)), ewl)),
-                Element::LinkRegular(..) => (),
+                Element::InternLink(..) => els.push((ElementID::InternLink(InternLinkID(idx as u32)), ewl)),
+                Element::ExternLink(..) => (),
             }
         }
 
@@ -147,28 +147,28 @@ impl Structure {
         ids.iter().map(move |&id| self.heading_by_id(id)).collect()
     }
 
-    pub fn refs(&self) -> Vec<LinkRefID> {
-        let mut refs = Vec::new();
+    pub fn intern_links(&self) -> Vec<InternLinkID> {
+        let mut links = Vec::new();
         for (idx, (el, _)) in self.elements.iter().enumerate() {
-            if let Element::LinkRef(..) = el {
-                refs.push(LinkRefID(idx as u32))
+            if let Element::InternLink(..) = el {
+                links.push(InternLinkID(idx as u32))
             }
         }
 
-        refs
+        links
     }
 
-    pub fn ref_by_id(&self, id: LinkRefID) -> (&LinkRef, Range<Pos>) {
+    pub fn intern_link_by_id(&self, id: InternLinkID) -> (&InternLink, Range<Pos>) {
         let el = &self.elements[id.0 as usize];
-        if let (Element::LinkRef(lr), span) = el {
+        if let (Element::InternLink(lr), span) = el {
             (lr, span.clone())
         } else {
-            panic!("Expected a ref at idx {:?} in {:?}", id, self.elements)
+            panic!("Expected an intern link at idx {:?} in {:?}", id, self.elements)
         }
     }
 
-    pub fn refs_with_ids(&self, ids: &[LinkRefID]) -> Vec<(&LinkRef, Range<Pos>)> {
-        ids.iter().map(move |&id| self.ref_by_id(id)).collect()
+    pub fn intern_links_with_ids(&self, ids: &[InternLinkID]) -> Vec<(&InternLink, Range<Pos>)> {
+        ids.iter().map(move |&id| self.intern_link_by_id(id)).collect()
     }
 }
 
@@ -178,19 +178,19 @@ pub type ElementWithLoc = (Element, Range<Pos>);
 pub struct HeadingID(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct LinkRefID(u32);
+pub struct InternLinkID(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ElementID {
     Heading(HeadingID),
-    Ref(LinkRefID),
+    InternLink(InternLinkID),
 }
 
 impl ElementID {
     pub fn to_u32(&self) -> u32 {
         match self {
             ElementID::Heading(HeadingID(id)) => *id,
-            ElementID::Ref(LinkRefID(id)) => *id,
+            ElementID::InternLink(InternLinkID(id)) => *id,
         }
     }
 
@@ -202,8 +202,8 @@ impl ElementID {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Element {
     Heading(Heading),
-    LinkRegular(LinkRegular),
-    LinkRef(LinkRef),
+    ExternLink(ExternLink),
+    InternLink(InternLink),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -214,23 +214,23 @@ pub struct Heading {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct LinkRef {
+pub struct InternLink {
     pub text: String,
     pub note_name: Option<NoteName>,
     pub heading: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct LinkRegular {
+pub struct ExternLink {
     text: String,
     dest: Option<String>,
     title: Option<String>,
 }
 
-pub fn parse_link_ref(text: &str) -> Option<LinkRef> {
-    let ref_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
+pub fn parse_intern_link(text: &str) -> Option<InternLink> {
+    let intern_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
 
-    if let Some(captures) = ref_link_regex.captures(text) {
+    if let Some(captures) = intern_link_regex.captures(text) {
         let text = text.to_string();
         let note_name = captures
             .get(1)
@@ -241,7 +241,7 @@ pub fn parse_link_ref(text: &str) -> Option<LinkRef> {
             .get(3)
             .map(|m| m.as_str().to_string())
             .filter(|s| !s.is_empty());
-        Some(LinkRef {
+        Some(InternLink {
             text,
             note_name,
             heading,
@@ -251,7 +251,7 @@ pub fn parse_link_ref(text: &str) -> Option<LinkRef> {
     }
 }
 
-pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> LinkRegular {
+pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> ExternLink {
     let text = text.to_string();
     let dest = if dest.is_empty() {
         None
@@ -263,7 +263,7 @@ pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> LinkRegula
     } else {
         Some(title.to_string())
     };
-    LinkRegular { text, dest, title }
+    ExternLink { text, dest, title }
 }
 
 pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
@@ -276,7 +276,7 @@ pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
 
     for (event, el_span) in parser.into_offset_iter() {
         match event {
-            Event::Start(Tag::Heading(level)) => {
+            Event::Start(Tag::Heading(level, ..)) => {
                 let heading_text = &index.text()[el_span.start..el_span.end];
 
                 // Trim newlines, whitespaces on the right
@@ -314,10 +314,10 @@ pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
                 | LinkType::Shortcut
                 | LinkType::ShortcutUnknown => {
                     let link_text = &index.text()[el_span.start..el_span.end].trim();
-                    let link = parse_link_ref(link_text)
-                        .map(Element::LinkRef)
+                    let link = parse_intern_link(link_text)
+                        .map(Element::InternLink)
                         .unwrap_or_else(|| {
-                            Element::LinkRegular(parse_link_regular(link_text, dest, title))
+                            Element::ExternLink(parse_link_regular(link_text, dest, title))
                         });
                     elements.push((link, index.offset_range_to_range(el_span).unwrap()));
                 }

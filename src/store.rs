@@ -15,9 +15,9 @@ use tracing::debug;
 
 use crate::{
     facts::{self, FactsDB},
+    parser::NoteName,
     store,
     structure::NoteID,
-    parser::NoteName,
 };
 
 #[derive(Default)]

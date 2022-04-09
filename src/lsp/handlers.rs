@@ -25,8 +25,8 @@ use tracing::debug;
 use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
     facts::{NoteFacts, NoteFactsDB, NoteFactsExt},
-    store::{NoteFile, NoteText, Version},
     parser::{Element, ElementWithLoc, NoteName},
+    store::{NoteFile, NoteText, Version},
 };
 use crate::{lsp::server::ClientName, store::Workspace};
 use crate::{store::NoteFolder, util::text_matches_query};

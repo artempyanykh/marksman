@@ -1,10 +1,6 @@
 use lsp_document::Pos;
 
-use std::{
-    fmt::Debug,
-    ops::Range,
-    sync::Arc,
-};
+use std::{fmt::Debug, ops::Range, sync::Arc};
 
 use crate::parser::{Element, ElementWithLoc, Heading, InternLink};
 

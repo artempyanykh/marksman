@@ -1,10 +1,12 @@
 use std::{
     fmt::{Debug, Display},
-    ops::Range, path::{Path, PathBuf},
+    iter::Peekable,
+    ops::Range,
+    path::{Path, PathBuf},
 };
 
 use lsp_document::{Pos, TextMap};
-use pulldown_cmark::{BrokenLink, CowStr, Event, LinkType, Options, Parser, Tag};
+use pulldown_cmark::{BrokenLink, CowStr, Event, LinkType, OffsetIter, Options, Parser, Tag};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -120,84 +122,182 @@ pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> ExternLink
     ExternLink { text, dest, title }
 }
 
+type ParseIter<'a, 'b> = Peekable<OffsetIter<'a, 'b>>;
+
 pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
     let mut callback = |_: BrokenLink<'_>| Some(("".into(), "".into()));
     let parser =
         Parser::new_with_broken_link_callback(index.text(), Options::all(), Some(&mut callback));
+    let stop_when = |_: &Event<'_>| false;
+
+    let mut iter: ParseIter<'_, '_> = parser.into_offset_iter().peekable();
+    let mut elements = scrape_document(index, &mut iter, stop_when);
+    elements.sort_by_key(|(_, span)| span.start);
+    elements
+}
+
+fn scrape_document<'a, 'b>(
+    index: &impl TextMap,
+    iter: &mut ParseIter<'a, 'b>,
+    stop_when: impl Fn(&Event<'a>) -> bool,
+) -> Vec<ElementWithLoc> {
     let mut elements = Vec::new();
 
-    let mut scoped_headings: Vec<(u8, String, Range<usize>)> = Vec::new();
+    while iter.peek().is_some() {
+        let (next_event, _) = iter.peek().unwrap();
+        if stop_when(next_event) {
+            return elements;
+        }
 
-    for (event, el_span) in parser.into_offset_iter() {
-        match event {
-            Event::Start(Tag::Heading(level, ..)) => {
-                let heading_text = &index.text()[el_span.start..el_span.end];
-
-                // Trim newlines, whitespaces on the right
-                let trim_right_text = heading_text.trim_end().to_string();
-                let trimmed_on_right = heading_text.len() - trim_right_text.len();
-                let heading_span = el_span.start..(el_span.end - trimmed_on_right);
-
-                while let Some(last) = scoped_headings.last() {
-                    if last.0 >= level as u8 {
-                        let last = scoped_headings.pop().unwrap();
-                        let heading = Heading {
-                            level: last.0,
-                            text: last.1,
-                            scope: index
-                                .offset_range_to_range(last.2.start..el_span.start)
-                                .unwrap(),
-                        };
-                        elements.push((
-                            Element::Heading(heading),
-                            index.offset_range_to_range(last.2).unwrap(),
-                        ));
-                    } else {
-                        break;
-                    }
-                }
-
-                scoped_headings.push((level as u8, trim_right_text, heading_span));
+        let (next_event, next_span) = iter.next().unwrap();
+        match next_event {
+            Event::Start(next_tag) => {
+                let block_elements = scrape_block(index, &next_tag, next_span, iter);
+                elements.extend(block_elements);
             }
-            Event::Start(Tag::Link(typ, dest, title)) => match typ {
-                LinkType::Inline
-                | LinkType::Reference
-                | LinkType::ReferenceUnknown
-                | LinkType::Collapsed
-                | LinkType::CollapsedUnknown
-                | LinkType::Shortcut
-                | LinkType::ShortcutUnknown => {
-                    let link_text = &index.text()[el_span.start..el_span.end].trim();
-                    let link = parse_intern_link(link_text)
-                        .map(Element::InternLink)
-                        .unwrap_or_else(|| {
-                            Element::ExternLink(parse_link_regular(link_text, dest, title))
-                        });
-                    elements.push((link, index.offset_range_to_range(el_span).unwrap()));
-                }
-                _ => (),
-            },
+            Event::End(tag) => {
+                let text_span = index.substr(index.offset_range_to_range(next_span).unwrap());
+                panic!(
+                    "scrape_document: unexpected end event: {:?}\nText for event: {:?}",
+                    tag, text_span
+                );
+            }
+            Event::Text(txt) => {
+                let partial_links = scrape_partial_links(index, txt, next_span);
+                elements.extend(partial_links);
+            }
             _ => (),
         }
     }
 
-    for remaining in scoped_headings {
+    elements
+}
+
+fn scrape_block<'a, 'b>(
+    index: &impl TextMap,
+    start_tag: &Tag<'a>,
+    start_span: Range<usize>,
+    iter: &mut ParseIter<'a, 'b>,
+) -> Vec<ElementWithLoc> {
+    match start_tag {
+        Tag::Heading(..) => scrape_heading(index, start_tag, start_span, iter),
+        Tag::Link(..) => scrape_link(index, start_tag, start_span, iter),
+        Tag::Paragraph | Tag::List(..) | Tag::Item => {
+            let stop_when =
+                |seen_event: &Event<'_>| matches!(seen_event, Event::End(t) if t == start_tag);
+            let par_elements = scrape_document(index, iter, stop_when);
+
+            let par_end_event = iter.next();
+            if let Some((Event::End(_), _)) = par_end_event {
+                par_elements
+            } else {
+                panic!(
+                    "scrape_block: expected end event, actual: {:?}",
+                    par_end_event
+                );
+            }
+        }
+        _ => {
+            skip_block(start_tag, iter);
+            Vec::new()
+        }
+    }
+}
+
+fn scrape_heading<'a, 'b>(
+    index: &impl TextMap,
+    start_tag: &Tag<'a>,
+    start_span: Range<usize>,
+    iter: &mut ParseIter<'a, 'b>,
+) -> Vec<ElementWithLoc> {
+    let mut elements = Vec::new();
+
+    let stop_when = |seen_event: &Event<'_>| matches!(seen_event, Event::End(t) if t == start_tag);
+    elements.extend(scrape_document(index, iter, stop_when));
+
+    let end_event = iter.next();
+    if let Some((Event::End(Tag::Heading(level, ..)), end_span)) = end_event {
+        let heading_text = &index.text()[start_span.start..start_span.end];
+
+        // Trim newlines, whitespaces on the right
+        let trim_right_text = heading_text.trim_end().to_string();
+        let trimmed_on_right = heading_text.len() - trim_right_text.len();
+        let heading_span = start_span.start..(start_span.end - trimmed_on_right);
+
         let heading = Heading {
-            level: remaining.0,
-            text: remaining.1,
+            level: level as u8,
+            text: trim_right_text,
             scope: index
-                .offset_range_to_range(remaining.2.start..index.text().len())
+                .offset_range_to_range(start_span.start..end_span.end)
                 .unwrap(),
         };
         elements.push((
             Element::Heading(heading),
-            index.offset_range_to_range(remaining.2).unwrap(),
+            index.offset_range_to_range(heading_span).unwrap(),
         ));
+    } else {
+        panic!(
+            "scrape_heading: expected a heading end event, actual is: {:?}",
+            end_event
+        );
     }
 
-    elements.sort_by_key(|(_, span)| span.start);
+    elements
+}
+
+fn scrape_link<'a, 'b>(
+    index: &impl TextMap,
+    start_tag: &Tag<'a>,
+    start_span: Range<usize>,
+    iter: &mut ParseIter<'a, 'b>,
+) -> Vec<ElementWithLoc> {
+    let mut elements = Vec::new();
+
+    match start_tag {
+        Tag::Link(typ, dest, title) => match typ {
+            LinkType::Inline
+            | LinkType::Reference
+            | LinkType::ReferenceUnknown
+            | LinkType::Collapsed
+            | LinkType::CollapsedUnknown
+            | LinkType::Shortcut
+            | LinkType::ShortcutUnknown => {
+                let link_text = &index.text()[start_span.start..start_span.end].trim();
+                let link = parse_intern_link(link_text)
+                    .map(Element::InternLink)
+                    .unwrap_or_else(|| {
+                        Element::ExternLink(parse_link_regular(
+                            link_text,
+                            dest.clone(),
+                            title.clone(),
+                        ))
+                    });
+                elements.push((link, index.offset_range_to_range(start_span).unwrap()));
+            }
+            _ => (),
+        },
+        _ => panic!("scrape_link: unexpected link tag: {:?}", start_tag),
+    }
+    skip_block(start_tag, iter);
 
     elements
+}
+
+fn skip_block<'a, 'b>(tag: &Tag<'a>, iter: &mut ParseIter<'a, 'b>) {
+    for (event, _) in iter {
+        match event {
+            Event::End(end_tag) if end_tag == *tag => break,
+            _ => (),
+        }
+    }
+}
+
+fn scrape_partial_links(
+    index: &impl TextMap,
+    txt: CowStr,
+    span: Range<usize>,
+) -> Vec<ElementWithLoc> {
+    Vec::new()
 }
 
 #[cfg(test)]

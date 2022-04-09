@@ -9,8 +9,8 @@ use tracing::debug;
 
 use crate::{
     facts::{Facts, FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
-    store::NoteFile,
     parser::{Heading, NoteName},
+    store::NoteFile,
 };
 
 #[derive(Debug, Default)]
@@ -59,10 +59,19 @@ pub type DiagWithLoc = (Diag, Range<Pos>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Diag {
-    DupTitle { title: Heading },
-    DupHeading { heading: Heading },
-    BrokenInternLinkToNote { linked_note: NoteName },
-    BrokenInternLinkToHeading { linked_note: NoteName, heading: String },
+    DupTitle {
+        title: Heading,
+    },
+    DupHeading {
+        heading: Heading,
+    },
+    BrokenInternLinkToNote {
+        linked_note: NoteName,
+    },
+    BrokenInternLinkToHeading {
+        linked_note: NoteName,
+        heading: String,
+    },
 }
 
 impl Diag {
@@ -76,7 +85,10 @@ impl Diag {
             Diag::BrokenInternLinkToNote { linked_note } => {
                 format!("Reference to non-existent note `{}`", linked_note)
             }
-            Diag::BrokenInternLinkToHeading { linked_note, heading } => format!(
+            Diag::BrokenInternLinkToHeading {
+                linked_note,
+                heading,
+            } => format!(
                 "Reference to non-existent heading `{}`{}",
                 linked_note, heading
             ),

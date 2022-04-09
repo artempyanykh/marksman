@@ -11,8 +11,9 @@ use salsa;
 
 use crate::{
     diag::{self, DiagWithLoc},
+    parser::{self, Heading},
     store::{self, NoteFile, NoteIndex, NoteText},
-    structure::{self, ElementID, Heading, HeadingID, InternLinkID, NoteID, Structure},
+    structure::{ElementID, HeadingID, InternLinkID, NoteID, Structure},
 };
 use lsp_document::{IndexedText, Pos, TextAdapter, TextMap};
 
@@ -31,7 +32,10 @@ pub trait Facts<'a>: salsa::Database {
     fn note_elements(&self, note_id: NoteID) -> Arc<[ElementID]>;
     fn note_headings(&self, note_id: NoteID) -> Arc<[HeadingID]>;
     fn note_intern_links(&self, note_id: NoteID) -> Arc<[InternLinkID]>;
-    fn note_valid_intern_links(&self, note_id: NoteID) -> Arc<[(InternLinkID, NoteID, Option<HeadingID>)]>;
+    fn note_valid_intern_links(
+        &self,
+        note_id: NoteID,
+    ) -> Arc<[(InternLinkID, NoteID, Option<HeadingID>)]>;
     fn note_intern_links_to_heading(
         &self,
         note_id: NoteID,
@@ -289,7 +293,7 @@ fn note_indexed_text(db: &dyn Facts, note_id: NoteID) -> Arc<IndexedText<Arc<str
 
 fn note_structure(db: &dyn Facts, note_id: NoteID) -> Structure {
     let text = db.note_indexed_text(note_id);
-    let elements = structure::scrape(&*text);
+    let elements = parser::scrape(&*text);
     Structure::new(elements)
 }
 

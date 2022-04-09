@@ -26,7 +26,7 @@ use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
     facts::{NoteFacts, NoteFactsDB, NoteFactsExt},
     store::{NoteFile, NoteText, Version},
-    structure::{Element, ElementWithLoc, NoteName},
+    parser::{Element, ElementWithLoc, NoteName},
 };
 use crate::{lsp::server::ClientName, store::Workspace};
 use crate::{store::NoteFolder, util::text_matches_query};

@@ -10,7 +10,7 @@ use tracing::debug;
 use crate::{
     facts::{Facts, FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
     store::NoteFile,
-    structure::{Heading, NoteName},
+    parser::{Heading, NoteName},
 };
 
 #[derive(Debug, Default)]
@@ -31,7 +31,7 @@ pub fn to_publish(
 
     let lsp_diags: Vec<Diagnostic> = diags
         .iter()
-        .map(|(d, r)| {
+        .filter_map(|(d, r)| {
             let range = match indexed_text.range_to_lsp_range(r) {
                 Some(r) => r,
                 _ => return None,
@@ -44,7 +44,6 @@ pub fn to_publish(
                 ..Diagnostic::default()
             })
         })
-        .flatten()
         .collect();
 
     let param = PublishDiagnosticsParams {

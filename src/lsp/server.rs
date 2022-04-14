@@ -6,6 +6,8 @@ use tracing::{debug, info, trace};
 
 use crate::{
     diag::DiagCollection,
+    lsp::handlers,
+    parser,
     store::{self, NoteFolder},
 };
 
@@ -27,8 +29,6 @@ use lsp_types::{
     TextDocumentSyncCapability, TextDocumentSyncKind, WorkDoneProgressOptions,
     WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
-
-use super::handlers;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ClientName {
@@ -149,7 +149,11 @@ fn mk_server_caps(ctx: &Ctx) -> ServerCapabilities {
     ));
 
     server_capabilities.completion_provider = Some(CompletionOptions {
-        trigger_characters: Some(vec![":".to_string(), "@".to_string()]),
+        trigger_characters: Some(vec![
+            parser::START_COLON.to_string(),
+            parser::SEP_AT.to_string(),
+            parser::SEP_BAR.to_string(),
+        ]),
         resolve_provider: Some(true),
         ..CompletionOptions::default()
     });
@@ -247,12 +251,12 @@ pub async fn main_loop(connection: Connection, ctx: Ctx) -> Result<()> {
                         Ok(Some(handlers::workspace_symbols(&workspace, &params.query)))
                     },
                     Completion => params -> {
-                        let candidates = handlers::completion_candidates(&workspace, params)
+                        let candidates = handlers::completion::completion_candidates(&workspace, params)
                             .unwrap_or_default();
                         Ok(Some(candidates.into()))
                     },
                     ResolveCompletionItem => params -> {
-                        Ok(handlers::completion_resolve(&workspace, &params).unwrap_or(params))
+                        Ok(handlers::completion::completion_resolve(&workspace, &params).unwrap_or(params))
                     },
                     HoverRequest => params -> {
                         Ok(handlers::hover(&workspace, params))

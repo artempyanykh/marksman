@@ -7,8 +7,13 @@ use std::{
 
 use lsp_document::{Pos, TextMap};
 use pulldown_cmark::{BrokenLink, CowStr, Event, LinkType, OffsetIter, Options, Parser, Tag};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
+
+pub const LINK_PREFIX_1: &str = "[:";
+pub const LINK_SUFFIX: char = ']';
+pub const START_COLON: char = ':';
+pub const SEP_AT: char = '@';
+pub const SEP_BAR: char = '|';
 
 pub type ElementWithLoc = (Element, Range<Pos>);
 
@@ -17,6 +22,16 @@ pub enum Element {
     Heading(Heading),
     ExternLink(ExternLink),
     InternLink(InternLink),
+}
+
+impl Element {
+    pub fn text(&self) -> &str {
+        match self {
+            Element::Heading(hd) => &hd.text,
+            Element::ExternLink(el) => &el.text,
+            Element::InternLink(il) => &il.text,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -84,22 +99,24 @@ impl NoteName {
 }
 
 pub fn parse_intern_link(text: &str) -> Option<InternLink> {
-    let intern_link_regex = Regex::new(r"^\[:([^@]*)(@(.*))?\]$").unwrap();
+    if text.starts_with(LINK_PREFIX_1) && text.ends_with(LINK_SUFFIX) {
+        let content = text
+            .trim_start_matches(LINK_PREFIX_1)
+            .trim_end_matches(LINK_SUFFIX);
+        let (name, heading) = match content.split_once([SEP_AT, SEP_BAR]) {
+            Some((n, h)) => (n, h),
+            _ => (content, ""),
+        };
+        let name = Some(name)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string);
+        let heading = Some(heading)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string);
 
-    if let Some(captures) = intern_link_regex.captures(text) {
-        let text = text.to_string();
-        let note_name = captures
-            .get(1)
-            .map(|m| m.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.into());
-        let heading = captures
-            .get(3)
-            .map(|m| m.as_str().to_string())
-            .filter(|s| !s.is_empty());
         Some(InternLink {
-            text,
-            note_name,
+            text: text.to_string(),
+            note_name: name.map(Into::into),
             heading,
         })
     } else {
@@ -293,9 +310,9 @@ fn skip_block<'a, 'b>(tag: &Tag<'a>, iter: &mut ParseIter<'a, 'b>) {
 }
 
 fn scrape_partial_links(
-    index: &impl TextMap,
-    txt: CowStr,
-    span: Range<usize>,
+    _index: &impl TextMap,
+    _txt: CowStr,
+    _span: Range<usize>,
 ) -> Vec<ElementWithLoc> {
     Vec::new()
 }
@@ -316,6 +333,19 @@ mod test {
         root.push(name);
 
         fs::read_to_string(&root)
+    }
+
+    #[test]
+    fn test_intern_link() {
+        let parsed = parse_intern_link("[:]");
+        assert_eq!(
+            Some(InternLink {
+                text: "[:]".to_string(),
+                note_name: None,
+                heading: None
+            }),
+            parsed
+        );
     }
 
     #[test]

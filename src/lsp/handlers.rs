@@ -9,12 +9,11 @@ use anyhow::Result;
 use lsp_document::TextMap;
 
 use lsp_types::{
-    CodeLens, CodeLensParams, Command, CompletionItem, CompletionParams,
-    DidChangeTextDocumentParams, DocumentLink, DocumentLinkParams, Documentation,
-    GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, Position,
-    PublishDiagnosticsParams, SemanticToken, SemanticTokenType, SemanticTokensLegend,
-    SemanticTokensParams, SemanticTokensRangeParams, SymbolInformation, TextDocumentIdentifier,
-    TextDocumentItem, Url, WorkspaceFoldersChangeEvent,
+    CodeLens, CodeLensParams, Command, DidChangeTextDocumentParams, DocumentLink,
+    DocumentLinkParams, GotoDefinitionParams, Hover, HoverContents, HoverParams, Location,
+    MarkupContent, Position, PublishDiagnosticsParams, SemanticToken, SemanticTokenType,
+    SemanticTokensLegend, SemanticTokensParams, SemanticTokensRangeParams, SymbolInformation,
+    TextDocumentIdentifier, TextDocumentItem, Url, WorkspaceFoldersChangeEvent,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -31,6 +30,8 @@ use crate::{
 use crate::{lsp::server::ClientName, store::Workspace};
 use crate::{store::NoteFolder, util::text_matches_query};
 use lsp_document::{self, IndexedText, TextAdapter};
+
+pub mod completion;
 
 //////////////////////////////////////////
 // Workspace
@@ -193,193 +194,6 @@ pub fn workspace_symbols(workspace: &Workspace, query: &str) -> Vec<SymbolInform
     }
 
     symbols
-}
-
-//////////////////////////////////////////
-// Completion
-/////////////////////////////////////////
-
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Clone)]
-pub enum CompletionType {
-    NoteCompletion {
-        root: PathBuf,
-        note_name: NoteName,
-    },
-    HeadingCompletion {
-        root: PathBuf,
-        note_name: NoteName,
-        heading: String,
-    },
-}
-
-pub fn completion_candidates(
-    workspace: &Workspace,
-    params: CompletionParams,
-) -> Option<Vec<CompletionItem>> {
-    let current_tag = params
-        .text_document_position
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
-    let pos = params.text_document_position.position;
-
-    let (folder, facts) = workspace.owning_folder(&current_tag)?;
-    let root = &folder.root;
-
-    let encl_note_id = facts.note_index().find_by_path(&current_tag)?;
-    let encl_note = facts.note_facts(encl_note_id);
-    let encl_structure = encl_note.structure();
-
-    let (enclosing_el, _) = encl_structure.element_by_id(encl_note.element_at_lsp_pos(&pos)?);
-    let enclosing_link = match enclosing_el {
-        Element::InternLink(r) => r,
-        _ => return None,
-    };
-
-    let tries_to_match_note =
-        enclosing_link.heading.is_none() && !enclosing_link.text.contains('@');
-
-    let mut candidates = Vec::new();
-
-    if tries_to_match_note {
-        debug!("Mathing notes...");
-        let partial_input = enclosing_link
-            .note_name
-            .clone()
-            .map(|n| n.to_string())
-            .unwrap_or_default();
-
-        for candidate_id in facts.note_index().ids() {
-            if candidate_id == encl_note_id {
-                // Don't try to complete the current note
-                continue;
-            }
-
-            let cand = facts.note_facts(candidate_id);
-            let cand_struct = cand.structure();
-
-            if let Some((title, _)) = cand.title().map(|id| cand_struct.heading_by_id(id)) {
-                if !text_matches_query(&title.text, &partial_input) {
-                    continue;
-                }
-
-                let name = NoteName::from_path(&cand.file().path, root);
-                let data = serde_json::to_value(CompletionType::NoteCompletion {
-                    root: root.clone(),
-                    note_name: name.clone(),
-                })
-                .unwrap();
-                candidates.push(CompletionItem {
-                    label: title.text.clone(),
-                    kind: Some(lsp_types::CompletionItemKind::FILE),
-                    detail: Some(name.to_string()),
-                    insert_text: Some(name.to_string()),
-                    data: Some(data),
-                    ..CompletionItem::default()
-                })
-            }
-        }
-    } else {
-        // tries to match a heading inside a note
-        let target_note_name = match &enclosing_link.note_name {
-            Some(name) => name.clone(),
-            _ => NoteName::from_path(&current_tag, root),
-        };
-        let target_tag = match &enclosing_link.note_name {
-            Some(name) => name.to_path(root),
-            _ => current_tag,
-        };
-        debug!("Mathing headings inside {:?}...", target_tag);
-
-        let cand_id = facts.note_index().find_by_path(&target_tag)?;
-        let cand = facts.note_facts(cand_id);
-        let cand_struct = cand.structure();
-
-        let query = enclosing_link.heading.clone().unwrap_or_default();
-        let candidate_headings: Vec<_> =
-            cand.headings_matching(|hd| text_matches_query(&hd.text, &query));
-        let candidate_headings = cand_struct.headings_with_ids(&candidate_headings);
-
-        for (hd, _) in candidate_headings {
-            if hd.level == 1 {
-                // no need to complete on heading level 1 as it should be unique
-                // in the document and file link points to it
-                continue;
-            }
-            let data = serde_json::to_value(CompletionType::HeadingCompletion {
-                root: root.clone(),
-                note_name: target_note_name.clone(),
-                heading: hd.text.to_string(),
-            })
-            .unwrap();
-            candidates.push(CompletionItem {
-                label: hd.text.to_string(),
-                kind: Some(lsp_types::CompletionItemKind::TEXT),
-                data: Some(data),
-                ..CompletionItem::default()
-            })
-        }
-    }
-
-    if candidates.is_empty() {
-        None
-    } else {
-        Some(candidates)
-    }
-}
-
-pub fn completion_resolve(
-    workspace: &Workspace,
-    unresolved: &CompletionItem,
-) -> Option<CompletionItem> {
-    let completion_type = unresolved
-        .data
-        .clone()
-        .map(serde_json::from_value::<CompletionType>)
-        .and_then(Result::ok)?;
-
-    match completion_type {
-        CompletionType::NoteCompletion { root, note_name } => {
-            let (_, facts) = workspace.owning_folder(&root)?;
-            let note_id = facts.note_index().find_by_name(&note_name)?;
-            let note = facts.note_facts(note_id);
-
-            let documentation = Documentation::MarkupContent(MarkupContent {
-                kind: lsp_types::MarkupKind::Markdown,
-                value: note.text().content.to_string(),
-            });
-
-            Some(CompletionItem {
-                documentation: Some(documentation),
-                ..unresolved.clone()
-            })
-        }
-        CompletionType::HeadingCompletion {
-            root,
-            note_name,
-            heading,
-        } => {
-            let (_, facts) = workspace.owning_folder(&root)?;
-            let note_id = facts.note_index().find_by_name(&note_name)?;
-            let note = facts.note_facts(note_id);
-            let structure = note.structure();
-            let (heading, _) = structure.heading_by_id(note.heading_with_text(&heading)?);
-            let content = note
-                .indexed_text()
-                .substr(heading.scope.clone())?
-                .to_string();
-            let documentation = Documentation::MarkupContent(MarkupContent {
-                kind: lsp_types::MarkupKind::Markdown,
-                value: content,
-            });
-
-            Some(CompletionItem {
-                documentation: Some(documentation),
-                ..unresolved.clone()
-            })
-        }
-    }
 }
 
 //////////////////////////////////////////

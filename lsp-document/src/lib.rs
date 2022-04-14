@@ -89,7 +89,7 @@ use std::{borrow::Borrow, cmp::Ordering, ops::Range};
 pub struct Pos {
     /// 0-indexed line inside the text document.
     pub line: u32,
-    /// 0-indexed byte offset from the beginning of the.
+    /// 0-indexed byte offset from the beginning of the line.
     /// The offset is at a valid char boundary.
     pub col: u32,
 }

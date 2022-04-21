@@ -24,7 +24,7 @@ use tracing::debug;
 use crate::{
     diag::{self, DiagCollection, DiagWithLoc},
     facts::{NoteFacts, NoteFactsDB, NoteFactsExt},
-    parser::{Element, ElementWithLoc, NoteName},
+    parser::{Element, NoteName},
     store::{NoteFile, NoteText, Version},
 };
 use crate::{lsp::server::ClientName, store::Workspace};
@@ -162,8 +162,8 @@ pub fn document_symbols(workspace: &Workspace, path: &Path, query: &str) -> Vec<
     debug!("document_symbols: found {} ids", matching_ids.len());
 
     let matching_els = structure.headings_with_ids(&matching_ids);
-    for (hd, span) in matching_els {
-        let lsp_range = match note.indexed_text().range_to_lsp_range(&span) {
+    for hd in matching_els {
+        let lsp_range = match note.indexed_text().range_to_lsp_range(&hd.span) {
             Some(r) => r,
             _ => continue,
         };
@@ -216,10 +216,10 @@ pub fn hover(workspace: &Workspace, params: HoverParams) -> Option<Hover> {
     let note_name = NoteName::from_path(&path, root);
     let note = facts.note_facts(note_id);
     let note_structure = note.structure();
-    let (hovered_el, span) = note_structure.element_by_id(note.element_at_lsp_pos(&pos)?);
+    let hovered_el = note_structure.element_by_id(note.element_at_lsp_pos(&pos)?);
 
     if let Element::InternLink(intern_link) = hovered_el {
-        let range = note.indexed_text().range_to_lsp_range(span);
+        let range = note.indexed_text().range_to_lsp_range(&intern_link.span);
 
         let target_note_name = intern_link.note_name.clone().unwrap_or(note_name);
 
@@ -228,9 +228,12 @@ pub fn hover(workspace: &Workspace, params: HoverParams) -> Option<Hover> {
         let target_struct = target_note.structure();
         let target_text = target_note.indexed_text();
         let text = if let Some(heading) = &intern_link.heading {
-            let (heading, _) = target_struct.heading_by_id(target_note.heading_with_text(heading)?);
+            let heading = target_struct.heading_by_id(target_note.heading_with_text(heading)?);
 
-            target_text.substr(heading.scope.clone())?.to_string()
+            target_text
+                .substr(heading.scope.clone())
+                .unwrap()
+                .to_string()
         } else {
             target_text.text().to_string()
         };
@@ -264,7 +267,7 @@ pub fn goto_definition(workspace: &Workspace, params: GotoDefinitionParams) -> O
     let source_id = facts.note_index().find_by_path(&path)?;
     let source_note = facts.note_facts(source_id);
     let souce_index = source_note.structure();
-    let (encl_el, _) = souce_index.element_by_id(source_note.element_at_lsp_pos(&pos)?);
+    let encl_el = souce_index.element_by_id(source_note.element_at_lsp_pos(&pos)?);
 
     if let Element::InternLink(intern_link) = encl_el {
         let target_note_name = intern_link
@@ -275,14 +278,14 @@ pub fn goto_definition(workspace: &Workspace, params: GotoDefinitionParams) -> O
         let target_id = facts.note_index().find_by_name(&target_note_name)?;
         let target_note = facts.note_facts(target_id);
         let target_struct = target_note.structure();
-        let (_, target_range) = if let Some(link_heading) = &intern_link.heading {
+        let target_heading = if let Some(link_heading) = &intern_link.heading {
             target_struct.heading_by_id(target_note.heading_with_text(link_heading)?)
         } else {
             target_struct.heading_by_id(target_note.title()?)
         };
         let range = target_note
             .indexed_text()
-            .range_to_lsp_range(&target_range)
+            .range_to_lsp_range(&target_heading.span)
             .unwrap();
 
         return Some(Location {
@@ -348,26 +351,23 @@ pub fn semantic_tokens_full(
     let note = facts.note_facts(note_id);
     let strukt = note.structure();
 
-    let elements = strukt
-        .elements_with_loc()
-        .into_iter()
-        .map(|(_, ewl)| ewl)
-        .collect();
+    let elements = strukt.elements().into_iter().map(|(_, ewl)| ewl).collect();
     Some(semantic_tokens_encode(note, elements))
 }
 
 fn semantic_tokens_encode(
     note: NoteFactsDB<'_>,
-    mut elements: Vec<&ElementWithLoc>,
+    mut elements: Vec<&Element>,
 ) -> Vec<SemanticToken> {
     // Sort before so that deltas are ok to calculate
-    elements.sort_by_key(|(_, span)| span.start);
+    elements.sort_by_key(|e| e.span().start);
 
     let mut encoded = Vec::new();
     let mut cur_line = 0;
     let mut cur_char_offset = 0;
 
-    for (el, el_span) in elements {
+    for el in elements {
+        let el_span = el.span();
         let token_type = match el {
             // SemanticTokenType::CLASS but skip for now as markdown syntax highlighting is already good eneough for headings
             Element::Heading(..) => continue,
@@ -478,8 +478,8 @@ pub fn code_lenses(workspace: &Workspace, params: CodeLensParams) -> Option<Vec<
             continue;
         }
 
-        let (heading, range) = strukt.heading_by_id(h_id);
-        let lsp_range = match indexed_text.range_to_lsp_range(&range) {
+        let heading = strukt.heading_by_id(h_id);
+        let lsp_range = match indexed_text.range_to_lsp_range(&heading.span) {
             Some(lr) => lr,
             None => continue,
         };
@@ -516,8 +516,8 @@ pub fn code_lens_resolve(workspace: &Workspace, lens: &CodeLens) -> Option<CodeL
     let strukt = note.structure();
 
     let heading_id = note.heading_with_text(&ref_data.heading_text)?;
-    let (_, heading_range) = strukt.heading_by_id(heading_id);
-    let heading_lsp_pos = note.indexed_text().pos_to_lsp_pos(&heading_range.start)?;
+    let heading = strukt.heading_by_id(heading_id);
+    let heading_lsp_pos = note.indexed_text().pos_to_lsp_pos(&heading.span.start)?;
 
     debug!(
         "code_lens_resolve: note_id={:?}, heading_id={:?}",
@@ -533,8 +533,8 @@ pub fn code_lens_resolve(workspace: &Workspace, lens: &CodeLens) -> Option<CodeL
         let src_indexed_text = src_note.indexed_text();
         let src_strukt = src_note.structure();
 
-        let (_, src_range) = src_strukt.intern_link_by_id(*src_link_id);
-        let lsp_range = match src_indexed_text.range_to_lsp_range(&src_range) {
+        let src_link = src_strukt.intern_link_by_id(*src_link_id);
+        let lsp_range = match src_indexed_text.range_to_lsp_range(&src_link.span) {
             Some(r) => r,
             _ => continue,
         };
@@ -586,24 +586,24 @@ pub fn document_links(
     let mut links = Vec::new();
 
     for (intern_link_id, target_note_id, target_heading_id) in note.valid_intern_links().iter() {
-        let (_, source_range) = strukt.intern_link_by_id(*intern_link_id);
+        let source_link = strukt.intern_link_by_id(*intern_link_id);
         let target_note = facts.note_facts(*target_note_id);
         let target_strukt = target_note.structure();
         let target_heading_id = match target_heading_id.or(target_note.title()) {
             Some(id) => id,
             _ => continue,
         };
-        let (_, target_range) = target_strukt.heading_by_id(target_heading_id);
+        let target_link = target_strukt.heading_by_id(target_heading_id);
         let target_range = target_note
             .indexed_text()
-            .range_to_lsp_range(&target_range)
+            .range_to_lsp_range(&target_link.span)
             .unwrap();
 
         let from_loc = Location {
             uri: Url::from_file_path(note.file().path).unwrap(),
             range: note
                 .indexed_text()
-                .range_to_lsp_range(&source_range)
+                .range_to_lsp_range(&source_link.span)
                 .unwrap(),
         };
         let to_loc = Location {
@@ -623,7 +623,7 @@ pub fn document_links(
         let link = DocumentLink {
             range: note
                 .indexed_text()
-                .range_to_lsp_range(&source_range)
+                .range_to_lsp_range(&source_link.span)
                 .unwrap(),
             target: Some(target),
             tooltip: None,

@@ -1,8 +1,6 @@
-use lsp_document::Pos;
+use std::{fmt::Debug, sync::Arc};
 
-use std::{fmt::Debug, ops::Range, sync::Arc};
-
-use crate::parser::{Element, ElementWithLoc, Heading, InternLink};
+use crate::parser::{Element, Heading, InternLink, Node};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NoteID(u32);
@@ -25,35 +23,60 @@ impl From<usize> for NoteID {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Structure {
-    elements: Arc<[ElementWithLoc]>,
+    elements_hierarchy: Arc<[Element]>,
+    elements_flat: Arc<[Element]>,
 }
 
 impl Structure {
-    pub fn new(elements: Vec<ElementWithLoc>) -> Self {
+    pub fn new(elements: Vec<Element>) -> Self {
+        let elements_hierarchy: Arc<[Element]> = elements.into();
+        let elements_flat: Arc<[Element]> = Self::flatten_elements(&elements_hierarchy).into();
         Self {
-            elements: elements.into(),
+            elements_hierarchy,
+            elements_flat,
         }
     }
 
-    pub fn elements(&self) -> Vec<ElementID> {
-        let mut els = Vec::with_capacity(self.elements.len());
-        for (idx, (el, _)) in self.elements.iter().enumerate() {
+    fn flatten_elements(initial: &[Element]) -> Vec<Element> {
+        let mut els = Vec::with_capacity(initial.len());
+
+        let mut to_process = Vec::with_capacity(initial.len());
+        to_process.extend(Vec::from(initial));
+
+        while let Some(el) = to_process.pop() {
+            if let Element::Heading(h) = &el {
+                to_process.extend(h.children.clone())
+            }
+            els.push(el)
+        }
+
+        els.sort_by_key(|e| e.span().start);
+        els
+    }
+
+    pub fn element_ids(&self) -> Vec<ElementID> {
+        let els_flat = &self.elements_flat;
+        let mut ids = Vec::with_capacity(els_flat.len());
+
+        for (idx, el) in els_flat.iter().enumerate() {
             match el {
-                Element::Heading(..) => els.push(ElementID::Heading(HeadingID(idx as u32))),
+                Element::Heading(..) => {
+                    ids.push(ElementID::Heading(HeadingID(idx as u32)));
+                }
                 Element::InternLink(..) => {
-                    els.push(ElementID::InternLink(InternLinkID(idx as u32)))
+                    ids.push(ElementID::InternLink(InternLinkID(idx as u32)))
                 }
                 Element::ExternLink(..) => (),
             }
         }
 
-        els
+        ids
     }
 
-    pub fn elements_with_loc(&self) -> Vec<(ElementID, &ElementWithLoc)> {
-        let mut els = Vec::with_capacity(self.elements.len());
-        for (idx, ewl) in self.elements.iter().enumerate() {
-            match ewl.0 {
+    pub fn elements(&self) -> Vec<(ElementID, &Element)> {
+        let mut els = Vec::with_capacity(self.elements_flat.len());
+        for (idx, ewl) in self.elements_flat.iter().enumerate() {
+            match ewl {
                 Element::Heading(..) => els.push((ElementID::Heading(HeadingID(idx as u32)), ewl)),
                 Element::InternLink(..) => {
                     els.push((ElementID::InternLink(InternLinkID(idx as u32)), ewl))
@@ -68,13 +91,13 @@ impl Structure {
     pub fn elements_with_ids<'a, 'b: 'a>(
         &'a self,
         ids: &'b [ElementID],
-    ) -> impl Iterator<Item = &'a ElementWithLoc> {
-        ids.iter().map(move |id| &self.elements[id.to_usize()])
+    ) -> impl Iterator<Item = &'a Element> {
+        ids.iter().map(move |id| &self.elements_flat[id.to_usize()])
     }
 
     pub fn headings(&self) -> Vec<HeadingID> {
         let mut headings = Vec::new();
-        for (idx, (el, _)) in self.elements.iter().enumerate() {
+        for (idx, el) in self.elements_flat.iter().enumerate() {
             if let Element::Heading(..) = el {
                 headings.push(HeadingID(idx as u32))
             }
@@ -83,26 +106,29 @@ impl Structure {
         headings
     }
 
-    pub fn element_by_id(&self, id: ElementID) -> &ElementWithLoc {
-        &self.elements[id.to_usize()]
+    pub fn element_by_id(&self, id: ElementID) -> &Element {
+        &self.elements_flat[id.to_usize()]
     }
 
-    pub fn heading_by_id(&self, id: HeadingID) -> (&Heading, Range<Pos>) {
-        let el = &self.elements[id.0 as usize];
-        if let (Element::Heading(hd), span) = el {
-            (hd, span.clone())
+    pub fn heading_by_id(&self, id: HeadingID) -> &Node<Heading> {
+        let el = &self.elements_flat[id.0 as usize];
+        if let Element::Heading(h) = el {
+            h
         } else {
-            panic!("Expected a heading at idx {:?} in {:?}", id, self.elements)
+            panic!(
+                "Expected a heading at idx {:?} in {:?}",
+                id, self.elements_flat
+            )
         }
     }
 
-    pub fn headings_with_ids(&self, ids: &[HeadingID]) -> Vec<(&Heading, Range<Pos>)> {
+    pub fn headings_with_ids(&self, ids: &[HeadingID]) -> Vec<&Node<Heading>> {
         ids.iter().map(move |&id| self.heading_by_id(id)).collect()
     }
 
     pub fn intern_links(&self) -> Vec<InternLinkID> {
         let mut links = Vec::new();
-        for (idx, (el, _)) in self.elements.iter().enumerate() {
+        for (idx, el) in self.elements_flat.iter().enumerate() {
             if let Element::InternLink(..) = el {
                 links.push(InternLinkID(idx as u32))
             }
@@ -111,19 +137,19 @@ impl Structure {
         links
     }
 
-    pub fn intern_link_by_id(&self, id: InternLinkID) -> (&InternLink, Range<Pos>) {
-        let el = &self.elements[id.0 as usize];
-        if let (Element::InternLink(lr), span) = el {
-            (lr, span.clone())
+    pub fn intern_link_by_id(&self, id: InternLinkID) -> &Node<InternLink> {
+        let el = &self.elements_flat[id.0 as usize];
+        if let Element::InternLink(il) = el {
+            il
         } else {
             panic!(
                 "Expected an intern link at idx {:?} in {:?}",
-                id, self.elements
+                id, self.elements_flat
             )
         }
     }
 
-    pub fn intern_links_with_ids(&self, ids: &[InternLinkID]) -> Vec<(&InternLink, Range<Pos>)> {
+    pub fn intern_links_with_ids(&self, ids: &[InternLinkID]) -> Vec<&Node<InternLink>> {
         ids.iter()
             .map(move |&id| self.intern_link_by_id(id))
             .collect()
@@ -152,5 +178,42 @@ impl ElementID {
 
     pub fn to_usize(&self) -> usize {
         self.to_u32() as usize
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser;
+
+    use super::*;
+    use lsp_document::{IndexedText, Pos};
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_heading_scope() {
+        let md = r#"
+# Title
+
+## Heading 2.1
+
+Text inside heading 2.1
+
+## Heading 2.2
+## Heading 2.3
+Text
+inside
+heading 2.3
+"#;
+        let index = IndexedText::new(md);
+        let elements = parser::scrape(&index);
+        let strukt = Structure::new(elements);
+        let headings = strukt.headings_with_ids(&strukt.headings());
+        let title = *headings.get(0).unwrap();
+        assert_eq!(title.text, "# Title");
+        assert_eq!(title.scope, Pos::new(1, 0)..Pos::new(11, 12));
+
+        let h21 = *headings.get(1).unwrap();
+        assert_eq!(h21.text, "## Heading 2.1");
+        assert_eq!(h21.scope, Pos::new(3, 0)..Pos::new(7, 0));
     }
 }

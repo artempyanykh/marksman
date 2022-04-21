@@ -1,7 +1,7 @@
 use std::{
     fmt::{Debug, Display},
     iter::Peekable,
-    ops::Range,
+    ops::{Deref, DerefMut, Range},
     path::{Path, PathBuf},
 };
 
@@ -15,13 +15,29 @@ pub const START_COLON: char = ':';
 pub const SEP_AT: char = '@';
 pub const SEP_BAR: char = '|';
 
-pub type ElementWithLoc = (Element, Range<Pos>);
-
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Element {
-    Heading(Heading),
-    ExternLink(ExternLink),
-    InternLink(InternLink),
+    Heading(Node<Heading>),
+    ExternLink(Node<ExternLink>),
+    InternLink(Node<InternLink>),
+}
+
+impl From<Node<InternLink>> for Element {
+    fn from(v: Node<InternLink>) -> Self {
+        Self::InternLink(v)
+    }
+}
+
+impl From<Node<ExternLink>> for Element {
+    fn from(v: Node<ExternLink>) -> Self {
+        Self::ExternLink(v)
+    }
+}
+
+impl From<Node<Heading>> for Element {
+    fn from(v: Node<Heading>) -> Self {
+        Self::Heading(v)
+    }
 }
 
 impl Element {
@@ -32,6 +48,56 @@ impl Element {
             Element::InternLink(il) => &il.text,
         }
     }
+
+    pub fn span(&self) -> &Range<Pos> {
+        match self {
+            Element::Heading(n) => &n.span,
+            Element::ExternLink(n) => &n.span,
+            Element::InternLink(n) => &n.span,
+        }
+    }
+
+    pub fn as_heading(&self) -> Option<&Node<Heading>> {
+        if let Self::Heading(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_heading_mut(&mut self) -> Option<&mut Node<Heading>> {
+        if let Self::Heading(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct Node<E> {
+    pub span: Range<Pos>,
+    pub inner: E,
+}
+
+impl<E> Node<E> {
+    pub fn new(inner: E, span: Range<Pos>) -> Self {
+        Self { inner, span }
+    }
+}
+
+impl<E> Deref for Node<E> {
+    type Target = E;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<E> DerefMut for Node<E> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -39,16 +105,17 @@ pub struct Heading {
     pub level: u8,
     pub text: String,
     pub scope: Range<Pos>,
+    pub children: Vec<Element>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct InternLink {
     pub text: String,
     pub note_name: Option<NoteName>,
     pub heading: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct ExternLink {
     text: String,
     dest: Option<String>,
@@ -141,7 +208,7 @@ pub fn parse_link_regular(text: &str, dest: CowStr, title: CowStr) -> ExternLink
 
 type ParseIter<'a, 'b> = Peekable<OffsetIter<'a, 'b>>;
 
-pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
+pub fn scrape(index: &impl TextMap) -> Vec<Element> {
     let mut callback = |_: BrokenLink<'_>| Some(("".into(), "".into()));
     let parser =
         Parser::new_with_broken_link_callback(index.text(), Options::all(), Some(&mut callback));
@@ -149,7 +216,8 @@ pub fn scrape(index: &impl TextMap) -> Vec<ElementWithLoc> {
 
     let mut iter: ParseIter<'_, '_> = parser.into_offset_iter().peekable();
     let mut elements = scrape_document(index, &mut iter, stop_when);
-    elements.sort_by_key(|(_, span)| span.start);
+
+    sort_elements(&mut elements);
     elements
 }
 
@@ -157,7 +225,7 @@ fn scrape_document<'a, 'b>(
     index: &impl TextMap,
     iter: &mut ParseIter<'a, 'b>,
     stop_when: impl Fn(&Event<'a>) -> bool,
-) -> Vec<ElementWithLoc> {
+) -> Vec<Element> {
     let mut elements = Vec::new();
 
     while iter.peek().is_some() {
@@ -195,7 +263,7 @@ fn scrape_block<'a, 'b>(
     start_tag: &Tag<'a>,
     start_span: Range<usize>,
     iter: &mut ParseIter<'a, 'b>,
-) -> Vec<ElementWithLoc> {
+) -> Vec<Element> {
     match start_tag {
         Tag::Heading(..) => scrape_heading(index, start_tag, start_span, iter),
         Tag::Link(..) => scrape_link(index, start_tag, start_span, iter),
@@ -226,40 +294,50 @@ fn scrape_heading<'a, 'b>(
     start_tag: &Tag<'a>,
     start_span: Range<usize>,
     iter: &mut ParseIter<'a, 'b>,
-) -> Vec<ElementWithLoc> {
+) -> Vec<Element> {
     let mut elements = Vec::new();
+    let current_heading_level = if let Tag::Heading(level, ..) = start_tag {
+        level
+    } else {
+        panic!("Unexpected start tag for heading: {:?}", start_tag)
+    };
 
+    // Process the heading block and advance the iterator
     let stop_when = |seen_event: &Event<'_>| matches!(seen_event, Event::End(t) if t == start_tag);
     elements.extend(scrape_document(index, iter, stop_when));
+    let heading_end = iter.next();
+    assert!(
+        matches!(heading_end, Some((Event::End(_), _))),
+        "scrape_heading: expected a heading end event, actual is: {:?}",
+        heading_end
+    );
 
-    let end_event = iter.next();
-    if let Some((Event::End(Tag::Heading(level, ..)), end_span)) = end_event {
-        let heading_text = &index.text()[start_span.start..start_span.end];
+    // Process all child elements (until the heading of <= level)
+    let stop_when = |seen_event: &Event<'_>| matches!(seen_event, Event::Start(Tag::Heading(level, ..)) if level <= current_heading_level);
+    elements.extend(scrape_document(index, iter, stop_when));
 
-        // Trim newlines, whitespaces on the right
-        let trim_right_text = heading_text.trim_end().to_string();
-        let trimmed_on_right = heading_text.len() - trim_right_text.len();
-        let heading_span = start_span.start..(start_span.end - trimmed_on_right);
+    let next_section_event = iter.peek();
+    let end_offset = match next_section_event {
+        Some(next_el) => next_el.1.start,
+        _ => index.text().len(),
+    };
 
-        let heading = Heading {
-            level: level as u8,
-            text: trim_right_text,
-            scope: index
-                .offset_range_to_range(start_span.start..end_span.end)
-                .unwrap(),
-        };
-        elements.push((
-            Element::Heading(heading),
-            index.offset_range_to_range(heading_span).unwrap(),
-        ));
-    } else {
-        panic!(
-            "scrape_heading: expected a heading end event, actual is: {:?}",
-            end_event
-        );
-    }
+    let heading_text = &index.text()[start_span.start..start_span.end];
 
-    elements
+    // Trim newlines, whitespaces on the right
+    let trim_right_text = heading_text.trim_end().to_string();
+    let trimmed_on_right = heading_text.len() - trim_right_text.len();
+    let heading_span = start_span.start..(start_span.end - trimmed_on_right);
+
+    let heading = Heading {
+        level: *current_heading_level as u8,
+        text: trim_right_text,
+        scope: index
+            .offset_range_to_range(start_span.start..end_offset)
+            .unwrap(),
+        children: elements,
+    };
+    vec![Node::new(heading, index.offset_range_to_range(heading_span).unwrap()).into()]
 }
 
 fn scrape_link<'a, 'b>(
@@ -267,7 +345,7 @@ fn scrape_link<'a, 'b>(
     start_tag: &Tag<'a>,
     start_span: Range<usize>,
     iter: &mut ParseIter<'a, 'b>,
-) -> Vec<ElementWithLoc> {
+) -> Vec<Element> {
     let mut elements = Vec::new();
 
     match start_tag {
@@ -279,17 +357,16 @@ fn scrape_link<'a, 'b>(
             | LinkType::CollapsedUnknown
             | LinkType::Shortcut
             | LinkType::ShortcutUnknown => {
-                let link_text = &index.text()[start_span.start..start_span.end].trim();
+                let pos_span = index.offset_range_to_range(start_span.clone()).unwrap();
+                let link_text = index.text()[start_span].trim();
                 let link = parse_intern_link(link_text)
-                    .map(Element::InternLink)
+                    .map(|l| Node::new(l, pos_span.clone()).into())
                     .unwrap_or_else(|| {
-                        Element::ExternLink(parse_link_regular(
-                            link_text,
-                            dest.clone(),
-                            title.clone(),
-                        ))
+                        let fallback_extern_link =
+                            parse_link_regular(link_text, dest.clone(), title.clone());
+                        Node::new(fallback_extern_link, pos_span).into()
                     });
-                elements.push((link, index.offset_range_to_range(start_span).unwrap()));
+                elements.push(link);
             }
             _ => (),
         },
@@ -309,18 +386,23 @@ fn skip_block<'a, 'b>(tag: &Tag<'a>, iter: &mut ParseIter<'a, 'b>) {
     }
 }
 
-fn scrape_partial_links(
-    _index: &impl TextMap,
-    _txt: CowStr,
-    _span: Range<usize>,
-) -> Vec<ElementWithLoc> {
+fn scrape_partial_links(_index: &impl TextMap, _txt: CowStr, _span: Range<usize>) -> Vec<Element> {
     Vec::new()
+}
+
+fn sort_elements(elements: &mut [Element]) {
+    elements.sort_by_key(|e| e.span().start);
+    for e in elements {
+        if let Some(heading) = e.as_heading_mut() {
+            sort_elements(&mut heading.children);
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use lsp_document::IndexedText;
+    use lsp_document::{IndexedText, Pos};
 
     use super::*;
     use pretty_assertions::assert_eq;
@@ -361,14 +443,38 @@ mod test {
         let elements = scrape(&IndexedText::new("#"));
         assert_eq!(
             elements,
-            vec![(
-                Element::Heading(Heading {
+            vec![Element::Heading(Node::new(
+                Heading {
                     level: 1,
                     text: "#".to_string(),
-                    scope: Pos::new(0, 0)..Pos::new(0, 1)
-                }),
+                    scope: Pos::new(0, 0)..Pos::new(0, 1),
+                    children: vec![]
+                },
                 Pos::new(0, 0)..Pos::new(0, 1)
-            )]
+            ))]
         );
+    }
+
+    #[test]
+    fn scrape_no_heading() {
+        let text = r#"
+        Text before heading
+        "#;
+        let elements = scrape(&IndexedText::new(text));
+        insta::assert_debug_snapshot!(elements);
+    }
+
+    #[test]
+    fn scrape_link_before_heading() {
+        let text = r#"Text; [:link]"#;
+        let elements = scrape(&IndexedText::new(text));
+        insta::assert_debug_snapshot!(elements);
+    }
+
+    #[test]
+    fn scrape_only_title() {
+        let text = r#"# Title"#;
+        let elements = scrape(&IndexedText::new(text));
+        insta::assert_debug_snapshot!(elements);
     }
 }

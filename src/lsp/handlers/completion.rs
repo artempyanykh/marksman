@@ -12,7 +12,7 @@ use serde_json;
 use tracing::debug;
 
 use crate::facts::NoteFactsDB;
-use crate::parser::{self, ElementWithLoc};
+use crate::parser;
 use crate::store::Workspace;
 use crate::util::text_matches_query;
 use crate::{
@@ -62,8 +62,8 @@ pub fn completion_candidates(
     let encl_note = facts.note_facts(encl_note_id);
     let encl_structure = encl_note.structure();
 
-    let enclosing_el_with_loc = encl_structure.element_by_id(encl_note.element_at_lsp_pos(&pos)?);
-    let enclosing_link = match &enclosing_el_with_loc.0 {
+    let enclosing_el = encl_structure.element_by_id(encl_note.element_at_lsp_pos(&pos)?);
+    let enclosing_link = match &enclosing_el {
         Element::InternLink(r) => r,
         _ => return None,
     };
@@ -90,7 +90,7 @@ pub fn completion_candidates(
             let cand = facts.note_facts(candidate_id);
             let cand_struct = cand.structure();
 
-            if let Some((title, _)) = cand.title().map(|id| cand_struct.heading_by_id(id)) {
+            if let Some(title) = cand.title().map(|id| cand_struct.heading_by_id(id)) {
                 let title = title.text.trim_start_matches('#').trim_start().to_string();
                 if !text_matches_query(&title, &partial_input) {
                     continue;
@@ -102,8 +102,7 @@ pub fn completion_candidates(
                     note_name: name.clone(),
                     note_title: title.clone(),
                 };
-                let completion_item =
-                    completion_item(&encl_note, enclosing_el_with_loc, &completion_type);
+                let completion_item = completion_item(&encl_note, enclosing_el, &completion_type);
                 candidates.push(completion_item)
             }
         }
@@ -128,7 +127,7 @@ pub fn completion_candidates(
             cand.headings_matching(|hd| text_matches_query(&hd.text, &query));
         let candidate_headings = cand_struct.headings_with_ids(&candidate_headings);
 
-        for (hd, _) in candidate_headings {
+        for hd in candidate_headings {
             if hd.level == 1 {
                 // no need to complete on heading level 1 as it should be unique
                 // in the document and file link points to it
@@ -139,8 +138,7 @@ pub fn completion_candidates(
                 note_name: target_note_name.clone(),
                 heading: hd.text.to_string(),
             };
-            let completion_item =
-                completion_item(&encl_note, enclosing_el_with_loc, &completion_type);
+            let completion_item = completion_item(&encl_note, enclosing_el, &completion_type);
             candidates.push(completion_item)
         }
     }
@@ -189,7 +187,7 @@ pub fn completion_resolve(
             let note_id = facts.note_index().find_by_name(&note_name)?;
             let note = facts.note_facts(note_id);
             let structure = note.structure();
-            let (heading, _) = structure.heading_by_id(note.heading_with_text(&heading)?);
+            let heading = structure.heading_by_id(note.heading_with_text(&heading)?);
             let content = note
                 .indexed_text()
                 .substr(heading.scope.clone())?
@@ -209,11 +207,11 @@ pub fn completion_resolve(
 
 fn completion_item(
     note_facts: &NoteFactsDB,
-    complete_on: &ElementWithLoc,
+    complete_on: &Element,
     completion: &CompletionType,
 ) -> CompletionItem {
     let data = serde_json::to_value(completion).unwrap();
-    let sep = if complete_on.0.text().contains(parser::SEP_AT) {
+    let sep = if complete_on.text().contains(parser::SEP_AT) {
         parser::SEP_AT
     } else {
         parser::SEP_BAR
@@ -254,7 +252,7 @@ fn completion_item(
 
 fn completion_edit(
     note_facts: &NoteFactsDB,
-    completion_item: &ElementWithLoc,
+    completion_item: &Element,
     completion: &CompletionType,
     is_intralink: bool,
     sep: char,
@@ -263,12 +261,12 @@ fn completion_edit(
         CompletionType::NoteCompletion { .. } => (2, 1),
         CompletionType::HeadingCompletion { .. } => (2, 1),
     };
-    let element_range = completion_item.1.clone();
+    let element_span = completion_item.span();
     let completion_range = Pos::new(
-        element_range.start.line,
-        element_range.start.col + start_offset,
+        element_span.start.line,
+        element_span.start.col + start_offset,
     )
-        ..Pos::new(element_range.end.line, element_range.end.col - end_offset);
+        ..Pos::new(element_span.end.line, element_span.end.col - end_offset);
 
     let completion_range = note_facts
         .indexed_text()

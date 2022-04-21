@@ -9,7 +9,7 @@ use tracing::debug;
 
 use crate::{
     facts::{Facts, FactsDB, NoteFacts, NoteFactsDB, NoteFactsExt},
-    parser::{Heading, NoteName},
+    parser::{Heading, Node, NoteName},
     store::NoteFile,
 };
 
@@ -60,10 +60,10 @@ pub type DiagWithLoc = (Diag, Range<Pos>);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Diag {
     DupTitle {
-        title: Heading,
+        title: Node<Heading>,
     },
     DupHeading {
-        heading: Heading,
+        heading: Node<Heading>,
     },
     BrokenInternLinkToNote {
         linked_note: NoteName,
@@ -106,7 +106,7 @@ pub fn check_title(note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
     let duplicates = strukt.headings_with_ids(&hd_ids).into_iter().skip(1);
 
     let duplicate_diags = duplicates
-        .map(|(t, r)| (Diag::DupTitle { title: t.clone() }, r))
+        .map(|t| (Diag::DupTitle { title: t.clone() }, t.span.clone()))
         .collect::<Vec<_>>();
 
     debug!("check_title: reporting {}", duplicate_diags.len());
@@ -132,7 +132,7 @@ pub fn check_headings(note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
         let cur_hd = strukt.heading_by_id(cur_id);
 
         let similar_text_ids = note
-            .headings_matching(|hd| hd.text == cur_hd.0.text)
+            .headings_matching(|hd| hd.text == cur_hd.text)
             .into_iter()
             .filter(|&id| id != cur_id)
             .collect::<Vec<_>>();
@@ -148,7 +148,7 @@ pub fn check_headings(note: &impl NoteFactsExt) -> Vec<DiagWithLoc> {
 
     let duplicate_diags = duplicates
         .into_iter()
-        .map(|(h, r)| (Diag::DupHeading { heading: h.clone() }, r))
+        .map(|h| (Diag::DupHeading { heading: h.clone() }, h.span.clone()))
         .collect::<Vec<_>>();
 
     debug!("check_headings: reporting {}", duplicate_diags.len());
@@ -162,7 +162,7 @@ pub fn check_intern_links(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<Di
     let intern_link_ids = note.intern_link_ids();
     let intern_links = strukt.intern_links_with_ids(&intern_link_ids);
 
-    for (intern_link, range) in intern_links {
+    for intern_link in intern_links {
         let target_name = intern_link
             .note_name
             .clone()
@@ -178,7 +178,7 @@ pub fn check_intern_links(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<Di
                                 linked_note: target_name,
                                 heading: heading.to_string(),
                             },
-                            range,
+                            intern_link.span.clone(),
                         ));
                     }
                 }
@@ -188,7 +188,7 @@ pub fn check_intern_links(facts: &dyn Facts, note: &impl NoteFactsExt) -> Vec<Di
                     Diag::BrokenInternLinkToNote {
                         linked_note: target_name,
                     },
-                    range,
+                    intern_link.span.clone(),
                 ));
             }
         }

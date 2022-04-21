@@ -199,7 +199,7 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
         self.headings()
             .iter()
             .filter_map(|&id| {
-                let (hd, _) = structure.heading_by_id(id);
+                let hd = structure.heading_by_id(id);
                 if pred(hd) {
                     Some(id)
                 } else {
@@ -218,25 +218,23 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
         let text = self.indexed_text();
 
         let mut candidates = structure
-            .elements_with_loc()
+            .elements()
             .into_iter()
-            .filter_map(
-                |(id, ewl)| {
-                    if ewl.1.contains(&pos) {
-                        Some(id)
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter_map(|(id, ewl)| {
+                if ewl.span().contains(&pos) {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>();
 
         // Since elements can overlap (e.g. a link within a heading) try to find
         // the most specific element
         candidates.sort_by_key(|id| {
-            let (_, range) = structure.element_by_id(*id);
+            let el = structure.element_by_id(*id);
             let text_len = text
-                .substr(range.clone())
+                .substr(el.span().clone())
                 .map(|s| s.len())
                 .unwrap_or_default();
             text_len
@@ -254,9 +252,10 @@ impl<'a> NoteFactsExt for NoteFactsDB<'a> {
     fn elements_in_range(&self, range: &Range<Pos>) -> Vec<ElementID> {
         let structure = self.structure();
         let mut els_in_range = Vec::new();
-        for (id, ewl) in structure.elements_with_loc() {
+        for (id, ewl) in structure.elements() {
+            let span = ewl.span();
             // strict inclusion
-            if range.contains(&ewl.1.start) && range.contains(&ewl.1.end) {
+            if range.contains(&span.start) && range.contains(&span.end) {
                 els_in_range.push(id);
             }
         }
@@ -298,7 +297,7 @@ fn note_structure(db: &dyn Facts, note_id: NoteID) -> Structure {
 }
 
 fn note_elements(db: &dyn Facts, note_id: NoteID) -> Arc<[ElementID]> {
-    db.note_structure(note_id).elements().into()
+    db.note_structure(note_id).element_ids().into()
 }
 
 fn note_headings(db: &dyn Facts, note_id: NoteID) -> Arc<[HeadingID]> {
@@ -309,7 +308,7 @@ fn note_title(db: &dyn Facts, note_id: NoteID) -> Option<HeadingID> {
     let index = db.note_structure(note_id);
     db.note_headings(note_id)
         .iter()
-        .find(|id| index.heading_by_id(**id).0.level == 1)
+        .find(|id| index.heading_by_id(**id).level == 1)
         .copied()
 }
 
@@ -328,7 +327,7 @@ fn note_valid_intern_links(
         .intern_link_ids()
         .iter()
         .filter_map(|&rid| {
-            let (intern_link, _) = cur_strukt.intern_link_by_id(rid);
+            let intern_link = cur_strukt.intern_link_by_id(rid);
             let target_note_name = intern_link
                 .note_name
                 .clone()

@@ -1,0 +1,24 @@
+---
+source: src/parser.rs
+expression: elements
+---
+[
+    InternLink(
+        Node {
+            span: Pos {
+                line: 0,
+                col: 6,
+            }..Pos {
+                line: 0,
+                col: 13,
+            },
+            inner: InternLink {
+                text: "[:link]",
+                note_name: Some(
+                    link,
+                ),
+                heading: None,
+            },
+        },
+    ),
+]

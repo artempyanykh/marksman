@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Marksman", "Marksman\Marksman.fsproj", "{70710B11-600C-4EA8-B927-8F964FDC079A}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Tests", "Tests\Tests.fsproj", "{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{70710B11-600C-4EA8-B927-8F964FDC079A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70710B11-600C-4EA8-B927-8F964FDC079A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70710B11-600C-4EA8-B927-8F964FDC079A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70710B11-600C-4EA8-B927-8F964FDC079A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

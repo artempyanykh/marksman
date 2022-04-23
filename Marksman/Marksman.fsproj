@@ -9,6 +9,7 @@
         <Compile Include="Misc.fs" />
         <Compile Include="Text.fs" />
         <Compile Include="Parser.fs" />
+        <Compile Include="Server.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

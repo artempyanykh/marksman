@@ -4,6 +4,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Marksman", "Marksman\Marksm
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Tests", "Tests\Tests.fsproj", "{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LanguageServerProtocol", "LanguageServerProtocol\LanguageServerProtocol.fsproj", "{610543D7-1361-479D-8491-04CC5B3A9781}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{28A81CE7-6A0A-4262-94E7-788A6EDD4DBE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{610543D7-1361-479D-8491-04CC5B3A9781}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{610543D7-1361-479D-8491-04CC5B3A9781}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{610543D7-1361-479D-8491-04CC5B3A9781}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{610543D7-1361-479D-8491-04CC5B3A9781}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

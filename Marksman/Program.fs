@@ -23,7 +23,11 @@ let configureLogging (verbosity: int) : unit =
     Log.Logger <-
         loggerConfig
             .WriteTo
-            .Console(standardErrorFromLevel = Events.LogEventLevel.Verbose)
+            .Console(
+                outputTemplate =
+                    "[{Timestamp:HH:mm:ss} {Level:u3}] <{SourceContext}> {Message:lj}: {Properties:lj}{NewLine}{Exception}",
+                standardErrorFromLevel = Events.LogEventLevel.Verbose
+            )
             .Enrich.FromLogContext()
             .CreateLogger()
 

@@ -1,6 +1,7 @@
 module Marksman.Text
 
 open System.IO
+open System.Text
 open Ionide.LanguageServerProtocol.Types
 
 open Misc
@@ -75,14 +76,14 @@ type Text =
 
     member this.FullRange() : Range =
         let lineNum = this.lineMap.Map.Length
-        let start = {Line = 0; Character = 0}
-        let end_ = {Line = lineNum; Character = 0}
-        {Start=start; End=end_}
+        let start = { Line = 0; Character = 0 }
+        let end_ = { Line = lineNum; Character = 0 }
+        { Start = start; End = end_ }
 
     member this.EndRange() : Range =
         let lineNum = this.lineMap.Map.Length
-        let end_ = {Line = lineNum; Character = 0}
-        {Start=end_; End=end_}
+        let end_ = { Line = lineNum; Character = 0 }
+        { Start = end_; End = end_ }
 
 type internal TrackingTextReader(baseReader: TextReader) =
     inherit TextReader()
@@ -130,3 +131,28 @@ let mkLineMap (str: string) : LineMap =
 let mkText (content: string) : Text =
     let lineMap = mkLineMap content
     { content = content; lineMap = lineMap }
+
+let mkPosition (line, char) = { Line = line; Character = char }
+
+let mkRange (start, end_) =
+    { Start = mkPosition start
+      End = mkPosition end_ }
+
+let private applyChangeRaw (lineMap: LineMap) (content: string) (change: TextDocumentContentChangeEvent) : string =
+    match change.Range, change.RangeLength with
+    | Some range, Some length ->
+        let start =
+            range.Start |> lineMap.FindOffset
+
+        StringBuilder(content)
+            .Remove(start, length)
+            .Insert(start, change.Text)
+            .ToString()
+    | None, None -> change.Text
+    | _, _ -> failwith $"Unexpected change event structure: {change}"
+
+let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text: Text) : Text =
+    let newContent =
+        Array.fold (applyChangeRaw text.lineMap) text.content changeEvents
+
+    mkText newContent

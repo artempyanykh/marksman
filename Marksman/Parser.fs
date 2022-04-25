@@ -28,13 +28,15 @@ type XRef =
 module XRef =
     let fmt x =
         let lines =
-          [ $"X: {XDest.fmt x.dest}; {x.range}"
-            $"  text: {x.text}" ]
+            [ $"X: {XDest.fmt x.dest}; {x.range}"
+              $"  text: {x.text}" ]
+
         String.Join(Environment.NewLine, lines)
 
 type Element =
     | H of Heading
     | X of XRef
+
 and Heading =
     { level: int
       text: string
@@ -46,11 +48,17 @@ let rec private fmtElement =
     function
     | H h -> fmtHeading h
     | X x -> XRef.fmt x
+
 and private fmtHeading h =
-    let l1 = $"H{h.level}: range={h.range.DebuggerDisplay}; scope={h.scope.DebuggerDisplay}"
+    let l1 =
+        $"H{h.level}: range={h.range.DebuggerDisplay}; scope={h.scope.DebuggerDisplay}"
+
     let l2 = $"  text=`{h.text}`"
-    let rest = Array.map (indentFmt fmtElement) h.children
-    String.Join(Environment.NewLine, Array.concat [[|l1; l2|]; rest])
+
+    let rest =
+        Array.map (indentFmt fmtElement) h.children
+
+    String.Join(Environment.NewLine, Array.concat [ [| l1; l2 |]; rest ])
 
 module Heading =
     let fmt = fmtHeading
@@ -80,10 +88,8 @@ let mdRangeToRange (mdRange: MarkdownRange) : Range =
 let rec scrapeSpan (text: Text) (span: MarkdownSpan) : seq<Element> =
     seq {
         match span with
-        | DirectLink(spans, url, titleOpt, range) ->
-            ()
-        | IndirectLink(spans, original, key, range) ->
-            ()
+        | DirectLink (spans, url, titleOpt, range) -> ()
+        | IndirectLink (spans, original, key, range) -> ()
         | MarkdownPatterns.SpanLeaf _ -> ()
         | MarkdownPatterns.SpanNode (_, spans) ->
             for span in spans do
@@ -101,7 +107,9 @@ let rec scrapeParagraph (text: Text) (par: MarkdownParagraph) : seq<Element> =
 
             let range = mdRangeToRange mdRange
             let headingText = text.Substring range
-            let children = Seq.collect (scrapeSpan text) spans |> Array.ofSeq
+
+            let children =
+                Seq.collect (scrapeSpan text) spans |> Array.ofSeq
 
             yield
                 Element.H
@@ -124,14 +132,19 @@ let rec reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
     seq {
         let mutable headStack: list<Heading> = []
         let mutable accChildren: list<Element> = []
-        let mutable accStandalone: list<Element> = []
+
+        let mutable accStandalone: list<Element> =
+            []
 
         let rec unwindHeadStack newHead : unit =
             match headStack with
             | [] ->
-                accStandalone <- List.concat [accChildren; accStandalone]
+                accStandalone <-
+                    List.concat [ accChildren
+                                  accStandalone ]
+
                 accChildren <- []
-                headStack <- [newHead]
+                headStack <- [ newHead ]
             | curHead :: rest ->
                 // #
                 // ##
@@ -140,15 +153,25 @@ let rec reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
                 //  e3, e4   |
                 // ##        |
                 //  e5
-                let curHeadChildren = Array.concat [curHead.children; Array.ofList accChildren]
-                let curHead = {curHead with children = curHeadChildren}
+                let curHeadChildren =
+                    Array.concat [ curHead.children
+                                   Array.ofList accChildren ]
+
+                let curHead =
+                    { curHead with children = curHeadChildren }
+
                 accChildren <- []
 
                 // Unwind further until we find a parent heading or none at all
                 if curHead.level >= newHead.level then
-                    let newScope = {Start=curHead.scope.Start; End=newHead.scope.Start}
-                    let curHead = {curHead with scope=newScope}
-                    accChildren <- [H curHead]
+                    let newScope =
+                        { Start = curHead.scope.Start
+                          End = newHead.scope.Start }
+
+                    let curHead =
+                        { curHead with scope = newScope }
+
+                    accChildren <- [ H curHead ]
                     headStack <- rest
                     unwindHeadStack newHead
                 else // cur.level < new.level; should stack the child
@@ -162,8 +185,15 @@ let rec reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
                 | [] -> yield el
             | H newHead -> unwindHeadStack newHead
 
-        let guardHead = {level = -1; text = ""; scope = text.EndRange(); range = text.EndRange(); children = [||]}
+        let guardHead =
+            { level = -1
+              text = ""
+              scope = text.EndRange()
+              range = text.EndRange()
+              children = [||] }
+
         unwindHeadStack guardHead
+
         for child in accChildren do
             yield child
 
@@ -183,11 +213,17 @@ let rec sortElements (elements: array<Element>) : unit =
 
     Array.sortInPlaceBy elementStart elements
 
-let rec scrapeDocument (content: string) : array<Element> =
-    let text = mkText content
-    let parsed = Markdown.Parse(content)
-    let flatElements = Seq.collect (scrapeParagraph text) parsed.Paragraphs
-    let hierarchicalElements = reconstructHierarchy text flatElements
-    let elements = Array.ofSeq hierarchicalElements
+let rec scrapeText (text: Text) : array<Element> =
+    let parsed = Markdown.Parse(text.content)
+
+    let flatElements =
+        Seq.collect (scrapeParagraph text) parsed.Paragraphs
+
+    let hierarchicalElements =
+        reconstructHierarchy text flatElements
+
+    let elements =
+        Array.ofSeq hierarchicalElements
+
     sortElements elements
     elements

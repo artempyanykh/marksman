@@ -11,7 +11,7 @@ let lineMap_empty () =
 [<Fact>]
 let lineMap_finalNewLine () =
     let lm = Text.mkLineMap "\n"
-    Assert.Equal([ 0, 1 ], lm.Map)
+    Assert.Equal([ 0, 1; 1, 1 ], lm.Map)
 
 [<Fact>]
 let lineMap_singleChar_ascii () =
@@ -26,7 +26,7 @@ let lineMap_singleLine_ascii () =
 [<Fact>]
 let lineMap_multiple_lines () =
     let lm = Text.mkLineMap "12\n345\r\n6789\n"
-    Assert.Equal([ 0, 3; 3, 8; 8, 13 ], lm.Map)
+    Assert.Equal([ 0, 3; 3, 8; 8, 13; 13, 13 ], lm.Map)
 
 [<Fact>]
 let applyTextChange_insert_single () =
@@ -41,7 +41,35 @@ let applyTextChange_insert_single () =
 
     let expected = "! Holla!"
     Assert.Equal(expected, actual.content)
-    
+
+[<Fact>]
+let applyTextChange_insert_on_empty () =
+    let text = Text.mkText ""
+
+    let actual =
+        Text.applyTextChange
+            [| { Range = Some(Text.mkRange ((0, 0), (0, 0)))
+                 RangeLength = Some 0
+                 Text = "H" } |]
+            text
+
+    let expected = "H"
+    Assert.Equal(expected, actual.content)
+
+[<Fact>]
+let applyTextChange_insert_next_line () =
+    let text = Text.mkText "A\n"
+
+    let actual =
+        Text.applyTextChange
+            [| { Range = Some(Text.mkRange ((1, 0), (1, 0)))
+                 RangeLength = Some 0
+                 Text = "B" } |]
+            text
+
+    let expected = "A\nB"
+    Assert.Equal(expected, actual.content)
+
 [<Fact>]
 let applyTextChange_replace_single () =
     let text = Text.mkText "Hello World!"

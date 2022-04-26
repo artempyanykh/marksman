@@ -122,9 +122,8 @@ let mkLineMap (str: string) : LineMap =
     while processLine (reader.ReadLine()) do
         ()
 
-    // Add an empty new line when needed
-    if not (str.EndsWithNewline()) then
-        lineMap.Add(start, start)
+    // Add an empty new line for text insertion at the end
+    lineMap.Add(start, start)
 
     LineMap(lineMap.ToArray())
 

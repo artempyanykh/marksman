@@ -25,6 +25,13 @@ module Document =
     let applyChange (change: DidChangeTextDocumentParams) (document: Document) : Document =
         let newVersion = change.TextDocument.Version
 
+        logger.trace (
+            Log.setMessage "Processing text change"
+            >> Log.addContext "uri" document.path
+            >> Log.addContext "currentVersion" document.version
+            >> Log.addContext "newVersion" newVersion
+        )
+
         // Sanity checking
         match newVersion, document.version with
         | Some newVersion, Some curVersion ->
@@ -89,7 +96,8 @@ module ClientDescription =
 
 type State =
     { client: ClientDescription
-      folders: Map<PathUri, Folder> }
+      folders: Map<PathUri, Folder>
+      revision: int }
 
 module State =
     let logger =
@@ -274,8 +282,14 @@ type MarksmanServer(_client: MarksmanClient) =
         LogProvider.getLoggerByName "MarksmanServer"
 
     let updateState (newState: State) : unit =
-        logger.trace (Log.setMessage "Updated state")
+        logger.trace (Log.setMessage $"Updating state: revision {newState.revision}")
+
+        let newState =
+            { newState with revision = newState.revision + 1 }
+
         state <- Some newState
+
+        logger.trace (Log.setMessage $"Updated state: revision {newState.revision}")
 
     let requireState () : State =
         Option.defaultWith (fun _ -> failwith "State was not initialized") state
@@ -305,7 +319,8 @@ type MarksmanServer(_client: MarksmanClient) =
               folders =
                 folders
                 |> List.map (fun x -> x.root, x)
-                |> Map.ofList }
+                |> Map.ofList
+              revision = 0 }
 
         updateState state
 
@@ -318,22 +333,28 @@ type MarksmanServer(_client: MarksmanClient) =
 
 
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =
+        let state = requireState ()
+
         let docUri =
             par.TextDocument.Uri |> Uri |> PathUri
 
-        let doc =
-            State.tryFindDocument docUri (requireState ())
+        let doc = State.tryFindDocument docUri state
 
-        let newDoc =
-            doc |> Option.map (Document.applyChange par)
+        match doc with
+        | Some doc ->
+            let newDoc = Document.applyChange par doc
 
-        let stateUpdater =
-            fun x -> State.updateDocument x (requireState ())
+            let newState =
+                State.updateDocument newDoc state
 
-        let newState =
-            Option.map stateUpdater newDoc
+            updateState newState
+        | _ ->
+            logger.warn (
+                Log.setMessage "Document not found"
+                >> Log.addContext "method" "textDocumentDidChange"
+                >> Log.addContext "uri" docUri
+            )
 
-        Option.iter updateState newState
         async.Return()
 
     override this.TextDocumentDidClose(par: DidCloseTextDocumentParams) =

@@ -287,6 +287,31 @@ module Types =
         /// symbols.
         ContainerName: string option
     }
+    
+    /// Represents programming constructs like variables, classes, interfaces etc.
+    /// that appear in a document. Document symbols can be hierarchical and they
+    /// have two ranges: one that encloses its definition and one that points to its
+    /// most interesting range, e.g. the range of an identifier.
+    type DocumentSymbol = {
+        /// The name of this symbol. Will be displayed in the user interface and
+        /// therefore must not be an empty string or a string only consisting of
+        /// white spaces.
+        Name: string
+        /// More detail for this symbol, e.g the signature of a function.
+        Detail: string option
+        /// The kind of this symbol.
+        Kind: SymbolKind
+        /// The range enclosing this symbol not including leading/trailing whitespace
+        /// but everything else like comments. This information is typically used to
+        /// determine if the clients cursor is inside the symbol to reveal in the
+        /// symbol in the UI.
+        Range: Range
+        /// The range that should be selected and revealed when this symbol is being
+        /// picked, e.g. the name of a function. Must be contained by the `range`.
+        SelectionRange: Range
+        /// Children of this symbol, e.g. properties of a class.
+        Children: DocumentSymbol[] option
+    }
 
     /// A textual edit applicable to a text document.
     type TextEdit = {
@@ -2777,7 +2802,7 @@ type LspServer() =
     /// The document symbol request is sent from the client to the server to return a flat list of all symbols
     /// found in a given text document. Neither the symbol’s location range nor the symbol’s container name
     /// should be used to infer a hierarchy.
-    abstract member TextDocumentDocumentSymbol: DocumentSymbolParams -> AsyncLspResult<SymbolInformation[] option>
+    abstract member TextDocumentDocumentSymbol: DocumentSymbolParams -> AsyncLspResult<U2<SymbolInformation[], DocumentSymbol[]> option>
     default __.TextDocumentDocumentSymbol(_) = notImplemented
 
     /// The watched files notification is sent from the client to the server when the client detects changes

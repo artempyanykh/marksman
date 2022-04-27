@@ -2271,10 +2271,56 @@ module Types =
     type SemanticTokensDelta = {
       ResultId: string option
 
-      /// The semantic token edits to transform a previous result into a new
-      /// result.
-      Edits: SemanticTokensEdit[];
+      /// The semantic token edits to transform a previous result into a new result.
+      Edits: SemanticTokensEdit[]
     }
+    
+    /// Represents information on a file/folder create.
+    ///@since 3.16.0 
+    type FileCreate = {
+        /// A file:// URI for the location of the file/folder being created.
+        Uri: string
+    }
+    
+    /// The parameters sent in notifications/requests for user-initiated creation of files.
+    /// @since 3.16.0
+    type CreateFilesParams = {
+        /// An array of all files/folders created in this operation.
+        Files: FileCreate[]
+    }
+    
+    /// Represents information on a file/folder rename.
+    /// @since 3.16.0
+    type FileRename = {
+        /// A file:// URI for the original location of the file/folder being renamed.
+        OldUri: string
+        /// A file:// URI for the new location of the file/folder being renamed.
+        NewUri: string
+    }
+    
+    /// The parameters sent in notifications/requests for user-initiated renames of files.
+    /// @since 3.16.0
+    type RenameFilesParams = {
+        /// An array of all files/folders renamed in this operation. When a folder is renamed,
+        /// only the folder will be included, and not its children.
+        Files: FileRename[]
+    }
+    
+    /// Represents information on a file/folder create.
+    ///@since 3.16.0 
+    type FileDelete = {
+        /// A file:// URI for the location of the file/folder being deleted.
+        Uri: string
+    }
+    
+    /// The parameters sent in notifications/requests for user-initiated deletes of files.
+    /// @since 3.16.0
+    type DeleteFilesParams = {
+        /// An array of all files/folders deleted in this operation.
+        Files: FileCreate[]
+    }
+
+open Types
 
 module LowLevel =
     open System
@@ -2751,6 +2797,39 @@ type LspServer() =
     /// A notification sent from the client to the server to signal the change of configuration settings.
     abstract member WorkspaceDidChangeConfiguration: DidChangeConfigurationParams -> Async<unit>
     default __.WorkspaceDidChangeConfiguration(_) = ignoreNotification
+    
+    /// The will create files request is sent from the client to the server before files are actually created
+    /// as long as the creation is triggered from within the client either by a user action or by applying a
+    /// workspace edit
+    abstract member WorkspaceWillCreateFiles: CreateFilesParams -> AsyncLspResult<WorkspaceEdit option>
+    default __.WorkspaceWillCreateFiles(_) = notImplemented
+    
+    /// The did create files notification is sent from the client to the server when files were created
+    /// from within the client.
+    abstract member WorkspaceDidCreateFiles: CreateFilesParams -> Async<unit>
+    default __.WorkspaceDidCreateFiles(_) = ignoreNotification
+    
+    /// The will rename files request is sent from the client to the server before files are actually renamed
+    /// as long as the rename is triggered from within the client either by a user action or by applying a
+    /// workspace edit. 
+    abstract member WorkspaceWillRenameFiles: RenameFilesParams -> AsyncLspResult<WorkspaceEdit option>
+    default __.WorkspaceWillRenameFiles(_) = notImplemented
+    
+    /// The did rename files notification is sent from the client to the server when files were renamed from
+    /// within the client.
+    abstract member WorkspaceDidRenameFiles: RenameFilesParams -> Async<unit>
+    default __.WorkspaceDidRenameFiles(_) = ignoreNotification
+    
+    /// The will delete files request is sent from the client to the server before files are actually deleted
+    /// as long as the deletion is triggered from within the client either by a user action or by applying a
+    /// workspace edit. 
+    abstract member WorkspaceWillDeleteFiles: DeleteFilesParams -> AsyncLspResult<WorkspaceEdit option>
+    default __.WorkspaceWillDeleteFiles(_) = notImplemented
+    
+    /// The did delete files notification is sent from the client to the server when files were deleted from
+    /// within the client.
+    abstract member WorkspaceDidDeleteFiles: DeleteFilesParams -> Async<unit>
+    default __.WorkspaceDidDeleteFiles(_) = ignoreNotification
 
     /// The workspace symbol request is sent from the client to the server to list project-wide symbols matching
     /// the query string.
@@ -2982,6 +3061,12 @@ module Server =
             "workspace/didChangeWatchedFiles", requestHandling (fun s p -> s.WorkspaceDidChangeWatchedFiles(p) |> notificationSuccess)
             "workspace/didChangeWorkspaceFolders", requestHandling (fun s p -> s.WorkspaceDidChangeWorkspaceFolders (p) |> notificationSuccess)
             "workspace/didChangeConfiguration", requestHandling (fun s p -> s.WorkspaceDidChangeConfiguration (p) |> notificationSuccess)
+            "workspace/willCreateFiles", requestHandling (fun s p -> s.WorkspaceWillCreateFiles(p))
+            "workspace/didCreateFiles", requestHandling (fun s p -> s.WorkspaceDidCreateFiles(p) |> notificationSuccess)
+            "workspace/willRenameFiles", requestHandling (fun s p -> s.WorkspaceWillRenameFiles(p))
+            "workspace/didRenameFiles", requestHandling (fun s p -> s.WorkspaceDidRenameFiles(p) |> notificationSuccess)
+            "workspace/willDeleteFiles", requestHandling (fun s p -> s.WorkspaceWillDeleteFiles(p))
+            "workspace/didDeleteFiles", requestHandling (fun s p -> s.WorkspaceDidDeleteFiles(p) |> notificationSuccess)
             "workspace/symbol", requestHandling (fun s p -> s.WorkspaceSymbol (p))
             "workspace/executeCommand ", requestHandling (fun s p -> s.WorkspaceExecuteCommand (p))
             "shutdown", requestHandling (fun s () -> s.Shutdown() |> notificationSuccess)

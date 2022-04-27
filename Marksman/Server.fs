@@ -9,7 +9,6 @@ open Ionide.LanguageServerProtocol.Server
 open LanguageServerProtocol.Logging
 open Marksman.Misc
 open Marksman.Parser
-open Misc
 open Text
 
 type Document =
@@ -22,7 +21,7 @@ module Document =
     let logger =
         LogProvider.getLoggerByName "Document"
 
-    let applyChange (change: DidChangeTextDocumentParams) (document: Document) : Document =
+    let applyLspChange (change: DidChangeTextDocumentParams) (document: Document) : Document =
         let newVersion = change.TextDocument.Version
 
         logger.trace (
@@ -57,8 +56,8 @@ module Document =
             text = newText
             elements = newElements }
 
-    let fromTextDocument (item: TextDocumentItem) : Document =
-        let path = item.Uri |> Uri |> PathUri
+    let fromLspDocument (item: TextDocumentItem) : Document =
+        let path = PathUri.fromString item.Uri
         let text = mkText item.Text
         let elements = scrapeText text
 
@@ -68,13 +67,103 @@ module Document =
           elements = elements }
 
 
+    let load (path: PathUri) : option<Document> =
+        try
+            let content =
+                (new StreamReader(path.AbsolutePath)).ReadToEnd()
+
+            let text = mkText content
+            let elements = scrapeText text
+
+            Some
+                { path = path
+                  text = text
+                  elements = elements
+                  version = None }
+        with
+        | :? FileNotFoundException -> None
+
+
 type Folder =
     { name: string
       root: PathUri
       documents: Map<PathUri, Document> }
 
 module Folder =
+    let private logger =
+        LogProvider.getLoggerByName "Folder"
+
     let tryFindDocument (uri: PathUri) (folder: Folder) : option<Document> = Map.tryFind uri folder.documents
+
+    let rec private loadDocuments (root: PathUri) : seq<PathUri * Document> =
+        let logger =
+            LogProvider.getLoggerByName "readRoot"
+
+        let di = DirectoryInfo(root.AbsolutePath)
+
+        try
+            let files = di.GetFiles("*.md")
+            let dirs = di.GetDirectories()
+
+            seq {
+                for file in files do
+                    let pathUri =
+                        PathUri.fromString file.FullName
+
+                    let document = Document.load pathUri
+
+                    match document with
+                    | Some document -> yield pathUri, document
+                    | _ -> ()
+
+                for dir in dirs do
+                    yield! loadDocuments (PathUri.fromString dir.FullName)
+            }
+        with
+        | :? UnauthorizedAccessException as exn ->
+            logger.warn (
+                Log.setMessage "Couldn't read the root folder"
+                >> Log.addContext "root" root
+                >> Log.addException exn
+            )
+
+            Seq.empty
+        | :? DirectoryNotFoundException as exn ->
+            logger.warn (
+                Log.setMessage "The root folder doesn't exist"
+                >> Log.addContext "root" root
+                >> Log.addException exn
+            )
+
+            Seq.empty
+
+    let tryLoad (name: string) (root: PathUri) : option<Folder> =
+        if Directory.Exists(root.AbsolutePath) then
+            let documents =
+                loadDocuments root |> Map.ofSeq
+
+            { name = name
+              root = root
+              documents = documents }
+            |> Some
+        else
+            logger.warn (
+                Log.setMessage "Folder path doesn't exist"
+                >> Log.addContext "uri" root
+            )
+
+            None
+
+    let loadDocument (uri: PathUri) (folder: Folder) : Folder =
+        match Document.load uri with
+        | Some doc -> { folder with documents = Map.add uri doc folder.documents }
+        | None -> folder
+
+    let removeDocument (uri: PathUri) (folder: Folder) : Folder =
+        { folder with documents = Map.remove uri folder.documents }
+
+    let addDocument (doc: Document) (folder: Folder) : Folder =
+        { folder with documents = Map.add doc.path doc folder.documents }
 
 type ClientDescription =
     { info: ClientInfo option
@@ -120,6 +209,39 @@ module State =
         |> Option.map (Folder.tryFindDocument uri)
         |> Option.flatten
 
+    let updateFoldersFromLsp (added: WorkspaceFolder []) (removed: WorkspaceFolder []) (state: State) : State =
+        logger.trace (
+            Log.setMessage "Updating workspace folders"
+            >> Log.addContext "numAdded" added.Length
+            >> Log.addContext "numRemoved" removed.Length
+        )
+
+        let removedUris =
+            removed
+            |> Array.map (fun f -> PathUri(Uri(f.Uri)))
+
+        let mutable newFolders = state.folders
+
+        for uri in removedUris do
+            newFolders <- Map.remove uri newFolders
+
+        let addedFolders =
+            seq {
+                for f in added do
+                    let rootUri = PathUri.fromString f.Uri
+
+                    let folder = Folder.tryLoad f.Name rootUri
+
+                    match folder with
+                    | Some folder -> yield rootUri, folder
+                    | _ -> ()
+            }
+
+        for uri, folder in addedFolders do
+            newFolders <- Map.add uri folder newFolders
+
+        { state with folders = newFolders }
+
     let updateDocument (newDocument: Document) (state: State) : State =
         let folder =
             findFolder newDocument.path state
@@ -140,10 +262,9 @@ module State =
         let folder = findFolder path state
 
         let newFolder =
-            { folder with documents = Map.remove path folder.documents }
+            Folder.removeDocument path folder
 
         { state with folders = Map.add folder.root newFolder state.folders }
-
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -164,98 +285,40 @@ let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
 
         Map.ofList [ rootName, rootUri ]
 
-let readDocument (path: PathUri) : option<Document> =
-    try
-        let content =
-            (new StreamReader(path.AbsolutePath)).ReadToEnd()
-
-        let text = mkText content
-        let elements = scrapeText text
-
-        Some
-            { path = path
-              text = text
-              elements = elements
-              version = None }
-    with
-    | :? FileNotFoundException -> None
-
-
-let rec readRoot (root: PathUri) : seq<PathUri * Document> =
-    let logger =
-        LogProvider.getLoggerByName "readRoot"
-
-    let di = DirectoryInfo(root.AbsolutePath)
-
-    try
-        let files = di.GetFiles("*.md")
-        let dirs = di.GetDirectories()
-
-        seq {
-            for file in files do
-                let pathUri = PathUri(Uri(file.FullName))
-                let document = readDocument pathUri
-
-                match document with
-                | Some document -> yield pathUri, document
-                | _ -> ()
-
-            for dir in dirs do
-                yield! readRoot (PathUri(Uri(dir.FullName)))
-        }
-    with
-    | :? UnauthorizedAccessException as exn ->
-        logger.warn (
-            Log.setMessage "Couldn't read the root folder"
-            >> Log.addContext "root" root
-            >> Log.addException exn
-        )
-
-        Seq.empty
-    | :? DirectoryNotFoundException as exn ->
-        logger.warn (
-            Log.setMessage "The root folder doesn't exist"
-            >> Log.addContext "root" root
-            >> Log.addException exn
-        )
-
-        Seq.empty
-
-
 let readWorkspace (roots: Map<string, PathUri>) : list<Folder> =
     seq {
         for KeyValue (name, root) in roots do
-            let content = readRoot root |> Map.ofSeq
-
-            yield
-                { name = name
-                  root = root
-                  documents = content }
+            match Folder.tryLoad name root with
+            | Some folder -> yield folder
+            | _ -> ()
     }
     |> List.ofSeq
 
 let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
     let workspaceFoldersCaps =
         { Supported = Some true
-          // TODO
-          ChangeNotifications = Some false }
+          ChangeNotifications = Some true }
 
     let markdownFilePattern =
         { Glob = "**/*.md"
           Matches = Some FileOperationPatternKind.File
           Options = Some { FileOperationPatternOptions.Default with IgnoreCase = Some true } }
 
-    let _markdownFileRegistration =
+    let markdownFileRegistration =
         { Filters =
             [| { Scheme = None
                  Pattern = markdownFilePattern } |] }
 
     let workspaceFileCaps =
         { WorkspaceFileOperationsServerCapabilities.Default with
-            // TODO
-            DidCreate = None
-            DidDelete = None
-            WillRename = None }
+            DidCreate = Some markdownFileRegistration
+            DidDelete = Some markdownFileRegistration
+            // VSCode behaves weirdly when communicating file renames, so let's turn this off.
+            // Anyway, when the file is renamed VSCode sends
+            // - didClose on the old name, and
+            // - didOpen on the new one
+            // which is enough to keep the state in sync.
+            DidRename = None }
 
     let workspaceCaps =
         { WorkspaceServerCapabilities.Default with
@@ -342,7 +405,7 @@ type MarksmanServer(_client: MarksmanClient) =
 
         match doc with
         | Some doc ->
-            let newDoc = Document.applyChange par doc
+            let newDoc = Document.applyLspChange par doc
 
             let newState =
                 State.updateDocument newDoc state
@@ -361,7 +424,7 @@ type MarksmanServer(_client: MarksmanClient) =
         let path =
             par.TextDocument.Uri |> Uri |> PathUri
 
-        let docFromDisk = readDocument path
+        let docFromDisk = Document.load path
 
         let newState =
             match docFromDisk with
@@ -373,7 +436,7 @@ type MarksmanServer(_client: MarksmanClient) =
 
     override this.TextDocumentDidOpen(par: DidOpenTextDocumentParams) =
         let document =
-            Document.fromTextDocument par.TextDocument
+            Document.fromLspDocument par.TextDocument
 
         let newState =
             State.updateDocument document (requireState ())
@@ -381,5 +444,58 @@ type MarksmanServer(_client: MarksmanClient) =
         updateState newState
         async.Return()
 
+    override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
+        let state = requireState ()
+
+        let newState =
+            State.updateFoldersFromLsp par.Event.Added par.Event.Removed state
+
+        updateState newState
+        async.Return()
+
+
+    override this.WorkspaceDidCreateFiles(par: CreateFilesParams) =
+        let docUris =
+            par.Files
+            |> Array.map (fun fc -> PathUri.fromString fc.Uri)
+
+        let mutable newState = requireState ()
+
+        for docUri in docUris do
+            logger.trace (
+                Log.setMessage "Processing file create not"
+                >> Log.addContext "uri" docUri
+            )
+
+            match Document.load docUri with
+            | Some doc -> newState <- State.updateDocument doc newState
+            | _ ->
+                logger.warn (
+                    Log.setMessage "Couldn't load created document"
+                    >> Log.addContext "uri" docUri
+                )
+
+                ()
+
+        updateState newState
+        async.Return()
+
+    override this.WorkspaceDidDeleteFiles(par: DeleteFilesParams) =
+        let mutable newState = requireState ()
+
+        let deletedUris =
+            par.Files
+            |> Array.map (fun x -> PathUri.fromString x.Uri)
+
+        for uri in deletedUris do
+            logger.trace (
+                Log.setMessage "Processing file delete not"
+                >> Log.addContext "uri" uri
+            )
+
+            newState <- State.removeDocument uri newState
+
+        updateState newState
+        async.Return()
 
     override this.Dispose() = ()

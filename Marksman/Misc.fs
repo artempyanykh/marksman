@@ -32,7 +32,6 @@ type PathUri =
     member this.AbsolutePath: string =
         this.Uri.AbsolutePath
 
-
     override this.Equals(obj) =
         match obj with
         | :? PathUri as other -> this.AbsolutePath.Equals(other.AbsolutePath)
@@ -46,3 +45,6 @@ type PathUri =
             match obj with
             | :? PathUri as other -> this.AbsolutePath.CompareTo(other.AbsolutePath)
             | _ -> failwith "Incompatible Type"
+
+module PathUri =
+    let fromString(str: string) : PathUri = PathUri(Uri(str))

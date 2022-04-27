@@ -10,6 +10,7 @@ open LanguageServerProtocol.Logging
 open Marksman.Misc
 open Marksman.Parser
 open Text
+open FSharpPlus.GenericBuilders
 
 type Document =
     { path: PathUri
@@ -332,7 +333,48 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
 
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
-        TextDocumentSync = Some textSyncCaps }
+        TextDocumentSync = Some textSyncCaps
+        DocumentSymbolProvider = Some true }
+
+let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [] =
+    let name = h.text.TrimStart([| '#'; ' ' |])
+    let name = $"H{h.level}: {name}"
+    let kind = SymbolKind.Module
+
+    let location =
+        { Uri = docUri.Uri.OriginalString
+          Range = h.range }
+
+    let sym =
+        { Name = name
+          Kind = kind
+          Location = location
+          ContainerName = None }
+
+    let children =
+        h.children
+        |> Element.pickHeadings
+        |> Array.collect (headingToSymbolInfo docUri)
+
+    Array.append [| sym |] children
+
+let rec headingToDocumentSymbol (h: Heading) : DocumentSymbol =
+    let name = h.text.TrimStart([| '#'; ' ' |])
+    let kind = SymbolKind.Module
+    let range = h.scope
+    let selectionRange = h.range
+
+    let children =
+        h.children
+        |> Element.pickHeadings
+        |> Array.map headingToDocumentSymbol
+
+    { Name = name
+      Detail = None
+      Kind = kind
+      Range = range
+      SelectionRange = selectionRange
+      Children = Some children }
 
 type MarksmanClient(_notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
     inherit LspClient()
@@ -497,5 +539,37 @@ type MarksmanServer(_client: MarksmanClient) =
 
         updateState newState
         async.Return()
+
+    override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
+        let state = requireState ()
+
+        let docUri =
+            par.TextDocument.Uri |> PathUri.fromString
+
+        match State.tryFindDocument docUri state with
+        | Some doc ->
+            let headings =
+                Element.pickHeadings doc.elements
+
+            let supportsHierarchy =
+                monad' {
+                    let! textDoc = state.client.caps.TextDocument
+                    let! docSymbol = textDoc.DocumentSymbol
+                    return! docSymbol.HierarchicalDocumentSymbolSupport
+                }
+                |> Option.defaultValue false
+
+            let response =
+                if supportsHierarchy then
+                    headings
+                    |> Array.map headingToDocumentSymbol
+                    |> Second
+                else
+                    headings
+                    |> Array.collect (headingToSymbolInfo docUri)
+                    |> First
+
+            AsyncLspResult.success (Some response)
+        | None -> AsyncLspResult.success None
 
     override this.Dispose() = ()

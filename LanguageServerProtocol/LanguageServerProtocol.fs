@@ -597,6 +597,9 @@ module Types =
 
         /// Specific capabilities for the `SymbolKind`.
         SymbolKind: SymbolKindCapabilities option
+        
+        /// The client supports hierarchical document symbols.
+        HierarchicalDocumentSymbolSupport: bool option
     }
 
     module CodeActionKind =

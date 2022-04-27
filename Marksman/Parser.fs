@@ -71,6 +71,16 @@ module Element =
 
     let fmt = fmtElement
 
+    let asHeading =
+        function
+        | H h -> Some h
+        | _ -> None
+
+    let pickHeadings (elements: array<Element>) : array<Heading> =
+        elements
+        |> Array.map asHeading
+        |> Array.collect Option.toArray
+
 let mdRangeToRange (mdRange: MarkdownRange) : Range =
     // It seems that MarkdownRange has lines starting with 1
     assert (mdRange.StartLine > 0)

@@ -48,3 +48,7 @@ type PathUri =
 
 module PathUri =
     let fromString(str: string) : PathUri = PathUri(Uri(str))
+    
+type Range with
+    static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range =
+        {Start = {Line = startLine; Character = startChar}; End = {Line = endLine; Character = endChar}}

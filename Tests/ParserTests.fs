@@ -16,7 +16,14 @@ module SnapshotTests =
 
         lines.ShouldMatchSnapshot()
 
-    let scrapeString content = scrapeText (Text.mkText content)
+    let checkInlineSnapshot (document: array<Element>) snapshot =
+        let lines =
+            Array.map (fun x -> (Element.fmt x).Lines()) document
+            |> Array.concat
+
+        lines.ShouldMatchInlineSnapshot(snapshot)
+
+    let scrapeString content = parseText (Text.mkText content)
 
     [<Fact>]
     let parse_empty () =
@@ -51,3 +58,93 @@ module SnapshotTests =
         let text = "# H1 \n## H2.1\n## H2.2\n"
         let document = scrapeString text
         checkSnapshot document
+
+    [<Fact>]
+    let parser_link_shortcut_ignore_for_now () =
+        let text = "[note]"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+
+    [<Fact>]
+    let parser_xref_note () =
+        let text = "[:note]"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note]]; (0,0)-(0,7)" ]
+
+    [<Fact>]
+    let parser_xref_note_heading_at () =
+        //          0123456789012345
+        let text = "[:note@heading]"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note|heading]]; (0,0)-(0,15)" ]
+
+    [<Fact>]
+    let parser_xref_note_heading_pipe () =
+        let text = "[:note|heading]"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note|heading]]; (0,0)-(0,15)" ]
+
+    [<Fact>]
+    let parser_xref_wiki_note () =
+        let text = "[[note]]"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note]]; (0,0)-(0,8)" ]
+
+    [<Fact>]
+    let parser_xref_wiki_note_heading_pipe () =
+        //          01234567890123456
+        let text = "[[note|heading]]"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note|heading]]; (0,0)-(0,16)" ]
+
+    [<Fact>]
+    let parser_xref_wiki_text_before () =
+        //          0123456789012
+        let text = "Before [[N]]"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[N]]; (0,7)-(0,12)" ]
+
+    [<Fact>]
+    let parser_xref_wiki_text_after () =
+        //          0123456789012345
+        let text = "[[note]]! Other"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note]]; (0,0)-(0,8)" ]
+
+    [<Fact>]
+    let parser_xref_wiki_text_around () =
+        //          0123456789012
+        let text = "To [[note]]!"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "X: [[note]]; (0,3)-(0,11)" ]
+
+    [<Fact>]
+    let parser_xref_wiki_2nd_line () =
+        //                    1         2         3
+        //          0123456789012345678901234567890
+        let text = "# H1\nThis is [[note]] huh!\n"
+        //          01234 0123456789012345678901
+        let document = scrapeString text
+        checkSnapshot document
+
+module XDestTests =
+    [<Fact>]
+    let parse_at () =
+        let actual =
+            Markdown.parseXDest "[[foo@bar]]"
+
+        Assert.Equal(XDest.Heading(Some "foo", "bar") |> Some, actual)
+
+    [<Fact>]
+    let parse_at_pipe () =
+        let actual =
+            Markdown.parseXDest "[[foo@bar|baz]]"
+
+        Assert.Equal(XDest.Heading(Some "foo", "bar|baz") |> Some, actual)
+
+    [<Fact>]
+    let parse_pipe_at () =
+        let actual =
+            Markdown.parseXDest "[[foo|bar@baz]]"
+
+        Assert.Equal(XDest.Heading(Some "foo", "bar@baz") |> Some, actual)

@@ -50,7 +50,7 @@ module Document =
         let newText =
             applyTextChange change.ContentChanges document.text
 
-        let newElements = scrapeText newText
+        let newElements = parseText newText
 
         { document with
             version = newVersion
@@ -60,7 +60,7 @@ module Document =
     let fromLspDocument (item: TextDocumentItem) : Document =
         let path = PathUri.fromString item.Uri
         let text = mkText item.Text
-        let elements = scrapeText text
+        let elements = parseText text
 
         { path = path
           version = Some item.Version
@@ -74,7 +74,7 @@ module Document =
                 (new StreamReader(path.AbsolutePath)).ReadToEnd()
 
             let text = mkText content
-            let elements = scrapeText text
+            let elements = parseText text
 
             Some
                 { path = path
@@ -339,7 +339,7 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
 let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [] =
     let name = h.text.TrimStart([| '#'; ' ' |])
     let name = $"H{h.level}: {name}"
-    let kind = SymbolKind.Module
+    let kind = SymbolKind.Key
 
     let location =
         { Uri = docUri.Uri.OriginalString

@@ -1,9 +1,9 @@
 module Marksman.Parser
 
 open System
-open FSharp.Formatting.Markdown
 open Ionide.LanguageServerProtocol.Types
 
+open Markdig.Syntax.Inlines
 open Text
 open Misc
 
@@ -12,13 +12,13 @@ type NoteName = string
 [<RequireQualifiedAccess>]
 type XDest =
     | Note of NoteName
-    | Heading of note: NoteName * heading: string
+    | Heading of note: option<NoteName> * heading: string
 
 module XDest =
     let fmt =
         function
         | XDest.Note name -> $"[[{name}]]"
-        | XDest.Heading (note, heading) -> $"[[{note}|{heading}]]"
+        | XDest.Heading (note, heading) -> $"[[{note |> Option.defaultValue String.Empty}|{heading}]]"
 
 type XRef =
     { text: string
@@ -27,11 +27,7 @@ type XRef =
 
 module XRef =
     let fmt x =
-        let lines =
-            [ $"X: {XDest.fmt x.dest}; {x.range}"
-              $"  text: {x.text}" ]
-
-        String.Join(Environment.NewLine, lines)
+        $"X: {XDest.fmt x.dest}; {x.range.DebuggerDisplay}"
 
 type Element =
     | H of Heading
@@ -64,12 +60,12 @@ module Heading =
     let fmt = fmtHeading
 
 module Element =
+    let fmt = fmtElement
+
     let range =
         function
         | H h -> h.range
         | X x -> x.range
-
-    let fmt = fmtElement
 
     let asHeading =
         function
@@ -81,64 +77,169 @@ module Element =
         |> Array.map asHeading
         |> Array.collect Option.toArray
 
-let mdRangeToRange (mdRange: MarkdownRange) : Range =
-    // It seems that MarkdownRange has lines starting with 1
-    assert (mdRange.StartLine > 0)
+module Markdown =
+    open Markdig
+    open Markdig.Syntax
+    open Markdig.Parsers
+    open Markdig.Helpers
 
-    let startPos =
-        { Line = mdRange.StartLine - 1
-          Character = mdRange.StartColumn }
+    type MarksmanLinkType =
+        | DoubleBracket
+        | BracketColon
 
-    let endPos =
-        { Line = mdRange.EndLine - 1
-          Character = mdRange.EndColumn }
+    type MarksmanLink(text: string) =
+        inherit LeafInline()
+        member val Text = text
 
-    { Start = startPos; End = endPos }
+    type MarksmanLinkParser =
+        inherit InlineParser
 
-let rec scrapeSpan (text: Text) (span: MarkdownSpan) : seq<Element> =
-    seq {
-        match span with
-        | DirectLink (spans, url, titleOpt, range) -> ()
-        | IndirectLink (spans, original, key, range) -> ()
-        | MarkdownPatterns.SpanLeaf _ -> ()
-        | MarkdownPatterns.SpanNode (_, spans) ->
-            for span in spans do
-                yield! scrapeSpan text span
-    }
+        new() as this =
+            { inherit InlineParser() }
+            then this.OpeningCharacters <- [| '[' |]
 
-let rec scrapeParagraph (text: Text) (par: MarkdownParagraph) : seq<Element> =
-    seq {
-        match par with
-        | Heading (level, spans, mdRange) ->
-            let mdRange =
-                mdRange
-                |> Option.orElseWith (fun _ -> failwith $"No range for {par}")
-                |> Option.get
+        override this.Match(processor, slice) =
+            let nextChar = slice.PeekCharExtra(1)
 
-            let range = mdRangeToRange mdRange
-            let headingText = text.Substring range
+            let linkType =
+                if nextChar = ':' then
+                    Some BracketColon
+                else if nextChar = '[' then
+                    Some DoubleBracket
+                else
+                    None
 
-            let children =
-                Seq.collect (scrapeSpan text) spans |> Array.ofSeq
+            match linkType with
+            | Some linkType ->
+                let start = slice.Start
+                let mutable found = false
+                let mutable current = slice.NextChar()
 
-            yield
-                Element.H
-                    { level = level
-                      text = headingText
-                      scope = range
-                      range = range
-                      children = children }
-        | MarkdownPatterns.ParagraphLeaf _ -> ()
-        | MarkdownPatterns.ParagraphSpans (_, spans) ->
-            for span in spans do
-                yield! scrapeSpan text span
-        | MarkdownPatterns.ParagraphNested (_, parsList) ->
-            for pars in parsList do
-                for par in pars do
-                    yield! scrapeParagraph text par
-    }
+                while not (current.IsNewLineOrLineFeed()) && not found do
+                    if current = ']' then
+                        match linkType with
+                        | BracketColon -> found <- true
+                        | DoubleBracket ->
+                            let prev = slice.PeekCharExtra(-1)
 
-let rec reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
+                            if prev = ']' then
+                                found <- true
+                            else
+                                current <- slice.NextChar()
+                    else
+                        current <- slice.NextChar()
+
+                if found then
+                    let end_ = slice.Start
+
+                    let text =
+                        slice.Text.Substring(start, end_ - start + 1)
+
+                    let link = MarksmanLink(text)
+                    link.Span <- SourceSpan(start, end_)
+                    processor.Inline <- link
+
+                found
+            | _ -> false
+
+    let markdigPipeline =
+        let pipelineBuilder =
+            MarkdownPipelineBuilder()
+
+        pipelineBuilder.InlineParsers.Insert(0, MarksmanLinkParser())
+
+        pipelineBuilder.Build()
+
+    let sourceSpanToRange (text: Text) (span: SourceSpan) : Range =
+        let start =
+            text.lineMap.FindPosition(span.Start)
+
+        let endInclusive =
+            text.lineMap.FindPosition(span.End)
+
+        let endOffset =
+            if Char.IsSurrogate(text.content, span.End) then
+                2
+            else
+                1
+
+
+        { Start = start
+          End = { endInclusive with Character = endInclusive.Character + endOffset } }
+
+    let parseXDest (text: string) : option<XDest> =
+        assert
+            ((text.StartsWith "[[" && text.EndsWith "]]")
+             || (text.StartsWith "[:" && text.EndsWith "]"))
+
+        let dropOnEnd =
+            if text.StartsWith("[[") then 2 else 1
+
+        let targetLength =
+            text.Length - 2 - dropOnEnd
+
+        assert (targetLength > 0)
+        let inner = text.Substring(2, targetLength) // drop [:, [[ and ] or ]]
+        let parts = inner.Split([| '|'; '@' |], 2)
+
+        if parts.Length = 1 then
+            XDest.Note inner |> Some
+        else
+            let note = parts[0]
+            let heading = parts[1]
+
+            if String.IsNullOrWhiteSpace heading then
+                XDest.Note note |> Some
+            else if String.IsNullOrWhiteSpace note then
+                XDest.Heading(None, heading) |> Some
+            else
+                XDest.Heading(Some note, heading) |> Some
+
+    let scrapeText (text: Text) : array<Element> =
+        let parsed: MarkdownObject =
+            Markdown.Parse(text.content, markdigPipeline)
+
+        let elements = ResizeArray()
+
+        for b in parsed.Descendants() do
+            match b with
+            | :? HeadingBlock as h ->
+                let level = h.Level
+
+                let title =
+                    text.content.Substring(h.Span.Start, h.Span.Length)
+
+                let range = sourceSpanToRange text h.Span
+
+                let heading =
+                    H
+                        { level = level
+                          text = title
+                          range = range
+                          scope = range
+                          children = [||] }
+
+                elements.Add(heading)
+            | :? MarksmanLink as link ->
+                let fullText = link.Text
+
+                match parseXDest fullText with
+                | Some dest ->
+                    let range = sourceSpanToRange text link.Span
+
+                    let xref =
+                        X
+                            { text = fullText
+                              dest = dest
+                              range = range }
+
+                    elements.Add(xref)
+                | _ -> ()
+            | _ -> ()
+
+        elements.ToArray()
+
+let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
     seq {
         let mutable headStack: list<Heading> = []
         let mutable accChildren: list<Element> = []
@@ -211,7 +312,7 @@ let rec reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
             yield child
     }
 
-let rec sortElements (elements: array<Element>) : unit =
+let rec private sortElements (elements: array<Element>) : unit =
     for el in elements do
         match el with
         | H h -> sortElements h.children
@@ -223,11 +324,8 @@ let rec sortElements (elements: array<Element>) : unit =
 
     Array.sortInPlaceBy elementStart elements
 
-let rec scrapeText (text: Text) : array<Element> =
-    let parsed = Markdown.Parse(text.content)
-
-    let flatElements =
-        Seq.collect (scrapeParagraph text) parsed.Paragraphs
+let rec parseText (text: Text) : array<Element> =
+    let flatElements = Markdown.scrapeText text
 
     let hierarchicalElements =
         reconstructHierarchy text flatElements

@@ -40,6 +40,10 @@ type LineMap =
                   Character = offset - start }
         | _ -> None
 
+    member this.FindPosition(offset: int) : Position =
+        this.TryFindPosition(offset)
+        |> Option.defaultWith (fun _ -> failwith $"Couldn't find offset's position: {offset}")
+
     member this.TryFindOffset(pos: Position) : option<int> =
         if pos.Line >= this.Map.Length then
             None

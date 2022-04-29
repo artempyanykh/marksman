@@ -2345,7 +2345,7 @@ module Types =
     /// @since 3.16.0
     type DeleteFilesParams = {
         /// An array of all files/folders deleted in this operation.
-        Files: FileCreate[]
+        Files: FileDelete[]
     }
 
 open Types

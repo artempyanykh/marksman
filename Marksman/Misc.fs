@@ -22,7 +22,8 @@ type String with
                 false
             else
                 match this[thisIdx], other[otherIdx] with
-                | thisChar, otherChar when thisChar = otherChar -> isMatching (thisIdx + 1) (otherIdx + 1)
+                | thisChar, otherChar when Char.ToLower(thisChar) = Char.ToLower(otherChar) ->
+                    isMatching (thisIdx + 1) (otherIdx + 1)
                 | _ -> isMatching thisIdx (otherIdx + 1)
 
         isMatching 0 0

@@ -212,6 +212,8 @@ module Folder =
         match doc with
         | None -> [||]
         | Some doc ->
+            let curDocName = documentName doc folder
+
             let isAtPoint =
                 function
                 | CP cp -> cp.range.End = pos
@@ -230,7 +232,7 @@ module Folder =
                         let destDoc =
                             XDest.destDoc ref.dest
                             // Absence of explicit doc means completion inside the current doc
-                            |> Option.defaultWith (fun () -> documentName doc folder)
+                            |> Option.defaultValue curDocName
                             |> Some
 
                         destDoc, XDest.destHeading ref.dest
@@ -276,20 +278,69 @@ module Folder =
                         let newText =
                             XDest.fmtStyled (XDest.isWikiBracket existingText) (XDest.isPipeDelimiter existingText) dest
 
-                        let text_edit =
+                        let textEdit =
                             { Range = Element.range atPoint
                               NewText = newText }
 
                         { CompletionItem.Create(label) with
                             Detail = detail
-                            TextEdit = Some text_edit
+                            TextEdit = Some textEdit
                             FilterText = Some newText }
 
                     matchingDocs
                     |> Seq.map toCompletionItem
                     |> Array.ofSeq
                 // Heading completion inside an already specified doc
-                | Some wantedDoc, Some wantedHeading -> [||]
+                | Some wantedDoc, Some wantedHeading ->
+                    let targetDoc =
+                        Map.values folder.documents
+                        |> Seq.tryFind (fun doc -> documentName doc folder = wantedDoc)
+
+                    match targetDoc with
+                    | None -> [||]
+                    | Some targetDoc ->
+                        let matchingHeadings =
+                            seq {
+                                for el in Document.elementsAll targetDoc do
+                                    match Element.asHeading el with
+                                    | Some h when
+                                        h.level <> 1
+                                        && wantedHeading.IsSubSequenceOf(Heading.title h)
+                                        ->
+                                        yield h
+                                    | _ -> ()
+                            }
+
+                        let toCompletionItem heading =
+                            // TODO: consider using slug for heading
+                            let label = Heading.title heading
+
+                            let destDoc =
+                                if wantedDoc = curDocName then
+                                    None
+                                else
+                                    Some wantedDoc
+
+                            let dest = XDest.Heading(destDoc, label)
+                            let existingText = Element.text atPoint
+
+                            let newText =
+                                XDest.fmtStyled
+                                    (XDest.isWikiBracket existingText)
+                                    (XDest.isPipeDelimiter existingText)
+                                    dest
+
+                            let textEdit =
+                                { Range = Element.range atPoint
+                                  NewText = newText }
+
+                            { CompletionItem.Create(label) with
+                                TextEdit = Some textEdit
+                                FilterText = Some newText }
+
+                        matchingHeadings
+                        |> Seq.map toCompletionItem
+                        |> Array.ofSeq
                 | _ -> [||]
 
 type ClientDescription =

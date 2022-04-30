@@ -21,7 +21,7 @@ module XDest =
             | XDest.Doc name -> name
             | XDest.Heading (doc, heading) ->
                 let delim = if usePipe then "|" else "@"
-                $"{doc |> Option.defaultValue String.Empty}{delim}{heading}]]"
+                $"{doc |> Option.defaultValue String.Empty}{delim}{heading}"
 
         if useWiki then
             $"[[{inner}]]"
@@ -68,9 +68,7 @@ module XDest =
                 let doc = parts[0]
                 let heading = parts[1]
 
-                if String.IsNullOrWhiteSpace heading then
-                    XDest.Doc doc |> Some
-                else if String.IsNullOrWhiteSpace doc then
+                if String.IsNullOrWhiteSpace doc then
                     XDest.Heading(None, heading) |> Some
                 else
                     XDest.Heading(Some doc, heading) |> Some
@@ -134,6 +132,9 @@ module Heading =
 
     let text (heading: Heading) = heading.text
 
+    let title (heading: Heading) =
+        heading.text.TrimStart(' ', '#').TrimEnd(' ')
+
 module Element =
     let fmt = fmtElement
 
@@ -142,7 +143,7 @@ module Element =
         | H h -> h.range
         | X ref -> ref.range
         | CP cp -> cp.range
-    
+
     let text =
         function
         | H h -> h.text

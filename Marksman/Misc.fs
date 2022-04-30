@@ -14,6 +14,19 @@ type String with
     member this.EndsWithNewline() : bool =
         Array.exists<string> this.EndsWith lineEndings
 
+    member this.IsSubSequenceOf(other: string) : bool =
+        let rec isMatching thisIdx otherIdx =
+            if thisIdx >= this.Length then
+                true
+            else if otherIdx >= other.Length then
+                false
+            else
+                match this[thisIdx], other[otherIdx] with
+                | thisChar, otherChar when thisChar = otherChar -> isMatching (thisIdx + 1) (otherIdx + 1)
+                | _ -> isMatching thisIdx (otherIdx + 1)
+
+        isMatching 0 0
+
 let indentFmt (fmtA: 'A -> string) (a: 'A) =
     let reprA = fmtA a
 
@@ -47,8 +60,11 @@ type PathUri =
             | _ -> failwith "Incompatible Type"
 
 module PathUri =
-    let fromString(str: string) : PathUri = PathUri(Uri(str))
-    
+    let fromString (str: string) : PathUri = PathUri(Uri(str))
+
 type Range with
     static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range =
-        {Start = {Line = startLine; Character = startChar}; End = {Line = endLine; Character = endChar}}
+        { Start =
+            { Line = startLine
+              Character = startChar }
+          End = { Line = endLine; Character = endChar } }

@@ -84,6 +84,34 @@ module Document =
         with
         | :? FileNotFoundException -> None
 
+    let title (doc: Document) : option<Heading> =
+        let isTitle el =
+            Element.asHeading el
+            |> Option.map (fun x -> x.level = 1)
+            |> Option.defaultValue false
+
+        let titleOpt =
+            doc.elements
+            |> Array.tryFind isTitle
+            |> Option.map (function
+                | H h -> h
+                | other -> failwith $"Expected heading: {other}")
+
+        titleOpt
+
+    let elementsAll (document: Document) : seq<Element> =
+        let rec collect els =
+            seq {
+                for el in els do
+                    yield el
+
+                    match el with
+                    | H h -> yield! collect h.children
+                    | X _
+                    | CP _ -> ()
+            }
+
+        collect document.elements
 
 type Folder =
     { name: string
@@ -165,6 +193,81 @@ module Folder =
 
     let addDocument (doc: Document) (folder: Folder) : Folder =
         { folder with documents = Map.add doc.path doc folder.documents }
+
+    let documentName (doc: Document) (folder: Folder) : DocName =
+        let docPath = doc.path.AbsolutePath
+        let folderPath = folder.root.AbsolutePath
+
+        let docRelPath =
+            Path.GetRelativePath(folderPath, docPath)
+
+        let docName =
+            Path.GetFileNameWithoutExtension(docRelPath)
+
+        docName
+
+    let findCompletionCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
+        let doc = tryFindDocument docUri folder
+
+        match doc with
+        | None -> [||]
+        | Some doc ->
+            let isAtPoint =
+                function
+                | CP cp -> cp.range.End = pos
+                | X x -> x.range.Start <= pos && pos < x.range.End
+                | _ -> false
+
+            let atPoint =
+                Document.elementsAll doc |> Seq.tryFind isAtPoint
+
+            match atPoint with
+            | None -> [||]
+            | Some atPoint ->
+                let wantedDoc, wantedHeading =
+                    match atPoint with
+                    | X ref ->
+                        let destDoc =
+                            XDest.destDoc ref.dest
+                            // Absence of explicit doc means completion inside the current doc
+                            |> Option.defaultWith (fun () -> documentName doc folder)
+                            |> Some
+
+                        destDoc, XDest.destHeading ref.dest
+                    | CP cp -> CompletionPoint.destNote cp, None
+                    | _ -> None, None
+
+                // Now we have 2 modes of completion to tackle
+                match wantedDoc, wantedHeading with
+                // Plain doc name completion
+                | Some wantedDoc, None ->
+                    let docs =
+                        Map.values folder.documents
+                        |> Seq.map (fun doc -> doc, Document.title doc, documentName doc folder)
+
+                    let isMatchingDoc (_, (title: option<Heading>), name) =
+                        let titleMatch =
+                            title
+                            |> Option.map (fun t -> wantedDoc.IsSubSequenceOf(t.text))
+                            |> Option.defaultValue false
+
+                        let nameMatch =
+                            wantedDoc.IsSubSequenceOf(name)
+
+                        titleMatch || nameMatch
+
+                    let matchingDocs =
+                        docs |> Seq.filter isMatchingDoc
+
+                    let toCompletionItem (doc, title, name) =
+                        { CompletionItem.Create(name) with Detail = Option.map Heading.text title }
+
+                    matchingDocs
+                    |> Seq.map toCompletionItem
+                    |> Array.ofSeq
+                // Heading completion inside an already specified doc
+                | Some wantedDoc, Some wantedHeading -> [||]
+                | _ -> [||]
 
 type ClientDescription =
     { info: ClientInfo option
@@ -267,6 +370,11 @@ module State =
 
         { state with folders = Map.add folder.root newFolder state.folders }
 
+    let findCompletionCandidates (pos: Position) (uri: PathUri) (state: State) : array<CompletionItem> =
+        tryFindFolder uri state
+        |> Option.map (Folder.findCompletionCandidates pos uri)
+        |> Option.defaultValue [||]
+
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
     | Some folders ->
@@ -334,7 +442,12 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
         TextDocumentSync = Some textSyncCaps
-        DocumentSymbolProvider = Some true }
+        DocumentSymbolProvider = Some true
+        CompletionProvider =
+            Some
+                { TriggerCharacters = Some [| '['; ':'; '|'; '@' |]
+                  ResolveProvider = None
+                  AllCommitCharacters = None } }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [] =
     let name = h.text.TrimStart([| '#'; ' ' |])
@@ -571,5 +684,25 @@ type MarksmanServer(_client: MarksmanClient) =
 
             AsyncLspResult.success (Some response)
         | None -> AsyncLspResult.success None
+
+    override this.TextDocumentCompletion(par: CompletionParams) =
+        let state = requireState ()
+        let pos = par.Position
+
+        let docUri =
+            par.TextDocument.Uri |> PathUri.fromString
+
+        let compCandidates =
+            State.findCompletionCandidates pos docUri state
+
+        let compList =
+            if compCandidates.Length = 0 then
+                None
+            else
+                { IsIncomplete = true
+                  Items = compCandidates }
+                |> Some
+
+        AsyncLspResult.success compList
 
     override this.Dispose() = ()

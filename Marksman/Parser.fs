@@ -7,18 +7,28 @@ open Markdig.Syntax.Inlines
 open Text
 open Misc
 
-type NoteName = string
+type DocName = string
 
 [<RequireQualifiedAccess>]
 type XDest =
-    | Note of NoteName
-    | Heading of note: option<NoteName> * heading: string
+    | Doc of DocName
+    | Heading of doc: option<DocName> * heading: string
 
 module XDest =
     let fmt =
         function
-        | XDest.Note name -> $"[[{name}]]"
-        | XDest.Heading (note, heading) -> $"[[{note |> Option.defaultValue String.Empty}|{heading}]]"
+        | XDest.Doc name -> $"[[{name}]]"
+        | XDest.Heading (doc, heading) -> $"[[{doc |> Option.defaultValue String.Empty}|{heading}]]"
+
+    let destDoc =
+        function
+        | XDest.Doc name -> Some name
+        | XDest.Heading (docOpt, _) -> docOpt
+
+    let destHeading =
+        function
+        | XDest.Doc _ -> None
+        | XDest.Heading (_, heading) -> Some heading
 
 type XRef =
     { text: string
@@ -34,6 +44,16 @@ type CompletionPoint = { text: string; range: Range }
 module CompletionPoint =
     let fmt cp =
         $"CP: `{cp.text}`: {cp.range.DebuggerDisplay}"
+
+    let isRef cp =
+        cp.text.StartsWith("[[")
+        || cp.text.StartsWith("[:")
+
+    let destNote cp : option<DocName> =
+        if isRef cp then
+            cp.text.Substring(2) |> Some
+        else
+            None
 
 type Element =
     | H of Heading
@@ -66,6 +86,8 @@ and private fmtHeading h =
 
 module Heading =
     let fmt = fmtHeading
+
+    let text (heading: Heading) = heading.text
 
 module Element =
     let fmt = fmtElement
@@ -125,6 +147,10 @@ module Markdown =
             match linkType with
             | Some linkType ->
                 let start = slice.Start
+
+                let offsetStart =
+                    processor.GetSourcePosition(start)
+
                 let mutable found = false
                 let mutable current = slice.NextChar()
 
@@ -147,12 +173,13 @@ module Markdown =
 
                 if found then
                     let end_ = slice.Start
+                    let offsetEnd = offsetStart + (end_ - start)
 
                     let text =
                         slice.Text.Substring(start, end_ - start + 1)
 
                     let link = MarksmanLink(text)
-                    link.Span <- SourceSpan(start, end_)
+                    link.Span <- SourceSpan(offsetStart, offsetEnd)
                     processor.Inline <- link
 
                 found
@@ -167,6 +194,10 @@ module Markdown =
 
         override this.Match(processor, slice) =
             let start = slice.Start
+
+            let offsetStart =
+                processor.GetSourcePosition(start)
+
             let mutable current = slice.NextChar()
 
             let shouldStop (char: char) =
@@ -182,11 +213,13 @@ module Markdown =
                 // -1 to exclude the whitespace/newline/0 from the completion point element
                 let end_ = slice.Start - 1
 
+                let offsetEnd = offsetStart + (end_ - start)
+
                 let text =
                     slice.Text.Substring(start, end_ - start + 1)
 
                 let link = MarksmanCompletionPoint(text)
-                link.Span <- SourceSpan(start, end_)
+                link.Span <- SourceSpan(offsetStart, offsetEnd)
                 processor.Inline <- link
                 true
             else
@@ -195,6 +228,7 @@ module Markdown =
     let markdigPipeline =
         let pipelineBuilder =
             MarkdownPipelineBuilder()
+                .UsePreciseSourceLocation()
 
         pipelineBuilder.InlineParsers.Insert(0, MarksmanCompletionPointParser())
         pipelineBuilder.InlineParsers.Insert(0, MarksmanLinkParser())
@@ -219,9 +253,12 @@ module Markdown =
           End = { endInclusive with Character = endInclusive.Character + endOffset } }
 
     let parseXDest (text: string) : option<XDest> =
-        assert
+        let validXDest =
             ((text.StartsWith "[[" && text.EndsWith "]]")
              || (text.StartsWith "[:" && text.EndsWith "]"))
+
+        if not validXDest then
+            failwith $"Malformed XDest text: {text}"
 
         let dropOnEnd =
             if text.StartsWith("[[") then 2 else 1
@@ -229,22 +266,22 @@ module Markdown =
         let targetLength =
             text.Length - 2 - dropOnEnd
 
-        assert (targetLength > 0)
+        assert (targetLength >= 0)
         let inner = text.Substring(2, targetLength) // drop [:, [[ and ] or ]]
         let parts = inner.Split([| '|'; '@' |], 2)
 
         if parts.Length = 1 then
-            XDest.Note inner |> Some
+            XDest.Doc inner |> Some
         else
-            let note = parts[0]
+            let doc = parts[0]
             let heading = parts[1]
 
             if String.IsNullOrWhiteSpace heading then
-                XDest.Note note |> Some
-            else if String.IsNullOrWhiteSpace note then
+                XDest.Doc doc |> Some
+            else if String.IsNullOrWhiteSpace doc then
                 XDest.Heading(None, heading) |> Some
             else
-                XDest.Heading(Some note, heading) |> Some
+                XDest.Heading(Some doc, heading) |> Some
 
     let scrapeText (text: Text) : array<Element> =
         let parsed: MarkdownObject =
@@ -368,15 +405,22 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
             yield child
     }
 
-let rec private sortElements (elements: array<Element>) : unit =
+let rec private sortElements (text: Text) (elements: array<Element>) : unit =
     for el in elements do
         match el with
-        | H h -> sortElements h.children
+        | H h -> sortElements text h.children
         | _ -> ()
 
     let elementStart el =
-        let start = (Element.range el).Start
-        start.Line + start.Character
+        let range = (Element.range el)
+
+        let start =
+            text.lineMap.FindOffset(range.Start)
+
+        let end_ =
+            text.lineMap.FindOffset(range.End)
+
+        (start, end_)
 
     Array.sortInPlaceBy elementStart elements
 
@@ -389,5 +433,5 @@ let rec parseText (text: Text) : array<Element> =
     let elements =
         Array.ofSeq hierarchicalElements
 
-    sortElements elements
+    sortElements text elements
     elements

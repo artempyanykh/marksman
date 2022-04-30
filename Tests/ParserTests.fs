@@ -161,6 +161,17 @@ module SnapshotTests =
         let document = scrapeString text
         checkInlineSnapshot document [ "CP: `[par_link`: (0,3)-(0,12)" ]
 
+    [<Fact>]
+    let complex_example_1 () =
+        let text =
+            //           1          2          3          4         5
+            //1234 5 67890123 4567890123456 789012 34567890123456789012345678901
+            "# H1\n\n## H2.1\nP2.1 [:ref1]\n[[cp1\n## H2.2 P2.2 [:cp2 next"
+        //   1       2        3             4      5
+
+        let document = scrapeString text
+        checkSnapshot document
+
 module XDestTests =
     [<Fact>]
     let parse_at () =

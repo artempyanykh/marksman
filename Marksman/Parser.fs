@@ -29,9 +29,16 @@ module XRef =
     let fmt x =
         $"X: {XDest.fmt x.dest}; {x.range.DebuggerDisplay}"
 
+type CompletionPoint = { text: string; range: Range }
+
+module CompletionPoint =
+    let fmt cp =
+        $"CP: `{cp.text}`: {cp.range.DebuggerDisplay}"
+
 type Element =
     | H of Heading
     | X of XRef
+    | CP of CompletionPoint
 
 and Heading =
     { level: int
@@ -44,6 +51,7 @@ let rec private fmtElement =
     function
     | H h -> fmtHeading h
     | X x -> XRef.fmt x
+    | CP cp -> CompletionPoint.fmt cp
 
 and private fmtHeading h =
     let l1 =
@@ -66,6 +74,7 @@ module Element =
         function
         | H h -> h.range
         | X x -> x.range
+        | CP cp -> cp.range
 
     let asHeading =
         function
@@ -88,6 +97,10 @@ module Markdown =
         | BracketColon
 
     type MarksmanLink(text: string) =
+        inherit LeafInline()
+        member val Text = text
+
+    type MarksmanCompletionPoint(text: string) =
         inherit LeafInline()
         member val Text = text
 
@@ -115,7 +128,10 @@ module Markdown =
                 let mutable found = false
                 let mutable current = slice.NextChar()
 
-                while not (current.IsNewLineOrLineFeed()) && not found do
+                let shouldStop (c: char) =
+                    c.IsNewLineOrLineFeed() || c.IsZero() || found
+
+                while not (shouldStop current) do
                     if current = ']' then
                         match linkType with
                         | BracketColon -> found <- true
@@ -142,10 +158,45 @@ module Markdown =
                 found
             | _ -> false
 
+    type MarksmanCompletionPointParser =
+        inherit InlineParser
+
+        new() as this =
+            { inherit InlineParser() }
+            then this.OpeningCharacters <- [| '[' |]
+
+        override this.Match(processor, slice) =
+            let start = slice.Start
+            let mutable current = slice.NextChar()
+
+            let shouldStop (char: char) =
+                char.IsWhiteSpaceOrZero()
+                || char.IsNewLineOrLineFeed()
+                || char = ']'
+
+            while not (shouldStop current) do
+                current <- slice.NextChar()
+
+            // We've found an unclosed link/ref
+            if current <> ']' then
+                // -1 to exclude the whitespace/newline/0 from the completion point element
+                let end_ = slice.Start - 1
+
+                let text =
+                    slice.Text.Substring(start, end_ - start + 1)
+
+                let link = MarksmanCompletionPoint(text)
+                link.Span <- SourceSpan(start, end_)
+                processor.Inline <- link
+                true
+            else
+                false
+
     let markdigPipeline =
         let pipelineBuilder =
             MarkdownPipelineBuilder()
 
+        pipelineBuilder.InlineParsers.Insert(0, MarksmanCompletionPointParser())
         pipelineBuilder.InlineParsers.Insert(0, MarksmanLinkParser())
 
         pipelineBuilder.Build()
@@ -235,6 +286,10 @@ module Markdown =
 
                     elements.Add(xref)
                 | _ -> ()
+            | :? MarksmanCompletionPoint as cp ->
+                let fullText = cp.Text
+                let range = sourceSpanToRange text cp.Span
+                elements.Add(CP { text = fullText; range = range })
             | _ -> ()
 
         elements.ToArray()
@@ -290,7 +345,8 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
 
         for el in flat do
             match el with
-            | X _ ->
+            | X _
+            | CP _ ->
                 match headStack with
                 | _ :: _ -> accChildren <- el :: accChildren
                 | [] -> yield el

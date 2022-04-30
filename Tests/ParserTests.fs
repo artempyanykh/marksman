@@ -127,6 +127,40 @@ module SnapshotTests =
         let document = scrapeString text
         checkSnapshot document
 
+    [<Fact>]
+    let parser_completion_point_1 () =
+        let text = "[["
+        let document = scrapeString text
+        checkInlineSnapshot document [ "CP: `[[`: (0,0)-(0,2)" ]
+
+    [<Fact>]
+    let parser_completion_point_2 () =
+        //          0123456789
+        let text = "[[partial other text"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "CP: `[[partial`: (0,0)-(0,9)" ]
+
+    [<Fact>]
+    let parser_completion_point_3 () =
+        //          0123456789
+        let text = "[[not_cp] other text"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+
+    [<Fact>]
+    let parser_completion_point_4 () =
+        //          0123456789
+        let text = "P: [:cp other text"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "CP: `[:cp`: (0,3)-(0,7)" ]
+
+    [<Fact>]
+    let parser_completion_point_5 () =
+        //          0123456789012
+        let text = "P: [par_link other text"
+        let document = scrapeString text
+        checkInlineSnapshot document [ "CP: `[par_link`: (0,3)-(0,12)" ]
+
 module XDestTests =
     [<Fact>]
     let parse_at () =

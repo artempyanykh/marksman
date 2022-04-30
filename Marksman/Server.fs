@@ -259,8 +259,31 @@ module Folder =
                     let matchingDocs =
                         docs |> Seq.filter isMatchingDoc
 
-                    let toCompletionItem (doc, title, name) =
-                        { CompletionItem.Create(name) with Detail = Option.map Heading.text title }
+                    let toCompletionItem (_doc, title, name) =
+                        let label =
+                            Option.map Heading.text title
+                            |> Option.defaultValue name
+
+                        let detail =
+                            if Option.isSome title then
+                                Some name
+                            else
+                                None
+
+                        let dest = XDest.Doc name
+                        let existingText = Element.text atPoint
+
+                        let newText =
+                            XDest.fmtStyled (XDest.isWikiBracket existingText) (XDest.isPipeDelimiter existingText) dest
+
+                        let text_edit =
+                            { Range = Element.range atPoint
+                              NewText = newText }
+
+                        { CompletionItem.Create(label) with
+                            Detail = detail
+                            TextEdit = Some text_edit
+                            FilterText = Some newText }
 
                     matchingDocs
                     |> Seq.map toCompletionItem

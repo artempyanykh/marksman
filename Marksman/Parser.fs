@@ -15,10 +15,20 @@ type XDest =
     | Heading of doc: option<DocName> * heading: string
 
 module XDest =
-    let fmt =
-        function
-        | XDest.Doc name -> $"[[{name}]]"
-        | XDest.Heading (doc, heading) -> $"[[{doc |> Option.defaultValue String.Empty}|{heading}]]"
+    let fmtStyled useWiki usePipe dest =
+        let inner =
+            match dest with
+            | XDest.Doc name -> name
+            | XDest.Heading (doc, heading) ->
+                let delim = if usePipe then "|" else "@"
+                $"{doc |> Option.defaultValue String.Empty}{delim}{heading}]]"
+
+        if useWiki then
+            $"[[{inner}]]"
+        else
+            $"[:{inner}]"
+
+    let fmt dest = fmtStyled true true dest
 
     let destDoc =
         function
@@ -29,6 +39,41 @@ module XDest =
         function
         | XDest.Doc _ -> None
         | XDest.Heading (_, heading) -> Some heading
+
+    let isWikiBracket (text: string) = text.StartsWith "[["
+
+    let isPipeDelimiter (text: string) = text.Contains("|")
+
+    let tryFromString (text: string) : option<XDest> =
+        let isValid =
+            ((text.StartsWith "[[" && text.EndsWith "]]")
+             || (text.StartsWith "[:" && text.EndsWith "]"))
+
+        if not isValid then
+            None
+        else
+            let dropOnEnd =
+                if text.StartsWith("[[") then 2 else 1
+
+            let targetLength =
+                text.Length - 2 - dropOnEnd
+
+            assert (targetLength >= 0)
+            let inner = text.Substring(2, targetLength) // drop [:, [[ and ] or ]]
+            let parts = inner.Split([| '|'; '@' |], 2)
+
+            if parts.Length = 1 then
+                XDest.Doc inner |> Some
+            else
+                let doc = parts[0]
+                let heading = parts[1]
+
+                if String.IsNullOrWhiteSpace heading then
+                    XDest.Doc doc |> Some
+                else if String.IsNullOrWhiteSpace doc then
+                    XDest.Heading(None, heading) |> Some
+                else
+                    XDest.Heading(Some doc, heading) |> Some
 
 type XRef =
     { text: string
@@ -95,8 +140,14 @@ module Element =
     let range =
         function
         | H h -> h.range
-        | X x -> x.range
+        | X ref -> ref.range
         | CP cp -> cp.range
+    
+    let text =
+        function
+        | H h -> h.text
+        | X ref -> ref.text
+        | CP cp -> cp.text
 
     let asHeading =
         function
@@ -252,36 +303,6 @@ module Markdown =
         { Start = start
           End = { endInclusive with Character = endInclusive.Character + endOffset } }
 
-    let parseXDest (text: string) : option<XDest> =
-        let validXDest =
-            ((text.StartsWith "[[" && text.EndsWith "]]")
-             || (text.StartsWith "[:" && text.EndsWith "]"))
-
-        if not validXDest then
-            failwith $"Malformed XDest text: {text}"
-
-        let dropOnEnd =
-            if text.StartsWith("[[") then 2 else 1
-
-        let targetLength =
-            text.Length - 2 - dropOnEnd
-
-        assert (targetLength >= 0)
-        let inner = text.Substring(2, targetLength) // drop [:, [[ and ] or ]]
-        let parts = inner.Split([| '|'; '@' |], 2)
-
-        if parts.Length = 1 then
-            XDest.Doc inner |> Some
-        else
-            let doc = parts[0]
-            let heading = parts[1]
-
-            if String.IsNullOrWhiteSpace heading then
-                XDest.Doc doc |> Some
-            else if String.IsNullOrWhiteSpace doc then
-                XDest.Heading(None, heading) |> Some
-            else
-                XDest.Heading(Some doc, heading) |> Some
 
     let scrapeText (text: Text) : array<Element> =
         let parsed: MarkdownObject =
@@ -311,7 +332,7 @@ module Markdown =
             | :? MarksmanLink as link ->
                 let fullText = link.Text
 
-                match parseXDest fullText with
+                match XDest.tryFromString fullText with
                 | Some dest ->
                     let range = sourceSpanToRange text link.Span
 

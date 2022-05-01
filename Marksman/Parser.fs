@@ -130,10 +130,12 @@ and private fmtHeading h =
 module Heading =
     let fmt = fmtHeading
 
-    let text (heading: Heading) = heading.text
+    let text (heading: Heading) : string = heading.text
 
-    let title (heading: Heading) =
+    let title (heading: Heading) : string =
         heading.text.TrimStart(' ', '#').TrimEnd(' ')
+
+    let range (heading: Heading) : Range = heading.range
 
 module Element =
     let fmt = fmtElement
@@ -153,6 +155,11 @@ module Element =
     let asHeading =
         function
         | H h -> Some h
+        | _ -> None
+
+    let asRef =
+        function
+        | X ref -> Some ref
         | _ -> None
 
     let pickHeadings (elements: array<Element>) : array<Heading> =

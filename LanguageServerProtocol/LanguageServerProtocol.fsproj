@@ -6,13 +6,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="FsLibLog.fs" />
-        <Compile Include="LanguageServerProtocol.fs" />
+        <Compile Include="FsLibLog.fs"/>
+        <Compile Include="LanguageServerProtocol.fs"/>
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-      <PackageReference Include="StreamJsonRpc" Version="2.10.44" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
+        <PackageReference Include="StreamJsonRpc" Version="2.10.44"/>
     </ItemGroup>
 
 </Project>

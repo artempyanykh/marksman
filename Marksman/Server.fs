@@ -113,6 +113,25 @@ module Document =
 
         collect document.elements
 
+    let headings (document: Document) : seq<Heading> =
+        seq {
+            for el in elementsAll document do
+                match Element.asHeading el with
+                | Some h -> yield h
+                | _ -> ()
+        }
+
+    let headingByName (name: string) (document: Document) : option<Heading> =
+        let nameSlug = name.Slug()
+        let matchingHeading h = (Heading.title h).Slug() = nameSlug
+        headings document |> Seq.tryFind matchingHeading
+
+    let elementAtPos (pos: Position) (doc: Document) : option<Element> =
+        elementsAll doc
+        |> Seq.tryFind (fun el ->
+            let range = Element.range el
+            range.Start <= pos && pos < range.End)
+
 type Folder =
     { name: string
       root: PathUri
@@ -206,6 +225,11 @@ module Folder =
 
         docName
 
+    let tryFindDocumentByName (name: DocName) (folder: Folder) : option<Document> =
+        folder.documents
+        |> Map.values
+        |> Seq.tryFind (fun doc -> documentName doc folder = name)
+
     let findCompletionCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
         let doc = tryFindDocument docUri folder
 
@@ -247,7 +271,7 @@ module Folder =
                         Map.values folder.documents
                         |> Seq.map (fun doc -> doc, Document.title doc, documentName doc folder)
 
-                    let isMatchingDoc (_, (title: option<Heading>), name) =
+                    let isMatchingDoc (_, title: option<Heading>, name) =
                         let titleMatch =
                             title
                             |> Option.map (fun t -> wantedDoc.IsSubSequenceOf(t.text))
@@ -521,7 +545,8 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
             Some
                 { TriggerCharacters = Some [| '['; ':'; '|'; '@' |]
                   ResolveProvider = None
-                  AllCommitCharacters = None } }
+                  AllCommitCharacters = None }
+        DefinitionProvider = Some true }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [] =
     let name = h.text.TrimStart([| '#'; ' ' |])
@@ -778,5 +803,49 @@ type MarksmanServer(_client: MarksmanClient) =
                 |> Some
 
         AsyncLspResult.success compList
+
+    override this.TextDocumentDefinition(par: TextDocumentPositionParams) =
+        let state = requireState ()
+
+        let docUri =
+            par.TextDocument.Uri |> PathUri.fromString
+
+        let goto =
+            monad {
+                let! folder = State.tryFindFolder docUri state
+                let! doc = Folder.tryFindDocument docUri folder
+                let! el = Document.elementAtPos par.Position doc
+                let! ref = Element.asRef el
+                // Discover target doc
+                let destDocName = XDest.destDoc ref.dest
+
+                let! destDoc =
+                    match destDocName with
+                    | None -> Some doc
+                    | Some destDocName -> Folder.tryFindDocumentByName destDocName folder
+
+                // Discover target heading range
+                let! destRange =
+                    match XDest.destHeading ref.dest with
+                    | None ->
+                        Document.title destDoc
+                        |> Option.map (fun t -> t.range)
+                        |> Option.defaultValue (destDoc.text.FullRange())
+                        |> Some
+                    | Some headingName ->
+                        let heading =
+                            Document.headingByName headingName destDoc
+
+                        heading |> Option.map Heading.range
+
+                let location =
+                    GotoResult.Single
+                        { Uri = destDoc.path.DocumentUri
+                          Range = destRange }
+
+                location
+            }
+
+        AsyncLspResult.success goto
 
     override this.Dispose() = ()

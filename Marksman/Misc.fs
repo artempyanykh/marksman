@@ -72,6 +72,9 @@ type PathUri =
         let (PathUri uri) = this
         uri
 
+    member this.DocumentUri =
+        this.Uri.OriginalString
+
     member this.AbsolutePath: string =
         this.Uri.AbsolutePath
 

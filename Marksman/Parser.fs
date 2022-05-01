@@ -3,7 +3,6 @@ module Marksman.Parser
 open System
 open Ionide.LanguageServerProtocol.Types
 
-open Markdig.Syntax.Inlines
 open Text
 open Misc
 
@@ -136,7 +135,7 @@ module Heading =
         heading.text.TrimStart(' ', '#').TrimEnd(' ')
 
     let range (heading: Heading) : Range = heading.range
-    
+
     let scope (heading: Heading) : Range = heading.scope
 
 module Element =
@@ -172,6 +171,7 @@ module Element =
 module Markdown =
     open Markdig
     open Markdig.Syntax
+    open Markdig.Syntax.Inlines
     open Markdig.Parsers
     open Markdig.Helpers
 
@@ -187,12 +187,10 @@ module Markdown =
         inherit LeafInline()
         member val Text = text
 
-    type MarksmanLinkParser =
-        inherit InlineParser
+    type MarksmanLinkParser() as this =
+        inherit InlineParser()
 
-        new() as this =
-            { inherit InlineParser() }
-            then this.OpeningCharacters <- [| '[' |]
+        do this.OpeningCharacters <- [| '[' |]
 
         override this.Match(processor, slice) =
             let nextChar = slice.PeekCharExtra(1)
@@ -246,12 +244,10 @@ module Markdown =
                 found
             | _ -> false
 
-    type MarksmanCompletionPointParser =
-        inherit InlineParser
+    type MarksmanCompletionPointParser() as this =
+        inherit InlineParser()
 
-        new() as this =
-            { inherit InlineParser() }
-            then this.OpeningCharacters <- [| '[' |]
+        do this.OpeningCharacters <- [| '[' |]
 
         override this.Match(processor, slice) =
             let start = slice.Start

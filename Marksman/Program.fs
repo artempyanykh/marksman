@@ -66,6 +66,6 @@ let main args =
 
     rootCommand args {
         description "Marksman is a language server for Markdown"
-        setHandler id
+        setHandler (fun () -> startLSP 2)
         addCommand lspCommand
     }

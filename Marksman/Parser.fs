@@ -136,6 +136,8 @@ module Heading =
         heading.text.TrimStart(' ', '#').TrimEnd(' ')
 
     let range (heading: Heading) : Range = heading.range
+    
+    let scope (heading: Heading) : Range = heading.scope
 
 module Element =
     let fmt = fmtElement

@@ -191,7 +191,8 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
                 { TriggerCharacters = Some [| '['; ':'; '|'; '@' |]
                   ResolveProvider = None
                   AllCommitCharacters = None }
-        DefinitionProvider = Some true }
+        DefinitionProvider = Some true
+        HoverProvider = Some true }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [] =
     let name = h.text.TrimStart([| '#'; ' ' |])
@@ -458,30 +459,16 @@ type MarksmanServer(_client: MarksmanClient) =
         let goto =
             monad {
                 let! folder = State.tryFindFolder docUri state
-                let! doc = Folder.tryFindDocument docUri folder
-                let! el = Document.elementAtPos par.Position doc
-                let! ref = Element.asRef el
-                // Discover target doc
-                let destDocName = XDest.destDoc ref.dest
+                let! sourceDoc = Folder.tryFindDocument docUri folder
+                let! atPos = Document.elementAtPos par.Position sourceDoc
+                let! ref = Element.asRef atPos
 
-                let! destDoc =
-                    match destDocName with
-                    | None -> Some doc
-                    | Some destDocName -> Folder.tryFindDocumentByName destDocName folder
+                let! destDoc, destHeading = Folder.tryFindReferenceTarget sourceDoc ref folder
 
-                // Discover target heading range
-                let! destRange =
-                    match XDest.destHeading ref.dest with
-                    | None ->
-                        Document.title destDoc
-                        |> Option.map (fun t -> t.range)
-                        |> Option.defaultValue (destDoc.text.FullRange())
-                        |> Some
-                    | Some headingName ->
-                        let heading =
-                            Document.headingByName headingName destDoc
-
-                        heading |> Option.map Heading.range
+                let destRange =
+                    destHeading
+                    |> Option.map Heading.range
+                    |> Option.defaultWith destDoc.text.FullRange
 
                 let location =
                     GotoResult.Single
@@ -492,5 +479,38 @@ type MarksmanServer(_client: MarksmanClient) =
             }
 
         AsyncLspResult.success goto
+
+    override this.TextDocumentHover(par: TextDocumentPositionParams) =
+        let state = requireState ()
+
+        let docUri =
+            par.TextDocument.Uri |> PathUri.fromString
+
+        let hover =
+            monad {
+                let! folder = State.tryFindFolder docUri state
+                let! sourceDoc = Folder.tryFindDocument docUri folder
+                let! atPos = Document.elementAtPos par.Position sourceDoc
+                let! ref = Element.asRef atPos
+
+                let! destDoc, destHeading = Folder.tryFindReferenceTarget sourceDoc ref folder
+
+                let destScope =
+                    destHeading
+                    |> Option.map Heading.scope
+                    |> Option.defaultWith destDoc.text.FullRange
+
+                let content =
+                    destDoc.text.Substring(destScope)
+                    |> markdown
+                    |> MarkupContent
+
+                let hover =
+                    { Contents = content; Range = None }
+
+                hover
+            }
+
+        AsyncLspResult.success hover
 
     override this.Dispose() = ()

@@ -79,13 +79,13 @@ type Text =
         this.content.Substring(s, e - s)
 
     member this.FullRange() : Range =
-        let lineNum = this.lineMap.Map.Length
+        let lineNum = this.lineMap.Map.Length - 1
         let start = { Line = 0; Character = 0 }
         let end_ = { Line = lineNum; Character = 0 }
         { Start = start; End = end_ }
 
     member this.EndRange() : Range =
-        let lineNum = this.lineMap.Map.Length
+        let lineNum = this.lineMap.Map.Length - 1
         let end_ = { Line = lineNum; Character = 0 }
         { Start = end_; End = end_ }
 

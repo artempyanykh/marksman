@@ -4,6 +4,7 @@ open System
 open System.IO
 open Ionide.LanguageServerProtocol.Types
 open LanguageServerProtocol.Logging
+open FSharpPlus.GenericBuilders
 
 open Text
 open Parser
@@ -363,3 +364,24 @@ module Folder =
                         |> Seq.map toCompletionItem
                         |> Array.ofSeq
                 | _ -> [||]
+
+    let tryFindReferenceTarget (sourceDoc: Document) (ref: XRef) (folder: Folder) : option<Document * Option<Heading>> =
+        // Discover target doc.
+        let destDocName = XDest.destDoc ref.dest
+
+        let destDoc =
+            match destDocName with
+            | None -> Some sourceDoc
+            | Some destDocName -> tryFindDocumentByName destDocName folder
+
+        match destDoc with
+        | None -> None
+        | Some destDoc ->
+            // Discover target heading.
+            // When target heading is specified but can't be found, the whole thing turns into None.
+            match XDest.destHeading ref.dest with
+            | None -> Some(destDoc, Document.title destDoc)
+            | Some headingName ->
+                match Document.headingByName headingName destDoc with
+                | Some _ as heading -> Some(destDoc, heading)
+                | _ -> None

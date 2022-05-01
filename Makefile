@@ -4,41 +4,41 @@ $(eval $(ARGS):;@:)
 
 # Do some magic to figure out host's OS and ARCH.
 # This will be used later to build RID for publishing of a self-contained binary.
-OS :=
-ARCH :=
+OS_ID :=
+ARCH_ID :=
 ifeq ($(OS),Windows_NT)
-    OS := win
+    OS_ID := win
     ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
-        ARCH := x64
+        ARCH_ID := x64
     else
         ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
-            ARCH := x64
+            ARCH_ID := x64
         endif
         ifeq ($(PROCESSOR_ARCHITECTURE),x86)
-            ARCH := x32
+            ARCH_ID := x32
         endif
     endif
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
-        OS := linux
+        OS_ID := linux
     endif
     ifeq ($(UNAME_S),Darwin)
-        OS := osx
+        OS_ID := osx
     endif
     UNAME_P := $(shell uname -p)
     ifeq ($(UNAME_P),x86_64)
-        ARCH := x64
+        ARCH_ID := x64
     endif
     ifneq ($(filter %86,$(UNAME_P)),)
-        ARCH := x32
+        ARCH_ID := x32
     endif
     ifneq ($(filter arm%,$(UNAME_P)),)
-        ARCH := arm64
+        ARCH_ID := arm64
     endif
 endif
 
-RID := $(OS)-$(ARCH)
+RID := $(OS_ID)-$(ARCH_ID)
 
 .PHONY: build
 build:
@@ -57,7 +57,13 @@ publish:
 		-p:EnableCompressionInSingleFile=true \
 		Marksman/Marksman.fsproj
 		
+# Install the binary to $HOME/.local/bin folder
 .PHONY: install
+ifeq ($(OS_ID),win)
+install: publish
+	cmd /C scripts\install.bat
+else
 install: publish
 	mkdir -p $${HOME}/.local/bin
 	cp -f Marksman/bin/Release/net6.0/$(RID)/publish/Marksman $${HOME}/.local/bin
+endif

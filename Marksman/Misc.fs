@@ -1,6 +1,7 @@
 module Marksman.Misc
 
 open System
+open System.Text
 open Ionide.LanguageServerProtocol.Types
 
 let todo what = failwith $"{what} not implemented"
@@ -27,6 +28,34 @@ type String with
                 | _ -> isMatching thisIdx (otherIdx + 1)
 
         isMatching 0 0
+
+    member this.Slug() : string =
+        let mutable sb = StringBuilder()
+        let mutable sepSeen = false
+        let mutable chunkState = 0 // 0 no text chunk, 1 chunk in progress, 2 finished
+
+        for char in this.ToCharArray() do
+            let isPunct =
+                Char.IsPunctuation(char) || Char.IsSymbol(char)
+
+            let isSep =
+                Char.IsWhiteSpace(char) || char = '-'
+
+            let isToOut = not isPunct && not isSep
+
+            if isSep then sepSeen <- true
+
+            if isToOut then
+                if sepSeen && chunkState = 2 then
+                    sb <- sb.Append('-')
+                    sepSeen <- false
+
+                chunkState <- 1
+                sb <- sb.Append(Char.ToLower(char))
+            else if chunkState = 1 then
+                chunkState <- 2
+
+        sb.ToString()
 
 let indentFmt (fmtA: 'A -> string) (a: 'A) =
     let reprA = fmtA a

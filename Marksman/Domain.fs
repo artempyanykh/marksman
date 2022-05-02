@@ -3,7 +3,7 @@ module Marksman.Domain
 open System
 open System.IO
 open Ionide.LanguageServerProtocol.Types
-open LanguageServerProtocol.Logging
+open Ionide.LanguageServerProtocol.Logging
 open FSharpPlus.GenericBuilders
 
 open Text

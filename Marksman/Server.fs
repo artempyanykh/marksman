@@ -5,7 +5,7 @@ open System.IO
 open Ionide.LanguageServerProtocol
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Server
-open LanguageServerProtocol.Logging
+open Ionide.LanguageServerProtocol.Logging
 open FSharpPlus.GenericBuilders
 
 open Marksman.Misc

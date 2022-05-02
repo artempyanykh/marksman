@@ -2,7 +2,7 @@
 
 open System
 open Ionide.LanguageServerProtocol
-open LanguageServerProtocol.Logging
+open Ionide.LanguageServerProtocol.Logging
 open Serilog
 
 module MS = Marksman.Server

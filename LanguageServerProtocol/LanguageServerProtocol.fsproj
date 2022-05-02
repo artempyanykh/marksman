@@ -8,6 +8,10 @@
 
     <ItemGroup>
         <Compile Include="FsLibLog.fs"/>
+        <Compile Include="JsonRpc.fs"/>
+        <Compile Include="Types.fs"/>
+        <Compile Include="Client.fs"/>
+        <Compile Include="Server.fs"/>
         <Compile Include="LanguageServerProtocol.fs"/>
     </ItemGroup>
 

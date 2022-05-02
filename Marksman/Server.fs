@@ -197,7 +197,7 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
 let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [] =
     let name = h.text.TrimStart([| '#'; ' ' |])
     let name = $"H{h.level}: {name}"
-    let kind = SymbolKind.Key
+    let kind = SymbolKind.String
 
     let location =
         { Uri = docUri.Uri.OriginalString
@@ -218,7 +218,7 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [
 
 let rec headingToDocumentSymbol (h: Heading) : DocumentSymbol =
     let name = h.text.TrimStart([| '#'; ' ' |])
-    let kind = SymbolKind.Module
+    let kind = SymbolKind.String
     let range = h.scope
     let selectionRange = h.range
 

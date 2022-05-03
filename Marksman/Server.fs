@@ -328,7 +328,7 @@ type MarksmanServer(client: MarksmanClient) =
             )
 
             let newFolderDiag =
-                Diagnostics.diagnosticForFolder folder
+                Diag.diagnosticForFolder folder
 
             newWorkspaceDiag <- Map.add folder.root newFolderDiag newWorkspaceDiag
 
@@ -443,24 +443,43 @@ type MarksmanServer(client: MarksmanClient) =
         let path =
             par.TextDocument.Uri |> Uri |> PathUri
 
-        let docFromDisk = Document.load path
+        let state = requireState ()
+        let folder = State.tryFindFolder path state
 
-        let newState =
-            match docFromDisk with
-            | Some doc -> State.updateDocument doc (requireState ())
-            | _ -> State.removeDocument path (requireState ())
+        match folder with
+        | None -> ()
+        | Some folder ->
+            let docFromDisk =
+                Document.load folder.root path
 
-        updateState newState
+            let newState =
+                match docFromDisk with
+                | Some doc -> State.updateDocument doc (requireState ())
+                | _ -> State.removeDocument path (requireState ())
+
+            updateState newState
+
         async.Return()
 
     override this.TextDocumentDidOpen(par: DidOpenTextDocumentParams) =
-        let document =
-            Document.fromLspDocument par.TextDocument
+        let state = requireState ()
 
-        let newState =
-            State.updateDocument document (requireState ())
+        let path =
+            par.TextDocument.Uri |> PathUri.fromString
 
-        updateState newState
+        let folder = State.tryFindFolder path state
+
+        match folder with
+        | None -> ()
+        | Some folder ->
+            let document =
+                Document.fromLspDocument folder.root par.TextDocument
+
+            let newState =
+                State.updateDocument document (requireState ())
+
+            updateState newState
+
         async.Return()
 
     override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
@@ -486,15 +505,21 @@ type MarksmanServer(client: MarksmanClient) =
                 >> Log.addContext "uri" docUri
             )
 
-            match Document.load docUri with
-            | Some doc -> newState <- State.updateDocument doc newState
-            | _ ->
-                logger.warn (
-                    Log.setMessage "Couldn't load created document"
-                    >> Log.addContext "uri" docUri
-                )
+            let folder =
+                State.tryFindFolder docUri newState
 
-                ()
+            match folder with
+            | None -> ()
+            | Some folder ->
+                match Document.load folder.root docUri with
+                | Some doc -> newState <- State.updateDocument doc newState
+                | _ ->
+                    logger.warn (
+                        Log.setMessage "Couldn't load created document"
+                        >> Log.addContext "uri" docUri
+                    )
+
+                    ()
 
         updateState newState
         async.Return()

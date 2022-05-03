@@ -11,6 +11,7 @@ open Misc
 
 type Document =
     { path: PathUri
+      name: DocName
       version: option<int>
       text: Text
       elements: array<Element> }
@@ -54,18 +55,31 @@ module Document =
             text = newText
             elements = newElements }
 
-    let fromLspDocument (item: TextDocumentItem) : Document =
+    let documentName (folderPath: PathUri) (docPath: PathUri) : DocName =
+        let docPath = docPath.AbsolutePath
+        let folderPath = folderPath.AbsolutePath
+
+        let docRelPath =
+            Path.GetRelativePath(folderPath, docPath)
+
+        let docName =
+            Path.GetFileNameWithoutExtension(docRelPath)
+
+        docName
+
+    let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Document =
         let path = PathUri.fromString item.Uri
         let text = mkText item.Text
         let elements = parseText text
 
         { path = path
+          name = documentName root path
           version = Some item.Version
           text = text
           elements = elements }
 
 
-    let load (path: PathUri) : option<Document> =
+    let load (root: PathUri) (path: PathUri) : option<Document> =
         try
             let content =
                 (new StreamReader(path.AbsolutePath)).ReadToEnd()
@@ -75,6 +89,7 @@ module Document =
 
             Some
                 { path = path
+                  name = documentName root path
                   text = text
                   elements = elements
                   version = None }
@@ -155,7 +170,7 @@ module Folder =
                     let pathUri =
                         PathUri.fromString file.FullName
 
-                    let document = Document.load pathUri
+                    let document = Document.load root pathUri
 
                     match document with
                     | Some document -> yield pathUri, document
@@ -200,7 +215,7 @@ module Folder =
             None
 
     let loadDocument (uri: PathUri) (folder: Folder) : Folder =
-        match Document.load uri with
+        match Document.load folder.root uri with
         | Some doc -> { folder with documents = Map.add uri doc folder.documents }
         | None -> folder
 
@@ -210,22 +225,11 @@ module Folder =
     let addDocument (doc: Document) (folder: Folder) : Folder =
         { folder with documents = Map.add doc.path doc folder.documents }
 
-    let documentName (doc: Document) (folder: Folder) : DocName =
-        let docPath = doc.path.AbsolutePath
-        let folderPath = folder.root.AbsolutePath
-
-        let docRelPath =
-            Path.GetRelativePath(folderPath, docPath)
-
-        let docName =
-            Path.GetFileNameWithoutExtension(docRelPath)
-
-        docName
 
     let tryFindDocumentByName (name: DocName) (folder: Folder) : option<Document> =
         folder.documents
         |> Map.values
-        |> Seq.tryFind (fun doc -> documentName doc folder = name)
+        |> Seq.tryFind (fun doc -> doc.name = name)
 
     let findDocumentByName (name: DocName) (folder: Folder) : Document =
         tryFindDocumentByName name folder
@@ -237,7 +241,7 @@ module Folder =
         match doc with
         | None -> [||]
         | Some doc ->
-            let curDocName = documentName doc folder
+            let curDocName = doc.name
 
             let isAtPoint =
                 function
@@ -270,7 +274,7 @@ module Folder =
                 | Some wantedDoc, None ->
                     let docs =
                         Map.values folder.documents
-                        |> Seq.map (fun doc -> doc, Document.title doc, documentName doc folder)
+                        |> Seq.map (fun doc -> doc, Document.title doc, doc.name)
 
                     let isMatchingDoc (_, title: option<Heading>, name) =
                         let titleMatch =
@@ -319,7 +323,7 @@ module Folder =
                 | Some wantedDoc, Some wantedHeading ->
                     let targetDoc =
                         Map.values folder.documents
-                        |> Seq.tryFind (fun doc -> documentName doc folder = wantedDoc)
+                        |> Seq.tryFind (fun doc -> doc.name = wantedDoc)
 
                     match targetDoc with
                     | None -> [||]

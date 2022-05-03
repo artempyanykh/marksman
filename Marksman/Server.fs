@@ -1,6 +1,7 @@
 module Marksman.Server
 
 open System
+open System.Collections.Generic
 open System.IO
 open Ionide.LanguageServerProtocol
 open Ionide.LanguageServerProtocol.Types
@@ -11,6 +12,7 @@ open FSharpPlus.GenericBuilders
 open Marksman.Misc
 open Marksman.Parser
 open Marksman.Domain
+open Microsoft.FSharp.Control
 
 type ClientDescription =
     { info: ClientInfo option
@@ -33,7 +35,8 @@ module ClientDescription =
 type State =
     { client: ClientDescription
       folders: Map<PathUri, Folder>
-      revision: int }
+      revision: int
+      diagnostic: Map<PathUri, array<PathUri * array<Diagnostic>>> }
 
 module State =
     let logger =
@@ -234,12 +237,81 @@ let rec headingToDocumentSymbol (h: Heading) : DocumentSymbol =
       SelectionRange = selectionRange
       Children = Some children }
 
-type MarksmanClient(_notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
+type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
     inherit LspClient()
 
-type MarksmanServer(_client: MarksmanClient) =
+    override this.TextDocumentPublishDiagnostics(par: PublishDiagnosticsParams) =
+        notSender "textDocument/publishDiagnostics" (box par)
+        |> Async.Ignore
+
+type BackgroundMessage =
+    | Start
+    | Stop
+    | EnqueueDiagnostic of PublishDiagnosticsParams
+
+type BackgroundAgent(client: MarksmanClient) =
+    let logger =
+        LogProvider.getLoggerByName "BackgroundAgent"
+
+    let agent: MailboxProcessor<BackgroundMessage> =
+        MailboxProcessor.Start (fun inbox ->
+            let mutable shouldStart = false
+            let mutable shouldStop = false
+
+            let diagQueue: Queue<PublishDiagnosticsParams> =
+                Queue()
+
+            let processDiagQueue () =
+                async {
+                    if shouldStart && not shouldStop then
+                        match diagQueue.TryDequeue() with
+                        | false, _ -> () // do nothing, continue processing messages
+                        | true, first ->
+                            logger.trace (
+                                Log.setMessage "Updating document diagnostic"
+                                >> Log.addContext "uri" first.Uri
+                                >> Log.addContext "numEntries" first.Diagnostics.Length
+                            )
+
+                            do! client.TextDocumentPublishDiagnostics(first)
+                }
+
+            let rec processMessages () =
+                async {
+                    do! processDiagQueue ()
+                    let! msg = inbox.Receive()
+
+                    match msg with
+                    | Start ->
+                        logger.trace (Log.setMessage "Starting background agent")
+                        shouldStart <- true
+                    | Stop ->
+                        logger.trace (Log.setMessage "Stopping background agent")
+                        shouldStop <- true
+                    | EnqueueDiagnostic pars -> diagQueue.Enqueue(pars)
+
+                    do! processDiagQueue ()
+
+                    if not shouldStop then
+                        return! processMessages ()
+                    else
+                        ()
+                }
+
+            logger.trace (Log.setMessage "Preparing to start background agent")
+
+            processMessages ())
+
+    member this.EnqueueDiagnostic(par: PublishDiagnosticsParams) : unit = agent.Post(EnqueueDiagnostic par)
+    member this.Start() : unit = agent.Post(Start)
+    member this.Stop() : unit = agent.Post(Stop)
+
+type MarksmanServer(client: MarksmanClient) =
     inherit LspServer()
     let mutable state: option<State> = None
+
+    let backgroundAgent =
+        BackgroundAgent(client)
 
     let logger =
         LogProvider.getLoggerByName "MarksmanServer"
@@ -247,8 +319,46 @@ type MarksmanServer(_client: MarksmanClient) =
     let updateState (newState: State) : unit =
         logger.trace (Log.setMessage $"Updating state: revision {newState.revision}")
 
+        let mutable newWorkspaceDiag = Map.empty
+
+        for KeyValue (_, folder) in newState.folders do
+            logger.trace (
+                Log.setMessage $"Computing diagnostic"
+                >> Log.addContext "folder" folder.name
+            )
+
+            let newFolderDiag =
+                Diagnostics.diagnosticForFolder folder
+
+            newWorkspaceDiag <- Map.add folder.root newFolderDiag newWorkspaceDiag
+
+            let existingFolderDiag =
+                Map.tryFind folder.root newState.diagnostic
+                |> Option.defaultValue [||]
+
+            if newFolderDiag = existingFolderDiag then
+                logger.trace (
+                    Log.setMessage "Diagnostic didn't change"
+                    >> Log.addContext "folder" folder.name
+                )
+            else
+                logger.trace (
+                    Log.setMessage $"Diagnostic changed; queueing the update"
+                    >> Log.addContext "folder" folder.name
+                )
+
+
+                for uri, diags in newFolderDiag do
+                    let publishParams =
+                        { Uri = uri.Uri.OriginalString
+                          Diagnostics = diags }
+
+                    backgroundAgent.EnqueueDiagnostic(publishParams)
+
         let newState =
-            { newState with revision = newState.revision + 1 }
+            { newState with
+                revision = newState.revision + 1
+                diagnostic = newWorkspaceDiag }
 
         state <- Some newState
 
@@ -283,7 +393,8 @@ type MarksmanServer(_client: MarksmanClient) =
                 folders
                 |> List.map (fun x -> x.root, x)
                 |> Map.ofList
-              revision = 0 }
+              revision = 0
+              diagnostic = Map.empty }
 
         updateState state
 
@@ -294,6 +405,14 @@ type MarksmanServer(_client: MarksmanClient) =
 
         AsyncLspResult.success initResult
 
+
+    override this.Initialized(_: InitializedParams) =
+        backgroundAgent.Start()
+        async.Return()
+
+    override this.Shutdown() =
+        backgroundAgent.Stop()
+        async.Return()
 
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =
         let state = requireState ()

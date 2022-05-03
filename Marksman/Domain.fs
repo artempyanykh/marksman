@@ -4,7 +4,6 @@ open System
 open System.IO
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
-open FSharpPlus.GenericBuilders
 
 open Text
 open Parser
@@ -105,7 +104,7 @@ module Document =
 
                     match el with
                     | H h -> yield! collect h.children
-                    | X _
+                    | R _
                     | CP _ -> ()
             }
 
@@ -228,6 +227,10 @@ module Folder =
         |> Map.values
         |> Seq.tryFind (fun doc -> documentName doc folder = name)
 
+    let findDocumentByName (name: DocName) (folder: Folder) : Document =
+        tryFindDocumentByName name folder
+        |> Option.defaultWith (fun () -> failwith $"Requested document doesn't exist: {name}")
+
     let findCompletionCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
         let doc = tryFindDocument docUri folder
 
@@ -239,7 +242,7 @@ module Folder =
             let isAtPoint =
                 function
                 | CP cp -> cp.range.End = pos
-                | X x -> x.range.Start <= pos && pos < x.range.End
+                | R x -> x.range.Start <= pos && pos < x.range.End
                 | _ -> false
 
             let atPoint =
@@ -250,14 +253,14 @@ module Folder =
             | Some atPoint ->
                 let wantedDoc, wantedHeading =
                     match atPoint with
-                    | X ref ->
+                    | R ref ->
                         let destDoc =
-                            XDest.destDoc ref.dest
+                            Dest.destDoc ref.dest
                             // Absence of explicit doc means completion inside the current doc
                             |> Option.defaultValue curDocName
                             |> Some
 
-                        destDoc, XDest.destHeading ref.dest
+                        destDoc, Dest.destHeading ref.dest
                     | CP cp -> CompletionPoint.destNote cp, None
                     | _ -> None, None
 
@@ -294,11 +297,11 @@ module Folder =
                             else
                                 None
 
-                        let dest = XDest.Doc name
+                        let dest = Dest.Doc name
                         let existingText = Element.text atPoint
 
                         let newText =
-                            XDest.fmtStyled (XDest.isWikiBracket existingText) (XDest.isPipeDelimiter existingText) dest
+                            Dest.fmtStyled (Dest.isWikiBracket existingText) (Dest.isPipeDelimiter existingText) dest
 
                         let textEdit =
                             { Range = Element.range atPoint
@@ -343,13 +346,13 @@ module Folder =
                                 else
                                     Some wantedDoc
 
-                            let dest = XDest.Heading(destDoc, label)
+                            let dest = Dest.Heading(destDoc, label)
                             let existingText = Element.text atPoint
 
                             let newText =
-                                XDest.fmtStyled
-                                    (XDest.isWikiBracket existingText)
-                                    (XDest.isPipeDelimiter existingText)
+                                Dest.fmtStyled
+                                    (Dest.isWikiBracket existingText)
+                                    (Dest.isPipeDelimiter existingText)
                                     dest
 
                             let textEdit =
@@ -365,9 +368,9 @@ module Folder =
                         |> Array.ofSeq
                 | _ -> [||]
 
-    let tryFindReferenceTarget (sourceDoc: Document) (ref: XRef) (folder: Folder) : option<Document * Option<Heading>> =
+    let tryFindReferenceTarget (sourceDoc: Document) (ref: Ref) (folder: Folder) : option<Document * Option<Heading>> =
         // Discover target doc.
-        let destDocName = XDest.destDoc ref.dest
+        let destDocName = Dest.destDoc ref.dest
 
         let destDoc =
             match destDocName with
@@ -379,7 +382,7 @@ module Folder =
         | Some destDoc ->
             // Discover target heading.
             // When target heading is specified but can't be found, the whole thing turns into None.
-            match XDest.destHeading ref.dest with
+            match Dest.destHeading ref.dest with
             | None -> Some(destDoc, Document.title destDoc)
             | Some headingName ->
                 match Document.headingByName headingName destDoc with

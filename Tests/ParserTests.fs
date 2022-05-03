@@ -176,20 +176,20 @@ module XDestTests =
     [<Fact>]
     let parse_at () =
         let actual =
-            XDest.tryFromString "[[foo@bar]]"
+            Dest.tryFromString "[[foo@bar]]"
 
-        Assert.Equal(XDest.Heading(Some "foo", "bar") |> Some, actual)
+        Assert.Equal(Dest.Heading(Some "foo", "bar") |> Some, actual)
 
     [<Fact>]
     let parse_at_pipe () =
         let actual =
-            XDest.tryFromString "[[foo@bar|baz]]"
+            Dest.tryFromString "[[foo@bar|baz]]"
 
-        Assert.Equal(XDest.Heading(Some "foo", "bar|baz") |> Some, actual)
+        Assert.Equal(Dest.Heading(Some "foo", "bar|baz") |> Some, actual)
 
     [<Fact>]
     let parse_pipe_at () =
         let actual =
-            XDest.tryFromString "[[foo|bar@baz]]"
+            Dest.tryFromString "[[foo|bar@baz]]"
 
-        Assert.Equal(XDest.Heading(Some "foo", "bar@baz") |> Some, actual)
+        Assert.Equal(Dest.Heading(Some "foo", "bar@baz") |> Some, actual)

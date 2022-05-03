@@ -9,16 +9,16 @@ open Misc
 type DocName = string
 
 [<RequireQualifiedAccess>]
-type XDest =
+type Dest =
     | Doc of DocName
     | Heading of doc: option<DocName> * heading: string
 
-module XDest =
+module Dest =
     let fmtStyled useWiki usePipe dest =
         let inner =
             match dest with
-            | XDest.Doc name -> name
-            | XDest.Heading (doc, heading) ->
+            | Dest.Doc name -> name
+            | Dest.Heading (doc, heading) ->
                 let delim = if usePipe then "|" else "@"
                 $"{doc |> Option.defaultValue String.Empty}{delim}{heading}"
 
@@ -31,19 +31,19 @@ module XDest =
 
     let destDoc =
         function
-        | XDest.Doc name -> Some name
-        | XDest.Heading (docOpt, _) -> docOpt
+        | Dest.Doc name -> Some name
+        | Dest.Heading (docOpt, _) -> docOpt
 
     let destHeading =
         function
-        | XDest.Doc _ -> None
-        | XDest.Heading (_, heading) -> Some heading
+        | Dest.Doc _ -> None
+        | Dest.Heading (_, heading) -> Some heading
 
     let isWikiBracket (text: string) = text.StartsWith "[["
 
     let isPipeDelimiter (text: string) = text.Contains("|")
 
-    let tryFromString (text: string) : option<XDest> =
+    let tryFromString (text: string) : option<Dest> =
         let isValid =
             ((text.StartsWith "[[" && text.EndsWith "]]")
              || (text.StartsWith "[:" && text.EndsWith "]"))
@@ -62,24 +62,24 @@ module XDest =
             let parts = inner.Split([| '|'; '@' |], 2)
 
             if parts.Length = 1 then
-                XDest.Doc inner |> Some
+                Dest.Doc inner |> Some
             else
                 let doc = parts[0]
                 let heading = parts[1]
 
                 if String.IsNullOrWhiteSpace doc then
-                    XDest.Heading(None, heading) |> Some
+                    Dest.Heading(None, heading) |> Some
                 else
-                    XDest.Heading(Some doc, heading) |> Some
+                    Dest.Heading(Some doc, heading) |> Some
 
-type XRef =
+type Ref =
     { text: string
-      dest: XDest
+      dest: Dest
       range: Range }
 
-module XRef =
+module Ref =
     let fmt x =
-        $"X: {XDest.fmt x.dest}; {x.range.DebuggerDisplay}"
+        $"X: {Dest.fmt x.dest}; {x.range.DebuggerDisplay}"
 
 type CompletionPoint = { text: string; range: Range }
 
@@ -99,7 +99,7 @@ module CompletionPoint =
 
 type Element =
     | H of Heading
-    | X of XRef
+    | R of Ref
     | CP of CompletionPoint
 
 and Heading =
@@ -112,7 +112,7 @@ and Heading =
 let rec private fmtElement =
     function
     | H h -> fmtHeading h
-    | X x -> XRef.fmt x
+    | R x -> Ref.fmt x
     | CP cp -> CompletionPoint.fmt cp
 
 and private fmtHeading h =
@@ -134,6 +134,8 @@ module Heading =
     let title (heading: Heading) : string =
         heading.text.TrimStart(' ', '#').TrimEnd(' ')
 
+    let isTitle (heading: Heading) = heading.level <= 1
+
     let range (heading: Heading) : Range = heading.range
 
     let scope (heading: Heading) : Range = heading.scope
@@ -144,13 +146,13 @@ module Element =
     let range =
         function
         | H h -> h.range
-        | X ref -> ref.range
+        | R ref -> ref.range
         | CP cp -> cp.range
 
     let text =
         function
         | H h -> h.text
-        | X ref -> ref.text
+        | R ref -> ref.text
         | CP cp -> cp.text
 
     let asHeading =
@@ -160,7 +162,7 @@ module Element =
 
     let asRef =
         function
-        | X ref -> Some ref
+        | R ref -> Some ref
         | _ -> None
 
     let pickHeadings (elements: array<Element>) : array<Heading> =
@@ -338,12 +340,12 @@ module Markdown =
             | :? MarksmanLink as link ->
                 let fullText = link.Text
 
-                match XDest.tryFromString fullText with
+                match Dest.tryFromString fullText with
                 | Some dest ->
                     let range = sourceSpanToRange text link.Span
 
                     let xref =
-                        X
+                        R
                             { text = fullText
                               dest = dest
                               range = range }
@@ -409,7 +411,7 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
 
         for el in flat do
             match el with
-            | X _
+            | R _
             | CP _ ->
                 match headStack with
                 | _ :: _ -> accChildren <- el :: accChildren

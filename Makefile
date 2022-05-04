@@ -31,7 +31,7 @@ else
         ARCH_ID := x64
     endif
     ifneq ($(filter %86,$(UNAME_P)),)
-        ARCH_ID := x32
+        ARCH_ID := x64
     endif
     ifneq ($(filter arm%,$(UNAME_P)),)
         ARCH_ID := arm64

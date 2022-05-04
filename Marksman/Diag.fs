@@ -188,3 +188,10 @@ let diagnosticForFolder (folder: Folder) : array<PathUri * array<Lsp.Diagnostic>
 
         uri, lspDiags)
     |> Array.ofSeq
+
+let diagnosticForWorkspace (workspace: Workspace) : Map<PathUri, array<PathUri * array<Lsp.Diagnostic>>> =
+    seq {
+        for f in Workspace.folders workspace do
+            yield f.root, diagnosticForFolder f
+    }
+    |> Map.ofSeq

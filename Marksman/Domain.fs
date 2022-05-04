@@ -155,7 +155,7 @@ module Folder =
 
     let tryFindDocument (uri: PathUri) (folder: Folder) : option<Document> = Map.tryFind uri folder.documents
 
-    let rec private loadDocuments (root: PathUri) : seq<PathUri * Document> =
+    let rec private loadDocuments (root: PathUri) : seq<Document> =
         let logger =
             LogProvider.getLoggerByName "readRoot"
 
@@ -173,7 +173,7 @@ module Folder =
                     let document = Document.load root pathUri
 
                     match document with
-                    | Some document -> yield pathUri, document
+                    | Some document -> yield document
                     | _ -> ()
 
                 for dir in dirs do
@@ -200,7 +200,9 @@ module Folder =
     let tryLoad (name: string) (root: PathUri) : option<Folder> =
         if Directory.Exists(root.AbsolutePath) then
             let documents =
-                loadDocuments root |> Map.ofSeq
+                loadDocuments root
+                |> Seq.map (fun doc -> doc.path, doc)
+                |> Map.ofSeq
 
             { name = name
               root = root
@@ -392,3 +394,48 @@ module Folder =
                 match Document.headingByName headingName destDoc with
                 | Some _ as heading -> Some(destDoc, heading)
                 | _ -> None
+
+type Workspace = { folders: Map<PathUri, Folder> }
+
+module Workspace =
+    let ofFolders (folders: seq<Folder>) : Workspace =
+        { folders =
+            folders
+            |> Seq.map (fun f -> f.root, f)
+            |> Map.ofSeq }
+
+    let folders (workspace: Workspace) : seq<Folder> =
+        seq {
+            for KeyValue (_, f) in workspace.folders do
+                yield f
+        }
+
+    let tryFindFolderByPath (root: PathUri) (workspace: Workspace) : option<Folder> = Map.tryFind root workspace.folders
+
+    let tryFindFolderEnclosing (innerPath: PathUri) (workspace: Workspace) : option<Folder> =
+        workspace.folders
+        |> Map.tryPick (fun root folder ->
+            if innerPath.AbsolutePath.StartsWith(root.AbsolutePath) then
+                Some folder
+            else
+                None)
+
+    let withoutFolder (root: PathUri) (workspace: Workspace) : Workspace =
+        { workspace with folders = Map.remove root workspace.folders }
+
+    let withoutFolders (roots: seq<PathUri>) (workspace: Workspace) : Workspace =
+        let newFolders =
+            roots
+            |> Seq.fold (flip Map.remove) workspace.folders
+
+        { workspace with folders = newFolders }
+
+    let withFolder (folder: Folder) (workspace: Workspace) : Workspace =
+        { workspace with folders = Map.add folder.root folder workspace.folders }
+
+    let withFolders (folders: seq<Folder>) (workspace: Workspace) : Workspace =
+        let newFolders =
+            folders
+            |> Seq.fold (fun fs f -> Map.add f.root f fs) workspace.folders
+
+        { workspace with folders = newFolders }

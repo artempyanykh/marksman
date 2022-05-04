@@ -32,23 +32,21 @@ module ClientDescription =
 
         { info = par.ClientInfo; caps = caps }
 
+type WorkspaceDiag = Map<PathUri, array<PathUri * array<Diagnostic>>>
+
 type State =
     { client: ClientDescription
-      folders: Map<PathUri, Folder>
+      workspace: Workspace
       revision: int
-      diagnostic: Map<PathUri, array<PathUri * array<Diagnostic>>> }
+      diag: WorkspaceDiag }
 
 module State =
     let logger =
         LogProvider.getLoggerByName "State"
 
     let tryFindFolder (uri: PathUri) (state: State) : option<Folder> =
-        let root =
-            state.folders
-            |> Map.tryFindKey (fun root _ -> uri.AbsolutePath.StartsWith(root.AbsolutePath))
+        Workspace.tryFindFolderEnclosing uri state.workspace
 
-        root
-        |> Option.map (fun root -> state.folders[root])
 
     let findFolder (uri: PathUri) (state: State) : Folder =
         tryFindFolder uri state
@@ -70,11 +68,6 @@ module State =
             removed
             |> Array.map (fun f -> PathUri(Uri(f.Uri)))
 
-        let mutable newFolders = state.folders
-
-        for uri in removedUris do
-            newFolders <- Map.remove uri newFolders
-
         let addedFolders =
             seq {
                 for f in added do
@@ -83,14 +76,15 @@ module State =
                     let folder = Folder.tryLoad f.Name rootUri
 
                     match folder with
-                    | Some folder -> yield rootUri, folder
+                    | Some folder -> yield folder
                     | _ -> ()
             }
 
-        for uri, folder in addedFolders do
-            newFolders <- Map.add uri folder newFolders
+        let newWorkspace =
+            Workspace.withoutFolders removedUris state.workspace
+            |> Workspace.withFolders addedFolders
 
-        { state with folders = newFolders }
+        { state with workspace = newWorkspace }
 
     let updateDocument (newDocument: Document) (state: State) : State =
         let folder =
@@ -103,10 +97,10 @@ module State =
         let newFolder =
             { folder with documents = newContent }
 
-        let newFolders =
-            state.folders |> Map.add newFolder.root newFolder
+        let newWorkspace =
+            Workspace.withFolder newFolder state.workspace
 
-        { state with folders = newFolders }
+        { state with workspace = newWorkspace }
 
     let removeDocument (path: PathUri) (state: State) : State =
         let folder = findFolder path state
@@ -114,7 +108,10 @@ module State =
         let newFolder =
             Folder.removeDocument path folder
 
-        { state with folders = Map.add folder.root newFolder state.folders }
+        let newWorkspace =
+            Workspace.withFolder newFolder state.workspace
+
+        { state with workspace = newWorkspace }
 
     let findCompletionCandidates (pos: Position) (uri: PathUri) (state: State) : array<CompletionItem> =
         tryFindFolder uri state
@@ -316,24 +313,19 @@ type MarksmanServer(client: MarksmanClient) =
     let logger =
         LogProvider.getLoggerByName "MarksmanServer"
 
-    let updateState (newState: State) : unit =
-        logger.trace (Log.setMessage $"Updating state: revision {newState.revision}")
+    let requireState () : State =
+        Option.defaultWith (fun _ -> failwith "State was not initialized") state
 
-        let mutable newWorkspaceDiag = Map.empty
+    let queueDiagUpdate (existingDiag: WorkspaceDiag) (newDiag: WorkspaceDiag) : unit =
+        let state = requireState ()
 
-        for KeyValue (_, folder) in newState.folders do
-            logger.trace (
-                Log.setMessage $"Computing diagnostic"
-                >> Log.addContext "folder" folder.name
-            )
-
+        for folder in Workspace.folders state.workspace do
             let newFolderDiag =
-                Diag.diagnosticForFolder folder
-
-            newWorkspaceDiag <- Map.add folder.root newFolderDiag newWorkspaceDiag
+                Map.tryFind folder.root newDiag
+                |> Option.defaultValue [||]
 
             let existingFolderDiag =
-                Map.tryFind folder.root newState.diagnostic
+                Map.tryFind folder.root existingDiag
                 |> Option.defaultValue [||]
 
             for docUri, docDiag in newFolderDiag do
@@ -346,7 +338,7 @@ type MarksmanServer(client: MarksmanClient) =
                 if docDiag <> existingDocDiag then
                     logger.trace (
                         Log.setMessage "Diagnostic changed, queueing the update"
-                        >> Log.addContext "folder" folder.name
+                        >> Log.addContext "doc" docUri
                     )
 
                     let publishParams =
@@ -355,17 +347,32 @@ type MarksmanServer(client: MarksmanClient) =
 
                     backgroundAgent.EnqueueDiagnostic(publishParams)
 
+    let updateState (newState: State) : unit =
+        logger.trace (
+            Log.setMessage "Updating state"
+            >> Log.addContext "curRev" newState.revision
+        )
+
+        let existingWorkspaceDiag = newState.diag
+
+        logger.trace (Log.setMessage "Computing workspace diagnostic")
+
+        let newWorkspaceDiag =
+            Diag.diagnosticForWorkspace newState.workspace
+
         let newState =
             { newState with
                 revision = newState.revision + 1
-                diagnostic = newWorkspaceDiag }
+                diag = newWorkspaceDiag }
 
         state <- Some newState
 
-        logger.trace (Log.setMessage $"Updated state: revision {newState.revision}")
+        logger.trace (
+            Log.setMessage "Updated state"
+            >> Log.addContext "newRev" newState.revision
+        )
 
-    let requireState () : State =
-        Option.defaultWith (fun _ -> failwith "State was not initialized") state
+        queueDiagUpdate existingWorkspaceDiag newWorkspaceDiag
 
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
         let workspaceFolders =
@@ -389,12 +396,9 @@ type MarksmanServer(client: MarksmanClient) =
 
         let state =
             { client = ClientDescription.fromParams par
-              folders =
-                folders
-                |> List.map (fun x -> x.root, x)
-                |> Map.ofList
+              workspace = Workspace.ofFolders folders
               revision = 0
-              diagnostic = Map.empty }
+              diag = Map.empty }
 
         updateState state
 

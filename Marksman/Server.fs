@@ -133,7 +133,7 @@ let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
         let rootUri = Uri(rootPath) |> PathUri
 
         let rootName =
-            Path.GetFileName(rootUri.AbsolutePath)
+            Path.GetFileName(rootUri.LocalPath)
 
         Map.ofList [ rootName, rootUri ]
 

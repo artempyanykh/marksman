@@ -77,21 +77,21 @@ type PathUri =
     member this.DocumentUri =
         this.Uri.OriginalString
 
-    member this.AbsolutePath: string =
-        this.Uri.AbsolutePath
+    member this.LocalPath: string =
+        this.Uri.LocalPath
 
     override this.Equals(obj) =
         match obj with
-        | :? PathUri as other -> this.AbsolutePath.Equals(other.AbsolutePath)
+        | :? PathUri as other -> this.LocalPath.Equals(other.LocalPath)
         | _ -> false
 
 
-    override this.GetHashCode() = this.AbsolutePath.GetHashCode()
+    override this.GetHashCode() = this.LocalPath.GetHashCode()
 
     interface IComparable with
         member this.CompareTo(obj) =
             match obj with
-            | :? PathUri as other -> this.AbsolutePath.CompareTo(other.AbsolutePath)
+            | :? PathUri as other -> this.LocalPath.CompareTo(other.LocalPath)
             | _ -> failwith "Incompatible Type"
 
 module PathUri =

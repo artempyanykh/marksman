@@ -56,8 +56,8 @@ module Document =
             elements = newElements }
 
     let documentName (folderPath: PathUri) (docPath: PathUri) : DocName =
-        let docPath = docPath.AbsolutePath
-        let folderPath = folderPath.AbsolutePath
+        let docPath = docPath.LocalPath
+        let folderPath = folderPath.LocalPath
 
         let docRelPath =
             Path.GetRelativePath(folderPath, docPath)
@@ -82,7 +82,7 @@ module Document =
     let load (root: PathUri) (path: PathUri) : option<Document> =
         try
             let content =
-                (new StreamReader(path.AbsolutePath)).ReadToEnd()
+                (new StreamReader(path.LocalPath)).ReadToEnd()
 
             let text = mkText content
             let elements = parseText text
@@ -159,7 +159,7 @@ module Folder =
         let logger =
             LogProvider.getLoggerByName "readRoot"
 
-        let di = DirectoryInfo(root.AbsolutePath)
+        let di = DirectoryInfo(root.LocalPath)
 
         try
             let files = di.GetFiles("*.md")
@@ -198,7 +198,7 @@ module Folder =
             Seq.empty
 
     let tryLoad (name: string) (root: PathUri) : option<Folder> =
-        if Directory.Exists(root.AbsolutePath) then
+        if Directory.Exists(root.LocalPath) then
             let documents =
                 loadDocuments root
                 |> Seq.map (fun doc -> doc.path, doc)
@@ -415,7 +415,7 @@ module Workspace =
     let tryFindFolderEnclosing (innerPath: PathUri) (workspace: Workspace) : option<Folder> =
         workspace.folders
         |> Map.tryPick (fun root folder ->
-            if innerPath.AbsolutePath.StartsWith(root.AbsolutePath) then
+            if innerPath.LocalPath.StartsWith(root.LocalPath) then
                 Some folder
             else
                 None)

@@ -336,22 +336,22 @@ type MarksmanServer(client: MarksmanClient) =
                 Map.tryFind folder.root newState.diagnostic
                 |> Option.defaultValue [||]
 
-            if newFolderDiag = existingFolderDiag then
-                logger.trace (
-                    Log.setMessage "Diagnostic didn't change"
-                    >> Log.addContext "folder" folder.name
-                )
-            else
-                logger.trace (
-                    Log.setMessage $"Diagnostic changed; queueing the update"
-                    >> Log.addContext "folder" folder.name
-                )
+            for docUri, docDiag in newFolderDiag do
+                let existingDocDiag =
+                    existingFolderDiag
+                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
+                    |> Option.map snd
+                    |> Option.defaultValue [||]
 
+                if docDiag <> existingDocDiag then
+                    logger.trace (
+                        Log.setMessage "Diagnostic changed, queueing the update"
+                        >> Log.addContext "folder" folder.name
+                    )
 
-                for uri, diags in newFolderDiag do
                     let publishParams =
-                        { Uri = uri.Uri.OriginalString
-                          Diagnostics = diags }
+                        { Uri = docUri.Uri.OriginalString
+                          Diagnostics = docDiag }
 
                     backgroundAgent.EnqueueDiagnostic(publishParams)
 

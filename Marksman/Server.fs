@@ -227,12 +227,26 @@ let rec headingToDocumentSymbol (h: Heading) : DocumentSymbol =
         |> Element.pickHeadings
         |> Array.map headingToDocumentSymbol
 
+    let thisHeading =
+        { Name = "."
+          Detail = None
+          Kind = kind
+          Range = range
+          SelectionRange = selectionRange
+          Children = None }
+
+    let children =
+        if Array.isEmpty children then
+            None
+        else
+            Some(Array.append [| thisHeading |] children)
+
     { Name = name
       Detail = None
       Kind = kind
       Range = range
       SelectionRange = selectionRange
-      Children = Some children }
+      Children = children }
 
 type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
     inherit LspClient()

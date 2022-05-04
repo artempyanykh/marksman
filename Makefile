@@ -57,6 +57,16 @@ publish:
 		-p:EnableCompressionInSingleFile=true \
 		Marksman/Marksman.fsproj
 		
+.PHONY: publishTo
+publishTo:
+	dotnet publish -c Release -r $(RID) --self-contained true \
+		-p:PublishSingleFile=true \
+		-p:PublishTrimmed=true \
+		-p:DebugType=embedded \
+		-p:EnableCompressionInSingleFile=true \
+		Marksman/Marksman.fsproj \
+		-o $(DEST)
+		
 # Install the binary to $HOME/.local/bin folder
 .PHONY: install
 ifeq ($(OS_ID),win)

@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Release name'
+        required: true
+
+jobs:
+  build:
+    name: Build the release on ${{ matrix.os.runner }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - runner: windows-latest
+            exe: Marksman.exe
+          - runner: ubuntu-latest
+            exe: Marksman
+          - runner: macos-latest
+            exe: Marksman
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '6.0.x'
+          
+      - name: Install dependencies
+        run: dotnet restore
+      
+      - name: Build the release binary
+        run: make publishTo DEST=out
+
+      - name: Upload the binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
+          path: out/${{ matrix.os.exe }}
+          if-no-files-found: error
+  
+  release:
+    name: Create the release for ${{ matrix.os.runner }}
+    needs: build
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - runner: windows-latest
+            exe: Marksman.exe
+            release_exe: Marksman.exe
+          - runner: ubuntu-latest
+            exe: Marksman
+            release_exe: Marksman-linux
+          - runner: macos-latest
+            exe: Marksman
+            release_exe: Marksman-macos
+    steps:
+      - id: download
+        name: Download the release binary
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
+
+      - name: Rename the binary
+        shell: python
+        run: |
+          import os
+          os.rename("${{ matrix.os.exe }}", "${{ matrix.os.release_exe }}")
+
+      - name: Create a GH release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ matrix.os.release_exe }}
+          name: ${{ github.event.inputs.name }}
+          tag_name: ${{ github.event.inputs.name }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

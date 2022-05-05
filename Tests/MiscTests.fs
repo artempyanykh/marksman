@@ -44,12 +44,22 @@ module StringExtensionsTests =
     [<Fact>]
     let slug_3 () =
         Assert.Equal("wow-some-hyphens-in-the-middle", "#-wow-some-hyphens- in-the- -middle".Slug())
-        
+
     [<Fact>]
     let slug_4 () =
         Assert.Equal("multi-hyphens", "multi-------hyphens".Slug())
+
+    [<Fact>]
+    let slug_5 () = Assert.Equal("", "".Slug())
+
+    [<Fact>]
+    let lines_1 () =
+        Assert.Equal<string>([| "Line" |], "Line".Lines())
         
     [<Fact>]
-    let slug_5 () =
-        Assert.Equal("", "".Slug())
+    let lines_2 () =
+        Assert.Equal<string>([| "Line 1"; "Line 2" |], "Line 1\nLine 2".Lines())
         
+    [<Fact>]
+    let lines_3 () =
+        Assert.Equal<string>([| "Line 1"; "Line 2"; "Line 3" |], "Line 1\nLine 2\r\nLine 3".Lines())

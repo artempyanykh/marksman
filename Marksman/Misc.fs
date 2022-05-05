@@ -8,7 +8,7 @@ let todo what = failwith $"{what} not implemented"
 
 let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 
-let lineEndings = [| "\r"; "\n"; "\r\n" |]
+let lineEndings = [| "\r\n"; "\n" |]
 
 type String with
     member this.Lines() : array<string> =

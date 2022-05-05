@@ -1,64 +1,64 @@
-# Zeta Note 
+<img src="assets/readme/logo.png" width="100" align="right">
 
-_Delightful note taking in markdown..._
+# Marksman
 
-[![Build & Test](https://github.com/artempyanykh/zeta-note/actions/workflows/push.yml/badge.svg?branch=main)](https://github.com/artempyanykh/zeta-note/actions/workflows/push.yml)
+_Markdown LSP server for note-taking and more._
+
+[![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
 
 **OBLIGATORY DISCLAIMER:**
-Zeta Note is a _work-in-progress_. For me it works fine, but there wasn't
+Marksman is a _work-in-progress_. For me it works fine, but there wasn't
 much testing and stability in general isn't guaranteed.
 
 ---
 
-Zeta Note is a language server that helps you write and manage notes. The
+Marksman is an LSP server that helps you write and manage your Markdown notes. The
 primary focus is to support [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note
-taking by providing an easy way to **cross-reference notes** (see more about
-features below).
+taking by providing an easy way to **cross-reference notes**. See more about
+Marksman's features below.
 
-But you don't have to go all-in on Zettelkasten method to benefit from Zeta Note:
+But you don't have to go all-in on Zettelkasten to get value out of Marksman:
+
 1. Write your notes that way you like.
-2. Cross-reference notes using _reference_ links:
-   - `[:another-note]` - a reference to another note.
-   - `[:another-note@##Subsection]` - a reference to a subsection of a note.
-   - `[:@##Inner subsection]` - a reference to a subsection of the current note.
+2. Cross-reference notes using _reference_ links in a _wiki-link_ format:
+    - `[[another-note]]` - a reference to another note.
+    - `[[another-note#Section]]` - a reference to a section of a note.
+    - `[[#Inner subsection]]` - a reference to a section of the current note.
 
-   Auto-completion provided by Zeta Note makes this process quick and easy.
+   Auto-completion provided by Marksman makes this process quick and easy.
 3. **Go To Definition**, **Hover** preview, **Code Lenses**, and
    **Diagnostics** simplify navigating and maintaining notes.
 
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
-- VSCode via [Zeta Note VSCode][zn-vscode].
-- Neovim 0.5+ via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#zeta_note).
+- VSCode via [Marksman VSCode][mn-vscode].
+- (**TODO**: _needs updating_) Neovim 0.5+
+  via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#zeta_note).
+- (**TODO**: _needs upstreaming_) Emacs via Emacs LSP.
 
 ## How to install
 
-### Option 1: via `cargo install`
+### Option 1: use pre-built binary
 
-Given you have Rust and Cargo installed, run 
-```
-cargo install zeta-note
-```
-
-The binary will be built and installed under a local Cargo folder (usually, `$HOME/.cargo/bin`).
-
-### Option 2: use pre-built binary
-
-1. Go to [Releases](https://github.com/artempyanykh/zeta-note/releases) page: each release has pre-built binaries for Linux, MacOS, and Windows. Download the binary for your OS.
+1. Go to [Releases](https://github.com/artempyanykh/marksman/releases) page: each release has pre-built binaries for
+   Linux, MacOS, and Windows. Download the binary for your OS.
 2. Rename the binary and make it executable:
-    * MacOS: `mv zeta-note-macos zeta-note && chmod +x zeta-note`
-    * Linux: `mv zeta-note-linux zeta-note && chmod +x zeta-note`
-    * Windows: rename `zeta-note-windows.exe` to `zeta-note.exe`.
-3. Place the binary somewhere in your `PATH`. 
+    * MacOS: `mv marksman-macos marksman && chmod +x marksman`
+    * Linux: `mv marksman-linux marksman && chmod +x marksman`
+    * Windows: rename `marksman-windows.exe` to `marksman.exe`.
+3. Place the binary somewhere in your `PATH`.
     * XDG recommends using `$HOME/.local/bin/` (make sure this folder is in your `PATH`).
 
-### Option 3: build from source
-0. Install Rust and Cargo via [rustup](https://rustup.rs/).
-1. Clone the repository: `git clone https://github.com/artempyanykh/zeta-note.git`
-2. Inside `zeta-note` folder run `cargo install --path .`
-3. The binary will be installed under `$HOME/.cargo/bin` (make sure this folder is in your `PATH`).
+### Option 2: build from source
+
+0. Install [Dotnet SDK](https://dotnet.microsoft.com/en-us/download) for your OS.
+1. Clone the repository: `git clone https://github.com/artempyanykh/marksman.git`
+2. Inside `marksman` folder run `make install`
+3. The binary will be installed under `$HOME/.local/bin` (make sure this folder is in your `PATH`).
 
 ## Screenshots
+
+**TODO**: _This section is outdated. Update with the new screenshots._
 
 - Hover preview:
   ![Hover](assets/readme/hover.png)
@@ -79,43 +79,53 @@ The binary will be built and installed under a local Cargo folder (usually, `$HO
 - ✅ Go to Definition for references.
 - ✅ Hover prevew for references.
 - ✅ Diagnostics about broken references.
-- ✅ Code Lens with "# references" on headings.
-- ✅ Support references in titles.
+- 🗓 Code Lens with "# references" on headings.
+- 🗓 Add support for _regular_ links (diagnostics, completion, goto).
+- 🗓 Support references in titles.
 - ✅ Support multi-folder workspaces.
+- ✅ Custom parser for more fine-grained note structure.
 - 🗓 Rename refactor.
-- 🗓 Support for Jupyter notebooks.
-- 🗓 Custom parser for more fine-grained note structure.
 - 🗓 Support heading slugs.
 - 🗓 Add "check" command for standalone workspace checking.
 - 🗓 Add "build" command that rewrites all cross-references into proper
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.
-- 🗓 Add support for _regular_ links (diagnostics, completion, goto).
 - 🗓 Add support for images (diagnostics, completion, goto).
+- 🗓 Support for Jupyter notebooks.
+
+## Where's `zeta-note` and where's Rust?
+
+After much deliberation, I've decided that it'd be _cheaper_ for me to write a new from-scratch implementation of the
+language server **in F#** and add new features to it, than it is to add new features to the Rust version.
+
+The original Rust implementation is archived [in a separate repo][original-zn]. Further development will happen in this
+repository in F#.
 
 ---
 
 <span id="fn1">\[1\]</span>: You may have heard about [Roam Research][roam]. This is a commercial
 implementation of the Zettelkasten method and another point of reference for
-what Zeta Note is about. However, unlike a proprietary Roam Research, Zeta
+what Marksman is about. However, unlike a proprietary Roam Research, Zeta
 Note is free, open-source and integrated into your favourite editor (albeit
 for not not as feature rich as Roam Research).
 
 <span id="fn2">\[2\]</span>: There is an excellent VSCode extension called [Markdown
 Memo][md-memo]. You definitely need to check it out if you're primarily using
-VSCode as it has some features that are missing in Zeta Note and [Zeta Note
-VSCode extension][zn-vscode]. However, Markdown Memo is VSCode specific while
-Zeta Note is a generic language server, so can be used with any editor that
+VSCode as it has some features that are missing in Marksman and [Marksman
+VSCode extension][mn-vscode]. However, Markdown Memo is VSCode specific while
+Marksman is a generic language server, so can be used with any editor that
 has LSP support: Emacs, Vim, Neovim, etc.
 
-<span id="fn3">\[3\]</span>: Since Zeta Note is a regular Language Server most of the functionality
+<span id="fn3">\[3\]</span>: Since Marksman is a regular Language Server most of the functionality
 works out of the box with any LSP client. The only thing that requires custom
-handling is "Code Lenses" due to how these are defined in LSP spec.
-
-<span id="fn4">\[4\]</span>: [rust-analyzer](https://github.com/rust-analyzer/rust-analyzer) was a huge
-source of inspiration for how to implement various parts of an LSP server in Rust. Thank you!
+handling is "Code Lenses" due to how these are defined in the LSP spec.
 
 [zettel-wiki]: https://en.wikipedia.org/wiki/Zettelkasten
+
 [roam]: https://roamresearch.com
+
 [md-memo]: https://github.com/svsool/vscode-memo
-[zn-vscode]: https://github.com/artempyanykh/zeta-note-vscode
+
+[mn-vscode]: https://github.com/artempyanykh/marksman-vscode
+
+[original-zn]: https://github.com/artempyanykh/zeta-note

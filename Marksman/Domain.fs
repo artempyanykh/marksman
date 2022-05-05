@@ -387,6 +387,8 @@ module Folder =
                 | Some _ as heading -> Some(destDoc, heading)
                 | _ -> None
 
+    let docCount (folder: Folder) : int = folder.documents.Values.Count
+
 type Workspace = { folders: Map<PathUri, Folder> }
 
 module Workspace =
@@ -431,3 +433,7 @@ module Workspace =
             |> Seq.fold (fun fs f -> Map.add f.root f fs) workspace.folders
 
         { workspace with folders = newFolders }
+
+    let docCount (workspace: Workspace) : int =
+        workspace.folders.Values
+        |> Seq.sumBy Folder.docCount

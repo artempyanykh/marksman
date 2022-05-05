@@ -21,6 +21,11 @@ type ClientDescription =
         this.info
         |> Option.exists (fun x -> x.Name = "Visual Studio Code")
 
+    member this.SupportsStatus: bool =
+        match this.caps.Experimental with
+        | None -> false
+        | Some exp -> exp.Value<bool>("statusNotification")
+
 module ClientDescription =
     let fromParams (par: InitializeParams) : ClientDescription =
         let caps =
@@ -146,7 +151,7 @@ let readWorkspace (roots: Map<string, PathUri>) : list<Folder> =
     }
     |> List.ofSeq
 
-let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
+let mkServerCaps (par: InitializeParams) : ServerCapabilities =
     let workspaceFoldersCaps =
         { Supported = Some true
           ChangeNotifications = Some true }
@@ -182,10 +187,14 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
             OpenClose = Some true
             Change = Some TextDocumentSyncKind.Incremental }
 
+
+    let clientDescr =
+        ClientDescription.fromParams par
+
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
         TextDocumentSync = Some textSyncCaps
-        DocumentSymbolProvider = Some true
+        DocumentSymbolProvider = Some(not clientDescr.IsVSCode)
         CompletionProvider =
             Some
                 { TriggerCharacters = Some [| '['; '#' |]
@@ -248,6 +257,8 @@ let rec headingToDocumentSymbol (h: Heading) : DocumentSymbol =
       SelectionRange = selectionRange
       Children = children }
 
+type MarksmanStatusParams = { State: string; DocCount: int }
+
 type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
     inherit LspClient()
 
@@ -255,16 +266,20 @@ type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientReque
         notSender "textDocument/publishDiagnostics" (box par)
         |> Async.Ignore
 
-type BackgroundMessage =
+    member this.MarksmanUpdateStatus(par: MarksmanStatusParams) =
+        notSender "marksman/status" (box par)
+        |> Async.Ignore
+
+type DiagMessage =
     | Start
     | Stop
     | EnqueueDiagnostic of PublishDiagnosticsParams
 
-type BackgroundAgent(client: MarksmanClient) =
+type DiagAgent(client: MarksmanClient) =
     let logger =
         LogProvider.getLoggerByName "BackgroundAgent"
 
-    let agent: MailboxProcessor<BackgroundMessage> =
+    let agent: MailboxProcessor<DiagMessage> =
         MailboxProcessor.Start (fun inbox ->
             let mutable shouldStart = false
             let mutable shouldStop = false
@@ -317,12 +332,44 @@ type BackgroundAgent(client: MarksmanClient) =
     member this.Start() : unit = agent.Post(Start)
     member this.Stop() : unit = agent.Post(Stop)
 
+type StatusMessage = DocCount of int
+
+type StatusAgent(client: MarksmanClient) =
+    let logger =
+        LogProvider.getLoggerByName "StatusAgent"
+
+    let agent =
+        MailboxProcessor.Start (fun inbox ->
+            let rec loop cnt =
+                async {
+                    let! msg = inbox.Receive()
+
+                    match msg with
+                    | DocCount newCnt when cnt <> newCnt ->
+                        logger.trace (
+                            Log.setMessage "StatusAgent sending update"
+                            >> Log.addContext "docCount" (cnt, newCnt)
+                        )
+
+                        do! client.MarksmanUpdateStatus({ State = "ok"; DocCount = newCnt })
+                        return! loop newCnt
+                    | _ -> return! loop cnt
+                }
+
+            logger.trace (Log.setMessage "StatusAgent starting")
+            loop 0)
+
+    member this.UpdateDocCount(cnt: int) : unit = agent.Post(DocCount cnt)
+
+
 type MarksmanServer(client: MarksmanClient) =
     inherit LspServer()
     let mutable state: option<State> = None
 
-    let backgroundAgent =
-        BackgroundAgent(client)
+    let diagAgent = DiagAgent(client)
+
+    let mutable statusAgent: option<StatusAgent> =
+        None
 
     let logger =
         LogProvider.getLoggerByName "MarksmanServer"
@@ -359,7 +406,7 @@ type MarksmanServer(client: MarksmanClient) =
                         { Uri = docUri.Uri.OriginalString
                           Diagnostics = docDiag }
 
-                    backgroundAgent.EnqueueDiagnostic(publishParams)
+                    diagAgent.EnqueueDiagnostic(publishParams)
 
     let updateState (newState: State) : unit =
         logger.trace (
@@ -378,6 +425,12 @@ type MarksmanServer(client: MarksmanClient) =
             { newState with
                 revision = newState.revision + 1
                 diag = newWorkspaceDiag }
+
+        let docCount =
+            Workspace.docCount newState.workspace
+
+        statusAgent
+        |> Option.iter (fun x -> x.UpdateDocCount(docCount))
 
         state <- Some newState
 
@@ -408,8 +461,11 @@ type MarksmanServer(client: MarksmanClient) =
             >> Log.addContext "numNotes" numNotes
         )
 
+        let clientDescr =
+            ClientDescription.fromParams par
+
         let state =
-            { client = ClientDescription.fromParams par
+            { client = clientDescr
               workspace = Workspace.ofFolders folders
               revision = 0
               diag = Map.empty }
@@ -425,11 +481,23 @@ type MarksmanServer(client: MarksmanClient) =
 
 
     override this.Initialized(_: InitializedParams) =
-        backgroundAgent.Start()
+        let state = requireState ()
+
+        if state.client.SupportsStatus then
+            logger.debug (Log.setMessage "Client supports status notifications. Initializing agent.")
+            statusAgent <- StatusAgent(client) |> Some
+
+            statusAgent
+            |> Option.iter (fun x -> x.UpdateDocCount(Workspace.docCount state.workspace))
+        else
+            logger.debug (Log.setMessage "Client doesn't support status notifications. Agent won't be initialized.")
+
+        diagAgent.Start()
+
         async.Return()
 
     override this.Shutdown() =
-        backgroundAgent.Stop()
+        diagAgent.Stop()
         async.Return()
 
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =

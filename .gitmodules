@@ -1,3 +1,0 @@
-[submodule "lsp-document"]
-	path = lsp-document
-	url = git@github.com:artempyanykh/rust-lsp-document.git

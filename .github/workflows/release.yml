@@ -15,11 +15,11 @@ jobs:
       matrix:
         os:
           - runner: windows-latest
-            exe: Marksman.exe
+            exe: marksman.exe
           - runner: ubuntu-latest
-            exe: Marksman
+            exe: marksman
           - runner: macos-latest
-            exe: Marksman
+            exe: marksman
     steps:
       - uses: actions/checkout@v2
       - name: Setup dotnet
@@ -48,14 +48,14 @@ jobs:
       matrix:
         os:
           - runner: windows-latest
-            exe: Marksman.exe
-            release_exe: Marksman.exe
+            exe: marksman.exe
+            release_exe: marksman.exe
           - runner: ubuntu-latest
-            exe: Marksman
-            release_exe: Marksman-linux
+            exe: marksman
+            release_exe: marksman-linux
           - runner: macos-latest
-            exe: Marksman
-            release_exe: Marksman-macos
+            exe: marksman
+            release_exe: marksman-macos
     steps:
       - id: download
         name: Download the release binary

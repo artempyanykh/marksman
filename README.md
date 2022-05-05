@@ -1,4 +1,4 @@
-<img src="assets/readme/logo.png" width="100" align="right">
+<img src="assets/readme/logo.png" width="90" align="right">
 
 # Marksman
 

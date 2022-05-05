@@ -188,7 +188,7 @@ let mkServerCaps (_pars: InitializeParams) : ServerCapabilities =
         DocumentSymbolProvider = Some true
         CompletionProvider =
             Some
-                { TriggerCharacters = Some [| '['; ':'; '|'; '@' |]
+                { TriggerCharacters = Some [| '['; '#' |]
                   ResolveProvider = None
                   AllCommitCharacters = None }
         DefinitionProvider = Some true

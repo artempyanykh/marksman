@@ -14,20 +14,13 @@ type Dest =
     | Heading of doc: option<DocName> * heading: string
 
 module Dest =
-    let fmtStyled useWiki usePipe dest =
+    let fmt dest =
         let inner =
             match dest with
             | Dest.Doc name -> name
-            | Dest.Heading (doc, heading) ->
-                let delim = if usePipe then "|" else "@"
-                $"{doc |> Option.defaultValue String.Empty}{delim}{heading}"
+            | Dest.Heading (doc, heading) -> $"{doc |> Option.defaultValue String.Empty}#{heading}"
 
-        if useWiki then
-            $"[[{inner}]]"
-        else
-            $"[:{inner}]"
-
-    let fmt dest = fmtStyled true true dest
+        $"[[{inner}]]"
 
     let destDoc =
         function
@@ -39,27 +32,18 @@ module Dest =
         | Dest.Doc _ -> None
         | Dest.Heading (_, heading) -> Some heading
 
-    let isWikiBracket (text: string) = text.StartsWith "[["
-
-    let isPipeDelimiter (text: string) = text.Contains("|")
-
     let tryFromString (text: string) : option<Dest> =
         let isValid =
-            ((text.StartsWith "[[" && text.EndsWith "]]")
-             || (text.StartsWith "[:" && text.EndsWith "]"))
+            (text.StartsWith "[[" && text.EndsWith "]]")
 
         if not isValid then
             None
         else
-            let dropOnEnd =
-                if text.StartsWith("[[") then 2 else 1
-
-            let targetLength =
-                text.Length - 2 - dropOnEnd
+            let targetLength = text.Length - 2 - 2 // -[[ -]]
 
             assert (targetLength >= 0)
-            let inner = text.Substring(2, targetLength) // drop [:, [[ and ] or ]]
-            let parts = inner.Split([| '|'; '@' |], 2)
+            let inner = text.Substring(2, targetLength) // drop [[ and ]]
+            let parts = inner.Split('#', 2)
 
             if parts.Length = 1 then
                 Dest.Doc inner |> Some
@@ -79,7 +63,7 @@ type Ref =
 
 module Ref =
     let fmt x =
-        $"X: {Dest.fmt x.dest}; {x.range.DebuggerDisplay}"
+        $"R: {Dest.fmt x.dest}; {x.range.DebuggerDisplay}"
 
 type CompletionPoint = { text: string; range: Range }
 
@@ -87,9 +71,7 @@ module CompletionPoint =
     let fmt cp =
         $"CP: `{cp.text}`: {cp.range.DebuggerDisplay}"
 
-    let isRef cp =
-        cp.text.StartsWith("[[")
-        || cp.text.StartsWith("[:")
+    let isRef cp = cp.text.StartsWith("[[")
 
     let destNote cp : option<DocName> =
         if isRef cp then
@@ -197,16 +179,9 @@ module Markdown =
         override this.Match(processor, slice) =
             let nextChar = slice.PeekCharExtra(1)
 
-            let linkType =
-                if nextChar = ':' then
-                    Some BracketColon
-                else if nextChar = '[' then
-                    Some DoubleBracket
-                else
-                    None
+            let isRef = nextChar = '['
 
-            match linkType with
-            | Some linkType ->
+            if isRef then
                 let start = slice.Start
 
                 let offsetStart =
@@ -220,15 +195,12 @@ module Markdown =
 
                 while not (shouldStop current) do
                     if current = ']' then
-                        match linkType with
-                        | BracketColon -> found <- true
-                        | DoubleBracket ->
-                            let prev = slice.PeekCharExtra(-1)
+                        let prev = slice.PeekCharExtra(-1)
 
-                            if prev = ']' then
-                                found <- true
-                            else
-                                current <- slice.NextChar()
+                        if prev = ']' then
+                            found <- true
+                        else
+                            current <- slice.NextChar()
                     else
                         current <- slice.NextChar()
 
@@ -244,7 +216,8 @@ module Markdown =
                     processor.Inline <- link
 
                 found
-            | _ -> false
+            else
+                false
 
     type MarksmanCompletionPointParser() as this =
         inherit InlineParser()

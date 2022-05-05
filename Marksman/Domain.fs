@@ -304,10 +304,8 @@ module Folder =
                                 None
 
                         let dest = Dest.Doc name
-                        let existingText = Element.text atPoint
 
-                        let newText =
-                            Dest.fmtStyled (Dest.isWikiBracket existingText) (Dest.isPipeDelimiter existingText) dest
+                        let newText = Dest.fmt dest
 
                         let textEdit =
                             { Range = Element.range atPoint
@@ -353,13 +351,7 @@ module Folder =
                                     Some wantedDoc
 
                             let dest = Dest.Heading(destDoc, label)
-                            let existingText = Element.text atPoint
-
-                            let newText =
-                                Dest.fmtStyled
-                                    (Dest.isWikiBracket existingText)
-                                    (Dest.isPipeDelimiter existingText)
-                                    dest
+                            let newText = Dest.fmt dest
 
                             let textEdit =
                                 { Range = Element.range atPoint

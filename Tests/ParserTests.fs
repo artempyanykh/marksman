@@ -67,59 +67,40 @@ module SnapshotTests =
 
     [<Fact>]
     let parser_xref_note () =
-        let text = "[:note]"
-        let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note]]; (0,0)-(0,7)" ]
-
-    [<Fact>]
-    let parser_xref_note_heading_at () =
-        //          0123456789012345
-        let text = "[:note@heading]"
-        let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note|heading]]; (0,0)-(0,15)" ]
-
-    [<Fact>]
-    let parser_xref_note_heading_pipe () =
-        let text = "[:note|heading]"
-        let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note|heading]]; (0,0)-(0,15)" ]
-
-    [<Fact>]
-    let parser_xref_wiki_note () =
         let text = "[[note]]"
         let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note]]; (0,0)-(0,8)" ]
+        checkInlineSnapshot document [ "R: [[note]]; (0,0)-(0,8)" ]
 
     [<Fact>]
-    let parser_xref_wiki_note_heading_pipe () =
+    let parser_xref_note_heading () =
         //          01234567890123456
-        let text = "[[note|heading]]"
+        let text = "[[note#heading]]"
         let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note|heading]]; (0,0)-(0,16)" ]
+        checkInlineSnapshot document [ "R: [[note#heading]]; (0,0)-(0,16)" ]
 
     [<Fact>]
-    let parser_xref_wiki_text_before () =
+    let parser_xref_text_before () =
         //          0123456789012
         let text = "Before [[N]]"
         let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[N]]; (0,7)-(0,12)" ]
+        checkInlineSnapshot document [ "R: [[N]]; (0,7)-(0,12)" ]
 
     [<Fact>]
-    let parser_xref_wiki_text_after () =
+    let parser_xref_text_after () =
         //          0123456789012345
         let text = "[[note]]! Other"
         let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note]]; (0,0)-(0,8)" ]
+        checkInlineSnapshot document [ "R: [[note]]; (0,0)-(0,8)" ]
 
     [<Fact>]
-    let parser_xref_wiki_text_around () =
+    let parser_xref_text_around () =
         //          0123456789012
         let text = "To [[note]]!"
         let document = scrapeString text
-        checkInlineSnapshot document [ "X: [[note]]; (0,3)-(0,11)" ]
+        checkInlineSnapshot document [ "R: [[note]]; (0,3)-(0,11)" ]
 
     [<Fact>]
-    let parser_xref_wiki_2nd_line () =
+    let parser_xref_2nd_line () =
         //                    1         2         3
         //          0123456789012345678901234567890
         let text = "# H1\nThis is [[note]] huh!\n"
@@ -149,13 +130,6 @@ module SnapshotTests =
 
     [<Fact>]
     let parser_completion_point_4 () =
-        //          0123456789
-        let text = "P: [:cp other text"
-        let document = scrapeString text
-        checkInlineSnapshot document [ "CP: `[:cp`: (0,3)-(0,7)" ]
-
-    [<Fact>]
-    let parser_completion_point_5 () =
         //          0123456789012
         let text = "P: [par_link other text"
         let document = scrapeString text
@@ -165,8 +139,8 @@ module SnapshotTests =
     let complex_example_1 () =
         let text =
             //           1          2          3          4         5
-            //1234 5 67890123 4567890123456 789012 34567890123456789012345678901
-            "# H1\n\n## H2.1\nP2.1 [:ref1]\n[[cp1\n## H2.2 P2.2 [:cp2 next"
+            //1234 5 67890123 45678901234567 890123 4567890123456789012345678901
+            "# H1\n\n## H2.1\nP2.1 [[ref1]]\n[[cp1\n## H2.2 P2.2 [:cp2 next"
         //   1       2        3             4      5
 
         let document = scrapeString text
@@ -174,22 +148,22 @@ module SnapshotTests =
 
 module XDestTests =
     [<Fact>]
-    let parse_at () =
+    let parse_pound () =
         let actual =
-            Dest.tryFromString "[[foo@bar]]"
+            Dest.tryFromString "[[foo#bar]]"
 
         Assert.Equal(Dest.Heading(Some "foo", "bar") |> Some, actual)
 
     [<Fact>]
-    let parse_at_pipe () =
+    let parse_pound_pipe () =
         let actual =
-            Dest.tryFromString "[[foo@bar|baz]]"
+            Dest.tryFromString "[[foo#bar|baz]]"
 
         Assert.Equal(Dest.Heading(Some "foo", "bar|baz") |> Some, actual)
 
     [<Fact>]
-    let parse_pipe_at () =
+    let parse_pound_pound () =
         let actual =
-            Dest.tryFromString "[[foo|bar@baz]]"
+            Dest.tryFromString "[[foo#bar#baz]]"
 
-        Assert.Equal(Dest.Heading(Some "foo", "bar@baz") |> Some, actual)
+        Assert.Equal(Dest.Heading(Some "foo", "bar#baz") |> Some, actual)

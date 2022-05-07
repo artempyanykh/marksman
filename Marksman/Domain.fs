@@ -82,7 +82,7 @@ module Document =
     let load (root: PathUri) (path: PathUri) : option<Document> =
         try
             let content =
-                (new StreamReader(path.LocalPath)).ReadToEnd()
+                using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
 
             let text = mkText content
             let elements = parseText text

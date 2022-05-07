@@ -49,6 +49,8 @@ let startLSP (verbosity: int) : int =
 
     let result =
         Server.start requestHandlings input output MS.MarksmanClient (fun client -> new MS.MarksmanServer(client))
+    
+    logger.trace (Log.setMessage "Stopped Marksman LSP server")
 
     int result
 
@@ -56,14 +58,14 @@ let startLSP (verbosity: int) : int =
 let main args =
     let verbosity =
         Input.Option([ "--verbose"; "-v" ], 2, "Set logging verbosity level")
-
+        
     let lspCommand =
         command "server" {
             description "Start LSP server on stdin/stdout"
-            inputs (verbosity)
+            inputs verbosity
             setHandler startLSP
         }
-
+        
     rootCommand args {
         description "Marksman is a language server for Markdown"
         setHandler (fun () -> startLSP 2)

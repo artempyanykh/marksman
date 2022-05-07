@@ -243,11 +243,24 @@ module Server =
     let mutable quitReceived = false
     use quitSemaphore = new SemaphoreSlim(0, 1)
 
-    let onShutdown () = shutdownReceived <- true
+    let onShutdown () =
+      logger.trace (Log.setMessage "Shutdown received")
+      shutdownReceived <- true
+      // VSCode Language Client has a bug that makes it to NOT send an `exit` notification when stopping a server.
+      // https://github.com/microsoft/vscode-languageserver-node/pull/776
+      // This results in a bunch of zombie language servers just hanging around.
+      // Although the fix was merged a while ago, the new client is yet to be released.
+      // As a workaround let's forcefully exit after 10s after receiving a `shutdown` request.
+      task {
+        do! Task.Delay(10_000)
+        logger.trace (Log.setMessage "No `exit` notification within 10s after `shutdown` request. Exiting now.")
+        quitSemaphore.Release() |> ignore
+      } |> ignore
 
     jsonRpc.AddLocalRpcMethod("shutdown", Action(onShutdown))
 
     let onExit () =
+      logger.trace (Log.setMessage "Exit received")
       quitReceived <- true
       quitSemaphore.Release() |> ignore
 

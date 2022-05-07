@@ -496,7 +496,12 @@ type MarksmanServer(client: MarksmanClient) =
         async.Return()
 
     override this.Shutdown() =
+        logger.trace (Log.setMessage "Preparing for shutdown")
         diagAgent.Stop()
+        async.Return()
+
+    override this.Exit() =
+        logger.trace (Log.setMessage "Exiting")
         async.Return()
 
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =

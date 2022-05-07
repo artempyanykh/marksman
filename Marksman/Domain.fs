@@ -286,8 +286,10 @@ module Folder =
 
                         let nameMatch =
                             wantedDoc.IsSubSequenceOf(name)
+                        
+                        let notCurDoc = wantedDoc <> curDocName
 
-                        titleMatch || nameMatch
+                        (titleMatch || nameMatch) && notCurDoc
 
                     let matchingDocs =
                         docs |> Seq.filter isMatchingDoc

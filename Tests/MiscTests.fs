@@ -1,5 +1,6 @@
 module Marksman.MiscTests
 
+open System
 open Xunit
 
 open Misc
@@ -66,6 +67,28 @@ module StringExtensionsTests =
 
 module PathUriTests =
     [<Fact>]
-    let testWinPath () =
-        let puri = PathUri.fromString "file:///e%3A/notes"
-        Assert.Equal("e:/notes", puri.LocalPath)
+    let testWinPathFromUri () =
+        let uri = "file:///e%3A/notes"
+        let puri = PathUri.fromString uri
+
+        Assert.Equal("e:\\notes", puri.LocalPath)
+
+    [<Fact>]
+    let testWinPathFromPath () =
+        let puri =
+            PathUri.fromString "E:\\notes (precious)"
+
+        Assert.Equal("e:\\notes (precious)", puri.LocalPath)
+
+    [<Fact>]
+    let testWinDocUriFromUri () =
+        let uri = "file:///e%3A/notes"
+        let puri = PathUri.fromString uri
+        Assert.Equal(uri, puri.DocumentUri)
+
+    [<Fact>]
+    let testWinDocUriFromPath () =
+        let path = "E:\\notes"
+        let uri = "file:///e%3A/notes"
+        let puri = PathUri.fromString path
+        Assert.Equal(uri, puri.DocumentUri)

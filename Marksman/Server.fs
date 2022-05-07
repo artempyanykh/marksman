@@ -1,6 +1,5 @@
 module Marksman.Server
 
-open System
 open System.Collections.Generic
 open System.IO
 open Ionide.LanguageServerProtocol
@@ -71,7 +70,7 @@ module State =
 
         let removedUris =
             removed
-            |> Array.map (fun f -> PathUri(Uri(f.Uri)))
+            |> Array.map (fun f -> PathUri.fromString f.Uri)
 
         let addedFolders =
             seq {
@@ -127,7 +126,7 @@ let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
     | Some folders ->
         folders
-        |> Array.map (fun { Name = name; Uri = uri } -> name, Uri(uri) |> PathUri)
+        |> Array.map (fun { Name = name; Uri = uri } -> name, PathUri.fromString uri)
         |> Map.ofArray
     | _ ->
         let rootPath =
@@ -135,7 +134,7 @@ let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
             |> Option.orElse par.RootPath
             |> Option.defaultWith (fun () -> failwith $"No folders configured in workspace: {par}")
 
-        let rootUri = Uri(rootPath) |> PathUri
+        let rootUri = PathUri.fromString rootPath
 
         let rootName =
             Path.GetFileName(rootUri.LocalPath)
@@ -209,7 +208,7 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Heading) : SymbolInformation [
     let kind = SymbolKind.String
 
     let location =
-        { Uri = docUri.Uri.OriginalString
+        { Uri = docUri.DocumentUri
           Range = h.range }
 
     let sym =
@@ -403,7 +402,7 @@ type MarksmanServer(client: MarksmanClient) =
                     )
 
                     let publishParams =
-                        { Uri = docUri.Uri.OriginalString
+                        { Uri = docUri.DocumentUri
                           Diagnostics = docDiag }
 
                     diagAgent.EnqueueDiagnostic(publishParams)
@@ -504,7 +503,7 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
 
         let docUri =
-            par.TextDocument.Uri |> Uri |> PathUri
+            par.TextDocument.Uri |> PathUri.fromString
 
         let doc = State.tryFindDocument docUri state
 
@@ -527,7 +526,7 @@ type MarksmanServer(client: MarksmanClient) =
 
     override this.TextDocumentDidClose(par: DidCloseTextDocumentParams) =
         let path =
-            par.TextDocument.Uri |> Uri |> PathUri
+            par.TextDocument.Uri |> PathUri.fromString
 
         let state = requireState ()
         let folder = State.tryFindFolder path state

@@ -78,7 +78,19 @@ type PathUri =
         this.Uri.OriginalString
 
     member this.LocalPath: string =
-        this.Uri.LocalPath
+        let unprocessed = this.Uri.LocalPath
+
+        let isWin =
+            unprocessed.Length >= 3
+            && match unprocessed[ 0..2 ].ToCharArray() with
+               | [| '/'; drive; ':' |] when Char.IsLetter drive -> true
+               | _ -> false
+
+        if isWin then
+            // Seems like trimming the leading slash without turning all forward slashes into back-slashes is enough to make Windows recognize paths.
+            unprocessed.TrimStart('/')
+        else
+            unprocessed
 
     override this.Equals(obj) =
         match obj with

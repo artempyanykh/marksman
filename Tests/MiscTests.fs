@@ -55,11 +55,17 @@ module StringExtensionsTests =
     [<Fact>]
     let lines_1 () =
         Assert.Equal<string>([| "Line" |], "Line".Lines())
-        
+
     [<Fact>]
     let lines_2 () =
         Assert.Equal<string>([| "Line 1"; "Line 2" |], "Line 1\nLine 2".Lines())
-        
+
     [<Fact>]
     let lines_3 () =
         Assert.Equal<string>([| "Line 1"; "Line 2"; "Line 3" |], "Line 1\nLine 2\r\nLine 3".Lines())
+
+module PathUriTests =
+    [<Fact>]
+    let testWinPath () =
+        let puri = PathUri.fromString "file:///e%3A/notes"
+        Assert.Equal("e:/notes", puri.LocalPath)

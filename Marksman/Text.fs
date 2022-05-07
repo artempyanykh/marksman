@@ -1,5 +1,6 @@
 module Marksman.Text
 
+open System
 open System.IO
 open System.Text
 open Ionide.LanguageServerProtocol.Types
@@ -92,6 +93,11 @@ type Text =
 type internal TrackingTextReader(baseReader: TextReader) =
     inherit TextReader()
 
+    interface IDisposable with
+        member this.Dispose() =
+            baseReader.Dispose()
+            base.Dispose()
+
     member val Position: int = 0 with get, set
 
     override this.Read() : int =
@@ -104,7 +110,6 @@ type internal TrackingTextReader(baseReader: TextReader) =
 
 
     override this.Peek() : int = baseReader.Peek()
-
 
 let mkLineMap (str: string) : LineMap =
     use reader =

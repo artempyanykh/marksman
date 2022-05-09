@@ -9,30 +9,30 @@ open Misc
 type DocName = string
 
 [<RequireQualifiedAccess>]
-type Dest =
+type RefDest =
     | Doc of DocName
     | Heading of doc: option<DocName> * heading: string
 
-module Dest =
+module RefDest =
     let fmt dest =
         let inner =
             match dest with
-            | Dest.Doc name -> name
-            | Dest.Heading (doc, heading) -> $"{doc |> Option.defaultValue String.Empty}#{heading}"
+            | RefDest.Doc name -> name
+            | RefDest.Heading (doc, heading) -> $"{doc |> Option.defaultValue String.Empty}#{heading}"
 
         $"[[{inner}]]"
 
     let destDoc =
         function
-        | Dest.Doc name -> Some name
-        | Dest.Heading (docOpt, _) -> docOpt
+        | RefDest.Doc name -> Some name
+        | RefDest.Heading (docOpt, _) -> docOpt
 
     let destHeading =
         function
-        | Dest.Doc _ -> None
-        | Dest.Heading (_, heading) -> Some heading
+        | RefDest.Doc _ -> None
+        | RefDest.Heading (_, heading) -> Some heading
 
-    let tryFromString (text: string) : option<Dest> =
+    let tryFromString (text: string) : option<RefDest> =
         let isValid =
             (text.StartsWith "[[" && text.EndsWith "]]")
 
@@ -46,24 +46,24 @@ module Dest =
             let parts = inner.Split('#', 2)
 
             if parts.Length = 1 then
-                Dest.Doc inner |> Some
+                RefDest.Doc inner |> Some
             else
                 let doc = parts[0]
                 let heading = parts[1]
 
                 if String.IsNullOrWhiteSpace doc then
-                    Dest.Heading(None, heading) |> Some
+                    RefDest.Heading(None, heading) |> Some
                 else
-                    Dest.Heading(Some doc, heading) |> Some
+                    RefDest.Heading(Some doc, heading) |> Some
 
 type Ref =
     { text: string
-      dest: Dest
+      dest: RefDest
       range: Range }
 
 module Ref =
     let fmt x =
-        $"R: {Dest.fmt x.dest}; {x.range.DebuggerDisplay}"
+        $"R: {RefDest.fmt x.dest}; {x.range.DebuggerDisplay}"
 
 type CompletionPoint = { text: string; range: Range }
 
@@ -79,9 +79,49 @@ module CompletionPoint =
         else
             None
 
+type StringLoc = { content: string; range: Range }
+
+module StringLoc =
+    let mk (content: string) (range: Range) = { content = content; range = range }
+    let content (x: StringLoc) = x.content
+    let range (x: StringLoc) = x.range
+
+[<RequireQualifiedAccess>]
+type LinkDescr =
+    // inline
+    | IL of label: StringLoc * url: option<StringLoc> * title: option<StringLoc>
+    // reference full
+    | RF of text: StringLoc * label: StringLoc
+    // reference collapsed
+    | RC of label: StringLoc
+    // reference shortcut
+    | RS of label: StringLoc
+
+module LinkDescr =
+    let fmt: LinkDescr -> string =
+        function
+        | LinkDescr.IL (label, url, title) ->
+            let destParts =
+                seq {
+                    for part in [ url; title ] do
+                        match Option.map StringLoc.content part with
+                        | Some str -> yield str
+                        | None -> ()
+                }
+
+            let dest = String.Join(" ", destParts)
+
+            $"[{label.content}]({dest})"
+
+type Link = { text: StringLoc; descr: LinkDescr }
+
+module Link =
+    let fmt (l: Link) = $"L: {LinkDescr.fmt l.descr}"
+
 type Element =
     | H of Heading
     | R of Ref
+    | L of Link
     | CP of CompletionPoint
 
 and Heading =
@@ -95,6 +135,7 @@ let rec private fmtElement =
     function
     | H h -> fmtHeading h
     | R x -> Ref.fmt x
+    | L l -> Link.fmt l
     | CP cp -> CompletionPoint.fmt cp
 
 and private fmtHeading h =
@@ -129,12 +170,14 @@ module Element =
         function
         | H h -> h.range
         | R ref -> ref.range
+        | L l -> l.text.range
         | CP cp -> cp.range
 
     let text =
         function
         | H h -> h.text
         | R ref -> ref.text
+        | L l -> l.text.content
         | CP cp -> cp.text
 
     let asHeading =
@@ -313,7 +356,7 @@ module Markdown =
             | :? MarksmanLink as link ->
                 let fullText = link.Text
 
-                match Dest.tryFromString fullText with
+                match RefDest.tryFromString fullText with
                 | Some dest ->
                     let range = sourceSpanToRange text link.Span
 
@@ -329,6 +372,51 @@ module Markdown =
                 let fullText = cp.Text
                 let range = sourceSpanToRange text cp.Span
                 elements.Add(CP { text = fullText; range = range })
+            | :? LinkInline as l ->
+                let linkRange =
+                    sourceSpanToRange text l.Span
+
+                let linkText =
+                    text.content.Substring(l.Span.Start, l.Span.Length)
+
+                let labelSpan = l.LabelSpan
+
+                let label =
+                    if labelSpan.IsEmpty then
+                        String.Empty
+                    else
+                        text.content.Substring(labelSpan.Start, labelSpan.End)
+
+                let titleSpan = l.TitleSpan
+                let title = l.Title
+
+                let urlSpan = l.UrlSpan
+                let url = l.Url
+
+                if not l.IsShortcut then
+                    let label =
+                        StringLoc.mk label (sourceSpanToRange text labelSpan)
+
+                    let url =
+                        if urlSpan.IsEmpty then
+                            None
+                        else
+                            Some(StringLoc.mk url (sourceSpanToRange text urlSpan))
+
+                    let title =
+                        if titleSpan.IsEmpty then
+                            None
+                        else
+                            Some(StringLoc.mk title (sourceSpanToRange text titleSpan))
+
+                    let link =
+                        LinkDescr.IL(label = label, url = url, title = title)
+
+                    elements.Add(
+                        L
+                            { text = StringLoc.mk linkText linkRange
+                              descr = link }
+                    )
             | _ -> ()
 
         elements.ToArray()
@@ -385,6 +473,7 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
         for el in flat do
             match el with
             | R _
+            | L _
             | CP _ ->
                 match headStack with
                 | _ :: _ -> accChildren <- el :: accChildren

@@ -261,12 +261,12 @@ module Folder =
                     match atPoint with
                     | R ref ->
                         let destDoc =
-                            Dest.destDoc ref.dest
+                            RefDest.destDoc ref.dest
                             // Absence of explicit doc means completion inside the current doc
                             |> Option.defaultValue curDocName
                             |> Some
 
-                        destDoc, Dest.destHeading ref.dest
+                        destDoc, RefDest.destHeading ref.dest
                     | CP cp -> CompletionPoint.destNote cp, None
                     | _ -> None, None
 
@@ -305,9 +305,9 @@ module Folder =
                             else
                                 None
 
-                        let dest = Dest.Doc name
+                        let dest = RefDest.Doc name
 
-                        let newText = Dest.fmt dest
+                        let newText = RefDest.fmt dest
 
                         let textEdit =
                             { Range = Element.range atPoint
@@ -352,8 +352,8 @@ module Folder =
                                 else
                                     Some wantedDoc
 
-                            let dest = Dest.Heading(destDoc, label)
-                            let newText = Dest.fmt dest
+                            let dest = RefDest.Heading(destDoc, label)
+                            let newText = RefDest.fmt dest
 
                             let textEdit =
                                 { Range = Element.range atPoint
@@ -370,7 +370,7 @@ module Folder =
 
     let tryFindReferenceTarget (sourceDoc: Document) (ref: Ref) (folder: Folder) : option<Document * Option<Heading>> =
         // Discover target doc.
-        let destDocName = Dest.destDoc ref.dest
+        let destDocName = RefDest.destDoc ref.dest
 
         let destDoc =
             match destDocName with
@@ -382,7 +382,7 @@ module Folder =
         | Some destDoc ->
             // Discover target heading.
             // When target heading is specified but can't be found, the whole thing turns into None.
-            match Dest.destHeading ref.dest with
+            match RefDest.destHeading ref.dest with
             | None -> Some(destDoc, Document.title destDoc)
             | Some headingName ->
                 match Document.headingByName headingName destDoc with

@@ -7,23 +7,24 @@ open Parser
 open Snapper
 open Misc
 
+let checkSnapshot (document: array<Element>) =
+    let lines =
+        Array.map (fun x -> (Element.fmt x).Lines()) document
+        |> Array.concat
+
+    lines.ShouldMatchSnapshot()
+
+let checkInlineSnapshot (document: array<Element>) snapshot =
+    let lines =
+        Array.map (fun x -> (Element.fmt x).Lines()) document
+        |> Array.concat
+
+    lines.ShouldMatchInlineSnapshot(snapshot)
+    
+let scrapeString content = parseText (Text.mkText content)
+
 [<StoreSnapshotsPerClass>]
 module SnapshotTests =
-    let checkSnapshot (document: array<Element>) =
-        let lines =
-            Array.map (fun x -> (Element.fmt x).Lines()) document
-            |> Array.concat
-
-        lines.ShouldMatchSnapshot()
-
-    let checkInlineSnapshot (document: array<Element>) snapshot =
-        let lines =
-            Array.map (fun x -> (Element.fmt x).Lines()) document
-            |> Array.concat
-
-        lines.ShouldMatchInlineSnapshot(snapshot)
-
-    let scrapeString content = parseText (Text.mkText content)
 
     [<Fact>]
     let parse_empty () =
@@ -145,25 +146,86 @@ module SnapshotTests =
 
         let document = scrapeString text
         checkSnapshot document
+    
+module LinkParsing =
+    [<Fact>]
+    let parser_link_1() =
+        let text = "[title](url)"
+        let document = scrapeString text
+        checkInlineSnapshot document ["L: [title](url)"]
+        
+    [<Fact>]
+    let parser_link_2() =
+        let text = "[]"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_3() =
+        let text = "[][]"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_4() =
+        let text = "[]()"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_5() =
+        let text = "[la bel](url \"title\")"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_6() =
+        let text = "[la bel](url title)"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_7() =
+        let text = "[](url)"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_8() =
+        let text = "[short cut]"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_9() =
+        let text = "[short cut][]"
+        let document = scrapeString text
+        checkInlineSnapshot document []
+        
+    [<Fact>]
+    let parser_link_10() =
+        let text = "[label][ref]"
+        let document = scrapeString text
+        checkInlineSnapshot document []
 
 module XDestTests =
     [<Fact>]
     let parse_pound () =
         let actual =
-            Dest.tryFromString "[[foo#bar]]"
+            RefDest.tryFromString "[[foo#bar]]"
 
-        Assert.Equal(Dest.Heading(Some "foo", "bar") |> Some, actual)
+        Assert.Equal(RefDest.Heading(Some "foo", "bar") |> Some, actual)
 
     [<Fact>]
     let parse_pound_pipe () =
         let actual =
-            Dest.tryFromString "[[foo#bar|baz]]"
+            RefDest.tryFromString "[[foo#bar|baz]]"
 
-        Assert.Equal(Dest.Heading(Some "foo", "bar|baz") |> Some, actual)
+        Assert.Equal(RefDest.Heading(Some "foo", "bar|baz") |> Some, actual)
 
     [<Fact>]
     let parse_pound_pound () =
         let actual =
-            Dest.tryFromString "[[foo#bar#baz]]"
+            RefDest.tryFromString "[[foo#bar#baz]]"
 
-        Assert.Equal(Dest.Heading(Some "foo", "bar#baz") |> Some, actual)
+        Assert.Equal(RefDest.Heading(Some "foo", "bar#baz") |> Some, actual)

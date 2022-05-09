@@ -101,7 +101,7 @@ let checkRefs (docName: DocName) (index: FolderIndex) : seq<Entry> =
     seq {
         for ref in docIndex.refs do
             let destDocName =
-                Dest.destDoc ref.dest
+                RefDest.destDoc ref.dest
                 |> Option.defaultValue docName
 
             let destDocIndex =
@@ -110,7 +110,7 @@ let checkRefs (docName: DocName) (index: FolderIndex) : seq<Entry> =
             match destDocIndex with
             | None -> yield BrokenDocRef(ref)
             | Some destDocIndex ->
-                match Dest.destHeading ref.dest with
+                match RefDest.destHeading ref.dest with
                 | None -> ()
                 | Some destHeading ->
                     let destSlug = destHeading.Slug()
@@ -164,7 +164,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = $"Reference to non-existent document: {Dest.destDoc ref.dest |> Option.get}"
+          Message = $"Reference to non-existent document: {RefDest.destDoc ref.dest |> Option.get}"
           RelatedInformation = None
           Tags = None
           Data = None }
@@ -174,7 +174,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = $"Reference to non-existent heading: {Dest.destHeading ref.dest |> Option.get}"
+          Message = $"Reference to non-existent heading: {RefDest.destHeading ref.dest |> Option.get}"
           RelatedInformation = None
           Tags = None
           Data = None }

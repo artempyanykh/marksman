@@ -195,6 +195,112 @@ module Element =
         |> Array.map asHeading
         |> Array.collect Option.toArray
 
+module Custom =
+    type Cursor =
+        { text: Text
+          pos: int }
+        member this.Char: char =
+            this.text.content[this.pos]
+
+    type Span =
+        { text: Text
+          start: int
+          end_: int }
+        member this.MoveForward() : option<Span> =
+            if this.start < this.end_ then
+                Some
+                    { text = this.text
+                      start = this.start + 1
+                      end_ = this.end_ }
+            else
+                None
+
+        member this.Range() : Range =
+            let start =
+                this.text.lineMap.FindPosition(this.start)
+
+            let stop =
+                this.text.lineMap.FindPosition(this.end_)
+
+            Range.Mk(start.Line, start.Character, stop.Line, stop.Character)
+
+        member this.ToCursor() : option<Cursor> =
+            if this.start < this.end_ then
+                Some { text = this.text; pos = this.start }
+            else
+                None
+
+        member this.StartChar: option<char> =
+            this.ToCursor() |> Option.map (fun c -> c.Char)
+
+    type Line =
+        { text: Text
+          line: int }
+        member this.ToSpan() : Span =
+            let start, end_ =
+                this.text.LineContentOffsets(this.line)
+
+            { text = this.text
+              start = start
+              end_ = end_ }
+
+        member this.StartChar: option<char> =
+            this.ToSpan().StartChar
+
+    let rec parseLine (line: Line) : seq<Element> =
+        let headerEls = parseHeader line
+
+        if Seq.isEmpty headerEls then
+            parseSpan (line.ToSpan())
+        else
+            headerEls
+
+    and parseSpan (span: Span) : seq<Element> = []
+
+    and parseHeader (line: Line) : seq<Element> =
+        match line.StartChar with
+        | None -> []
+        | Some '#' ->
+            let rec matchLoop level (span: Span) =
+                if level > 6 then
+                    None
+                else
+                    match span.StartChar with
+                    | None -> Some level
+                    | Some ch ->
+                        if ch = '#' then
+                            span.MoveForward()
+                            |> Option.bind (matchLoop (level + 1))
+                        else
+                            Some level
+
+            let lineSpan = line.ToSpan()
+
+            match matchLoop 0 lineSpan with
+            | Some level ->
+                let lineRange = lineSpan.Range()
+
+                let heading =
+                    { level = level
+                      text = line.text.Substring(lineRange)
+                      range = lineRange
+                      scope = lineRange
+                      children = [||] }
+
+                [ H heading ]
+            | None -> []
+        | Some _ -> []
+
+
+    let scrapeText (text: Text) : array<Element> =
+        let elements =
+            seq {
+                for line in 0 .. text.lineMap.NumLines do
+                    yield! parseLine { text = text; line = line }
+            }
+
+        Array.ofSeq elements
+
 module Markdown =
     open Markdig
     open Markdig.Syntax
@@ -516,7 +622,7 @@ let rec private sortElements (text: Text) (elements: array<Element>) : unit =
     Array.sortInPlaceBy elementStart elements
 
 let rec parseText (text: Text) : array<Element> =
-    let flatElements = Markdown.scrapeText text
+    let flatElements = Custom.scrapeText text
 
     let hierarchicalElements =
         reconstructHierarchy text flatElements

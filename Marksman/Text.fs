@@ -15,6 +15,8 @@ type LineMap =
         let (LineMap arr) = this
         arr
 
+    member this.NumLines = this.Map.Length - 1
+
     member this.TryFindPosition(offset: int) : Option<Position> =
         let rec go l h =
             if l > h then
@@ -25,14 +27,16 @@ type LineMap =
 
                 if start > offset then
                     go l (m - 1)
-                else if offset >= end_ then
-                    go (m + 1) h
                 else if start <= offset && offset < end_ then
                     Some m
+                else if start = end_ && start = offset then
+                    Some m
+                else if offset >= end_ then
+                    go (m + 1) h
                 else
                     None
 
-        match go 0 this.Map.Length with
+        match go 0 (this.Map.Length - 1) with
         | Some lineIdx ->
             let start, _ = this.Map[lineIdx]
 
@@ -78,6 +82,36 @@ type Text =
     member this.Substring(range: Range) : string =
         let s, e = this.lineMap.FindRange range
         this.content.Substring(s, e - s)
+
+    member this.CharAt(p: Position) : char =
+        let off = this.lineMap.FindOffset(p)
+        this.content[off]
+
+    member this.CharAt(off: int) : char = this.content[off]
+
+    member this.LineContentOffsets(line: int) : LineRange =
+        let start, end_ = this.lineMap.Map[line]
+
+        if start = end_ then
+            start, end_
+        else if start = end_ - 1 then
+            if this.content[start] = '\n' then
+                start, start
+            else
+                start, end_
+        else if this.content[end_ - 2] = '\r'
+                && this.content[end_ - 1] = '\n' then
+            start, end_ - 2
+        else if this.content[end_ - 1] = '\n' then
+            start, end_ - 1
+        else
+            start, end_
+
+    member this.LineContentRange(line: int) : Range =
+        let start, end_ =
+            this.LineContentOffsets(line)
+
+        Range.Mk(line, 0, line, end_ - start)
 
     member this.FullRange() : Range =
         let lineNum = this.lineMap.Map.Length - 1

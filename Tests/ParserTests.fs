@@ -139,10 +139,10 @@ module SnapshotTests =
     [<Fact>]
     let complex_example_1 () =
         let text =
-            //           1          2          3          4         5
-            //1234 5 67890123 45678901234567 890123 4567890123456789012345678901
-            "# H1\n\n## H2.1\nP2.1 [[ref1]]\n[[cp1\n## H2.2 P2.2 [:cp2 next"
-        //   1       2        3             4      5
+            //           1          2          3          4          5
+            //1234 5 67890123 45678901234567 890123 45678901 23456789012345678901
+            "# H1\n\n## H2.1\nP2.1 [[ref1]]\n[[cp1\n## H2.2\nP2.2 [:cp2 next"
+        //   1       2        3              4      5        6
 
         let document = scrapeString text
         checkSnapshot document

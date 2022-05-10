@@ -150,9 +150,11 @@ module PathUri =
           localPath = localPath }
 
 
+type Position with
+    static member Mk(line: int, char: int) : Position = { Line = line; Character = char }
+    static member MkLine(line: int) : Position = Position.Mk(line, 0)
+
 type Range with
     static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range =
-        { Start =
-            { Line = startLine
-              Character = startChar }
-          End = { Line = endLine; Character = endChar } }
+        { Start = Position.Mk(startLine, startChar)
+          End = Position.Mk(endLine, endChar) }

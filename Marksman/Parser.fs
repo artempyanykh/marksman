@@ -33,8 +33,7 @@ module RefDest =
         | RefDest.Heading (_, heading) -> Some heading
 
     let tryFromString (text: string) : option<RefDest> =
-        let isValid =
-            (text.StartsWith "[[" && text.EndsWith "]]")
+        let isValid = (text.StartsWith "[[" && text.EndsWith "]]")
 
         if not isValid then
             None
@@ -56,28 +55,19 @@ module RefDest =
                 else
                     RefDest.Heading(Some doc, heading) |> Some
 
-type Ref =
-    { text: string
-      dest: RefDest
-      range: Range }
+type Ref = { text: string; dest: RefDest; range: Range }
 
 module Ref =
-    let fmt x =
-        $"R: {RefDest.fmt x.dest}; {x.range.DebuggerDisplay}"
+    let fmt x = $"R: {RefDest.fmt x.dest}; {x.range.DebuggerDisplay}"
 
 type CompletionPoint = { text: string; range: Range }
 
 module CompletionPoint =
-    let fmt cp =
-        $"CP: `{cp.text}`: {cp.range.DebuggerDisplay}"
+    let fmt cp = $"CP: `{cp.text}`: {cp.range.DebuggerDisplay}"
 
     let isRef cp = cp.text.StartsWith("[[")
 
-    let destNote cp : option<DocName> =
-        if isRef cp then
-            cp.text.Substring(2) |> Some
-        else
-            None
+    let destNote cp : option<DocName> = if isRef cp then cp.text.Substring(2) |> Some else None
 
 type StringLoc = { content: string; range: Range }
 
@@ -144,8 +134,7 @@ and private fmtHeading h =
 
     let l2 = $"  text=`{h.text}`"
 
-    let rest =
-        Array.map (indentFmt fmtElement) h.children
+    let rest = Array.map (indentFmt fmtElement) h.children
 
     String.Join(Environment.NewLine, Array.concat [ [| l1; l2 |]; rest ])
 
@@ -154,8 +143,7 @@ module Heading =
 
     let text (heading: Heading) : string = heading.text
 
-    let title (heading: Heading) : string =
-        heading.text.TrimStart(' ', '#').TrimEnd(' ')
+    let title (heading: Heading) : string = heading.text.TrimStart(' ', '#').TrimEnd(' ')
 
     let isTitle (heading: Heading) = heading.level <= 1
 
@@ -191,94 +179,128 @@ module Element =
         | _ -> None
 
     let pickHeadings (elements: array<Element>) : array<Heading> =
-        elements
-        |> Array.map asHeading
-        |> Array.collect Option.toArray
+        elements |> Array.map asHeading |> Array.collect Option.toArray
 
 module Custom =
-    type Cursor =
-        { text: Text
-          pos: int }
-        member this.Char: char =
-            this.text.content[this.pos]
+    type Span = { text: Text; start: int; end_: int }
 
-    type Span =
-        { text: Text
-          start: int
-          end_: int }
-        member this.MoveForward() : option<Span> =
-            if this.start < this.end_ then
-                Some
-                    { text = this.text
-                      start = this.start + 1
-                      end_ = this.end_ }
+    type Cursor = { span: Span; pos: int }
+
+    module Cursor =
+        let char c = c.span.text.content[c.pos]
+
+        let forward c : option<Cursor> =
+            if c.span.start < c.span.end_ then
+                Some { c with pos = c.pos + 1 }
             else
                 None
 
-        member this.Range() : Range =
-            let start =
-                this.text.lineMap.FindPosition(this.start)
+        let char2 c =
+            let char1 = char c
+            let char2 = forward c |> Option.map char
+            char2 |> Option.map (fun x -> char1, x)
 
-            let stop =
-                this.text.lineMap.FindPosition(this.end_)
+        let charN n c =
+            let rec loop acc n cursor : option<list<char>> =
+                if n = 0 then
+                    Some acc
+                else
+                    match cursor with
+                    | None -> None
+                    | Some cursor -> loop ((char cursor) :: acc) (n - 1) (forward cursor)
+
+            loop [] n c |> Option.map List.rev
+
+
+        let forwardN n c =
+            let mutable res = forward c
+            let mutable i = 1
+
+            while i < n && res.IsSome do
+                res <- Option.bind forward res
+
+            res
+
+        let toSpan c : Span = { c.span with start = c.pos }
+
+    module Span =
+        let range span : Range =
+            let start = span.text.lineMap.FindPosition(span.start)
+
+            let stop = span.text.lineMap.FindPosition(span.end_)
 
             Range.Mk(start.Line, start.Character, stop.Line, stop.Character)
 
-        member this.ToCursor() : option<Cursor> =
-            if this.start < this.end_ then
-                Some { text = this.text; pos = this.start }
+        let toCursor span : option<Cursor> =
+            if span.start < span.end_ then
+                Some { span = span; pos = span.start }
             else
                 None
 
-        member this.StartChar: option<char> =
-            this.ToCursor() |> Option.map (fun c -> c.Char)
+        let fwd span : option<Span> =
+            if span.start < span.end_ then
+                Some { span with start = span.start + 1 }
+            else
+                None
 
-    type Line =
-        { text: Text
-          line: int }
-        member this.ToSpan() : Span =
-            let start, end_ =
-                this.text.LineContentOffsets(this.line)
+        let startChar = toCursor >> (Option.map Cursor.char)
 
-            { text = this.text
-              start = start
-              end_ = end_ }
+    type Line = { text: Text; line: int }
 
-        member this.StartChar: option<char> =
-            this.ToSpan().StartChar
+    module Line =
+        let toSpan line : Span =
+            let start, end_ = line.text.LineContentOffsets(line.line)
+
+            { text = line.text; start = start; end_ = end_ }
+
+        let toCursor = toSpan >> Span.toCursor
+
+        let startChar = toSpan >> Span.startChar
 
     let rec parseLine (line: Line) : seq<Element> =
         let headerEls = parseHeader line
 
         if Seq.isEmpty headerEls then
-            parseSpan (line.ToSpan())
+            parseInline (Line.toSpan line)
         else
             headerEls
 
-    and parseSpan (span: Span) : seq<Element> = []
+    and parseInline (span: Span) : seq<Element> =
+        let matched = Span.toCursor span |> Option.bind parseWikiLink
+
+        match matched with
+        | Some (el, nextSpan) -> Seq.append [ el ] (parseInline nextSpan)
+        | None ->
+            match Span.fwd span with
+            | Some span -> parseInline span
+            | None -> Seq.empty
+
+    and parseWikiLink (cursor: Cursor) : option<Element * Span> =
+        match Cursor.char2 cursor with
+        | Some ('[', '[') -> None
+        | _ -> None
 
     and parseHeader (line: Line) : seq<Element> =
-        match line.StartChar with
+        match Line.startChar line with
         | None -> []
         | Some '#' ->
             let rec matchLoop level (span: Span) =
                 if level > 6 then
                     None
                 else
-                    match span.StartChar with
+                    match Span.startChar span with
                     | None -> Some level
                     | Some ch ->
                         if ch = '#' then
-                            span.MoveForward()
-                            |> Option.bind (matchLoop (level + 1))
+                            Span.fwd span |> Option.bind (matchLoop (level + 1))
                         else
                             Some level
 
-            let lineSpan = line.ToSpan()
+            let lineSpan = Line.toSpan line
 
             match matchLoop 0 lineSpan with
             | Some level ->
-                let lineRange = lineSpan.Range()
+                let lineRange = Span.range lineSpan
 
                 let heading =
                     { level = level
@@ -333,23 +355,18 @@ module Markdown =
             if isRef then
                 let start = slice.Start
 
-                let offsetStart =
-                    processor.GetSourcePosition(start)
+                let offsetStart = processor.GetSourcePosition(start)
 
                 let mutable found = false
                 let mutable current = slice.NextChar()
 
-                let shouldStop (c: char) =
-                    c.IsNewLineOrLineFeed() || c.IsZero() || found
+                let shouldStop (c: char) = c.IsNewLineOrLineFeed() || c.IsZero() || found
 
                 while not (shouldStop current) do
                     if current = ']' then
                         let prev = slice.PeekCharExtra(-1)
 
-                        if prev = ']' then
-                            found <- true
-                        else
-                            current <- slice.NextChar()
+                        if prev = ']' then found <- true else current <- slice.NextChar()
                     else
                         current <- slice.NextChar()
 
@@ -357,8 +374,7 @@ module Markdown =
                     let end_ = slice.Start
                     let offsetEnd = offsetStart + (end_ - start)
 
-                    let text =
-                        slice.Text.Substring(start, end_ - start + 1)
+                    let text = slice.Text.Substring(start, end_ - start + 1)
 
                     let link = MarksmanLink(text)
                     link.Span <- SourceSpan(offsetStart, offsetEnd)
@@ -376,15 +392,11 @@ module Markdown =
         override this.Match(processor, slice) =
             let start = slice.Start
 
-            let offsetStart =
-                processor.GetSourcePosition(start)
+            let offsetStart = processor.GetSourcePosition(start)
 
             let mutable current = slice.NextChar()
 
-            let shouldStop (char: char) =
-                char.IsWhiteSpaceOrZero()
-                || char.IsNewLineOrLineFeed()
-                || char = ']'
+            let shouldStop (char: char) = char.IsWhiteSpaceOrZero() || char.IsNewLineOrLineFeed() || char = ']'
 
             while not (shouldStop current) do
                 current <- slice.NextChar()
@@ -396,8 +408,7 @@ module Markdown =
 
                 let offsetEnd = offsetStart + (end_ - start)
 
-                let text =
-                    slice.Text.Substring(start, end_ - start + 1)
+                let text = slice.Text.Substring(start, end_ - start + 1)
 
                 let link = MarksmanCompletionPoint(text)
                 link.Span <- SourceSpan(offsetStart, offsetEnd)
@@ -407,9 +418,7 @@ module Markdown =
                 false
 
     let markdigPipeline =
-        let pipelineBuilder =
-            MarkdownPipelineBuilder()
-                .UsePreciseSourceLocation()
+        let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation()
 
         pipelineBuilder.InlineParsers.Insert(0, MarksmanCompletionPointParser())
         pipelineBuilder.InlineParsers.Insert(0, MarksmanLinkParser())
@@ -417,17 +426,11 @@ module Markdown =
         pipelineBuilder.Build()
 
     let sourceSpanToRange (text: Text) (span: SourceSpan) : Range =
-        let start =
-            text.lineMap.FindPosition(span.Start)
+        let start = text.lineMap.FindPosition(span.Start)
 
-        let endInclusive =
-            text.lineMap.FindPosition(span.End)
+        let endInclusive = text.lineMap.FindPosition(span.End)
 
-        let endOffset =
-            if Char.IsSurrogate(text.content, span.End) then
-                2
-            else
-                1
+        let endOffset = if Char.IsSurrogate(text.content, span.End) then 2 else 1
 
 
         { Start = start
@@ -435,8 +438,7 @@ module Markdown =
 
 
     let scrapeText (text: Text) : array<Element> =
-        let parsed: MarkdownObject =
-            Markdown.Parse(text.content, markdigPipeline)
+        let parsed: MarkdownObject = Markdown.Parse(text.content, markdigPipeline)
 
         let elements = ResizeArray()
 
@@ -445,18 +447,12 @@ module Markdown =
             | :? HeadingBlock as h ->
                 let level = h.Level
 
-                let title =
-                    text.content.Substring(h.Span.Start, h.Span.Length)
+                let title = text.content.Substring(h.Span.Start, h.Span.Length)
 
                 let range = sourceSpanToRange text h.Span
 
                 let heading =
-                    H
-                        { level = level
-                          text = title
-                          range = range
-                          scope = range
-                          children = [||] }
+                    H { level = level; text = title; range = range; scope = range; children = [||] }
 
                 elements.Add(heading)
             | :? MarksmanLink as link ->
@@ -466,11 +462,7 @@ module Markdown =
                 | Some dest ->
                     let range = sourceSpanToRange text link.Span
 
-                    let xref =
-                        R
-                            { text = fullText
-                              dest = dest
-                              range = range }
+                    let xref = R { text = fullText; dest = dest; range = range }
 
                     elements.Add(xref)
                 | _ -> ()
@@ -479,11 +471,9 @@ module Markdown =
                 let range = sourceSpanToRange text cp.Span
                 elements.Add(CP { text = fullText; range = range })
             | :? LinkInline as l ->
-                let linkRange =
-                    sourceSpanToRange text l.Span
+                let linkRange = sourceSpanToRange text l.Span
 
-                let linkText =
-                    text.content.Substring(l.Span.Start, l.Span.Length)
+                let linkText = text.content.Substring(l.Span.Start, l.Span.Length)
 
                 let labelSpan = l.LabelSpan
 
@@ -500,8 +490,7 @@ module Markdown =
                 let url = l.Url
 
                 if not l.IsShortcut then
-                    let label =
-                        StringLoc.mk label (sourceSpanToRange text labelSpan)
+                    let label = StringLoc.mk label (sourceSpanToRange text labelSpan)
 
                     let url =
                         if urlSpan.IsEmpty then
@@ -515,14 +504,9 @@ module Markdown =
                         else
                             Some(StringLoc.mk title (sourceSpanToRange text titleSpan))
 
-                    let link =
-                        LinkDescr.IL(label = label, url = url, title = title)
+                    let link = LinkDescr.IL(label = label, url = url, title = title)
 
-                    elements.Add(
-                        L
-                            { text = StringLoc.mk linkText linkRange
-                              descr = link }
-                    )
+                    elements.Add(L { text = StringLoc.mk linkText linkRange; descr = link })
             | _ -> ()
 
         elements.ToArray()
@@ -532,15 +516,12 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
         let mutable headStack: list<Heading> = []
         let mutable accChildren: list<Element> = []
 
-        let mutable accStandalone: list<Element> =
-            []
+        let mutable accStandalone: list<Element> = []
 
         let rec unwindHeadStack newHead : unit =
             match headStack with
             | [] ->
-                accStandalone <-
-                    List.concat [ accChildren
-                                  accStandalone ]
+                accStandalone <- List.concat [ accChildren; accStandalone ]
 
                 accChildren <- []
                 headStack <- [ newHead ]
@@ -552,23 +533,17 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
                 //  e3, e4   |
                 // ##        |
                 //  e5
-                let curHeadChildren =
-                    Array.concat [ curHead.children
-                                   Array.ofList accChildren ]
+                let curHeadChildren = Array.concat [ curHead.children; Array.ofList accChildren ]
 
-                let curHead =
-                    { curHead with children = curHeadChildren }
+                let curHead = { curHead with children = curHeadChildren }
 
                 accChildren <- []
 
                 // Unwind further until we find a parent heading or none at all
                 if curHead.level >= newHead.level then
-                    let newScope =
-                        { Start = curHead.scope.Start
-                          End = newHead.scope.Start }
+                    let newScope = { Start = curHead.scope.Start; End = newHead.scope.Start }
 
-                    let curHead =
-                        { curHead with scope = newScope }
+                    let curHead = { curHead with scope = newScope }
 
                     accChildren <- [ H curHead ]
                     headStack <- rest
@@ -611,11 +586,9 @@ let rec private sortElements (text: Text) (elements: array<Element>) : unit =
     let elementStart el =
         let range = (Element.range el)
 
-        let start =
-            text.lineMap.FindOffset(range.Start)
+        let start = text.lineMap.FindOffset(range.Start)
 
-        let end_ =
-            text.lineMap.FindOffset(range.End)
+        let end_ = text.lineMap.FindOffset(range.End)
 
         (start, end_)
 
@@ -624,11 +597,9 @@ let rec private sortElements (text: Text) (elements: array<Element>) : unit =
 let rec parseText (text: Text) : array<Element> =
     let flatElements = Custom.scrapeText text
 
-    let hierarchicalElements =
-        reconstructHierarchy text flatElements
+    let hierarchicalElements = reconstructHierarchy text flatElements
 
-    let elements =
-        Array.ofSeq hierarchicalElements
+    let elements = Array.ofSeq hierarchicalElements
 
     sortElements text elements
     elements

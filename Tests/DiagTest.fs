@@ -23,7 +23,6 @@ let documentIndex_1 () =
     let doc = makeFakeDocument "# T1\n# T2"
     let index = indexDocument doc
 
-    let titles =
-        index.titles |> List.map Heading.title
+    let titles = index.titles |> List.map (fun x -> x.data.title.text)
 
     Assert.Equal<string>([ "T1"; "T2" ], titles)

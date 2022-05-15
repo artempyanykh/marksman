@@ -198,3 +198,78 @@ let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text:
         Array.fold (applyChangeRaw text.lineMap) text.content changeEvents
 
     mkText newContent
+
+type Span = { text: Text; start: int; end_: int }
+
+type Cursor = { span: Span; pos: int }
+
+module Cursor =
+    let char c = c.span.text.content[c.pos]
+
+    let forward c : option<Cursor> =
+        if c.span.start < c.span.end_ then
+            Some { c with pos = c.pos + 1 }
+        else
+            None
+
+    let char2 c =
+        let char1 = char c
+        let char2 = forward c |> Option.map char
+        char2 |> Option.map (fun x -> char1, x)
+
+    let charN n c =
+        let rec loop acc n cursor : option<list<char>> =
+            if n = 0 then
+                Some acc
+            else
+                match cursor with
+                | None -> None
+                | Some cursor -> loop ((char cursor) :: acc) (n - 1) (forward cursor)
+
+        loop [] n c |> Option.map List.rev
+
+
+    let forwardN n c =
+        let mutable res = forward c
+        let mutable i = 1
+
+        while i < n && res.IsSome do
+            res <- Option.bind forward res
+
+        res
+
+    let toSpan c : Span = { c.span with start = c.pos }
+
+module Span =
+    let range span : Range =
+        let start = span.text.lineMap.FindPosition(span.start)
+
+        let stop = span.text.lineMap.FindPosition(span.end_)
+
+        Range.Mk(start.Line, start.Character, stop.Line, stop.Character)
+
+    let toCursor span : option<Cursor> =
+        if span.start < span.end_ then
+            Some { span = span; pos = span.start }
+        else
+            None
+
+    let forward span : option<Span> =
+        if span.start < span.end_ then
+            Some { span with start = span.start + 1 }
+        else
+            None
+
+    let startChar = toCursor >> (Option.map Cursor.char)
+
+type Line = { text: Text; line: int }
+
+module Line =
+    let toSpan line : Span =
+        let start, end_ = line.text.LineContentOffsets(line.line)
+
+        { text = line.text; start = start; end_ = end_ }
+
+    let toCursor = toSpan >> Span.toCursor
+
+    let startChar = toSpan >> Span.startChar

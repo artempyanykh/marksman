@@ -207,25 +207,3 @@ module LinkParsing =
         let text = "[label][ref]"
         let document = scrapeString text
         checkInlineSnapshot document []
-
-module XDestTests =
-    [<Fact>]
-    let parse_pound () =
-        let actual =
-            RefDest.tryFromString "[[foo#bar]]"
-
-        Assert.Equal(RefDest.Heading(Some "foo", "bar") |> Some, actual)
-
-    [<Fact>]
-    let parse_pound_pipe () =
-        let actual =
-            RefDest.tryFromString "[[foo#bar|baz]]"
-
-        Assert.Equal(RefDest.Heading(Some "foo", "bar|baz") |> Some, actual)
-
-    [<Fact>]
-    let parse_pound_pound () =
-        let actual =
-            RefDest.tryFromString "[[foo#bar#baz]]"
-
-        Assert.Equal(RefDest.Heading(Some "foo", "bar#baz") |> Some, actual)

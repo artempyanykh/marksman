@@ -17,7 +17,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.3" />
+        <PackageReference Update="FSharp.Core" Version="6.0.4" />
         <PackageReference Include="FSharp.SystemCommandLine" Version="0.10.0-beta" />
         <PackageReference Include="FSharpPlus" Version="1.2.3" />
         <PackageReference Include="Markdig" Version="0.30.2" />

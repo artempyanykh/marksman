@@ -9,44 +9,43 @@ open Parser
 open Domain
 
 type Entry =
-    | DupTitle of orig: Heading * dup: Heading
-    | DupHeading of orig: Heading * dup: Heading
-    | BrokenDocRef of Ref
-    | BrokenHeadingRef of Ref
+    | DupTitle of orig: Node<Heading> * dup: Node<Heading>
+    | DupHeading of orig: Node<Heading> * dup: Node<Heading>
+    | BrokenDocWL of Node<WikiLink>
+    | BrokenHeadingWL of Node<WikiLink>
 
 let code: Entry -> string =
     function
     | DupTitle _ -> "1"
     | DupHeading _ -> "2"
-    | BrokenDocRef _ -> "3"
-    | BrokenHeadingRef _ -> "4"
+    | BrokenDocWL _ -> "3"
+    | BrokenHeadingWL _ -> "4"
 
 type DocumentIndex =
     { path: PathUri
-      titles: list<Heading>
-      headings: Map<string, list<Heading>>
-      refs: array<Ref> }
+      titles: list<Node<Heading>>
+      headings: Map<string, list<Node<Heading>>>
+      wikiLinks: array<Node<WikiLink>> }
 
 let indexDocument (doc: Document) : DocumentIndex =
     let titles = ResizeArray()
 
-    let headings =
-        Dictionary<string, ResizeArray<Heading>>()
+    let headings = Dictionary<string, ResizeArray<Node<Heading>>>()
 
     let refs = ResizeArray()
 
     for el in Document.elementsAll doc do
         match el with
         | H h ->
-            let slug = (Heading.title h).Slug()
+            let slug = (Heading.title h.data).Slug()
 
             if not (headings.ContainsKey(slug)) then
                 headings[slug] <- ResizeArray()
 
-            headings[ slug ].Add(h)
+            headings.[slug].Add(h)
 
-            if Heading.isTitle h then titles.Add(h)
-        | R ref -> refs.Add(ref)
+            if Heading.isTitle h.data then titles.Add(h)
+        | WL ref -> refs.Add(ref)
         | _ -> ()
 
     let titles = titles |> List.ofSeq
@@ -60,10 +59,7 @@ let indexDocument (doc: Document) : DocumentIndex =
 
     let refs = refs.ToArray()
 
-    { path = doc.path
-      titles = titles
-      headings = headings
-      refs = refs }
+    { path = doc.path; titles = titles; headings = headings; wikiLinks = refs }
 
 type FolderIndex = Map<DocName, DocumentIndex>
 
@@ -79,10 +75,7 @@ let checkTitles (summary: DocumentIndex) : seq<Entry> =
     match summary.titles with
     | [] -> []
     | [ _ ] -> []
-    | first :: rest ->
-        rest
-        |> List.map (fun dup -> DupTitle(orig = first, dup = dup))
-        |> Seq.ofList
+    | first :: rest -> rest |> List.map (fun dup -> DupTitle(orig = first, dup = dup)) |> Seq.ofList
 
 let checkHeadings (index: DocumentIndex) : seq<Entry> =
     seq {
@@ -99,24 +92,21 @@ let checkRefs (docName: DocName) (index: FolderIndex) : seq<Entry> =
     let docIndex = Map.find docName index
 
     seq {
-        for ref in docIndex.refs do
-            let destDocName =
-                RefDest.destDoc ref.dest
-                |> Option.defaultValue docName
+        for wl in docIndex.wikiLinks do
+            let destDocName = WikiLink.destDoc wl.data |> Option.defaultValue docName
 
-            let destDocIndex =
-                Map.tryFind destDocName index
+            let destDocIndex = Map.tryFind destDocName index
 
             match destDocIndex with
-            | None -> yield BrokenDocRef(ref)
+            | None -> yield BrokenDocWL(wl)
             | Some destDocIndex ->
-                match RefDest.destHeading ref.dest with
+                match WikiLink.destHeading wl.data with
                 | None -> ()
                 | Some destHeading ->
                     let destSlug = destHeading.Slug()
 
                     match Map.tryFind destSlug destDocIndex.headings with
-                    | None -> yield BrokenHeadingRef(ref)
+                    | None -> yield BrokenHeadingWL(wl)
                     | Some _ -> ()
     }
 
@@ -158,23 +148,23 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           RelatedInformation = None
           Tags = None
           Data = None }
-    | BrokenDocRef ref ->
-        { Range = ref.range
+    | BrokenDocWL wl ->
+        { Range = wl.range
           Severity = Some Lsp.DiagnosticSeverity.Error
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = $"Reference to non-existent document: {RefDest.destDoc ref.dest |> Option.get}"
+          Message = $"Reference to non-existent document: {WikiLink.destDoc wl.data |> Option.get}"
           RelatedInformation = None
           Tags = None
           Data = None }
-    | BrokenHeadingRef ref ->
-        { Range = ref.range
+    | BrokenHeadingWL wl ->
+        { Range = wl.range
           Severity = Some Lsp.DiagnosticSeverity.Error
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = $"Reference to non-existent heading: {RefDest.destHeading ref.dest |> Option.get}"
+          Message = $"Reference to non-existent heading: {WikiLink.destHeading wl.data |> Option.get}"
           RelatedInformation = None
           Tags = None
           Data = None }
@@ -183,8 +173,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
 let diagnosticForFolder (folder: Folder) : array<PathUri * array<Lsp.Diagnostic>> =
     checkFolder folder
     |> Seq.map (fun (uri, diags) ->
-        let lspDiags =
-            List.map diagToLsp diags |> Array.ofList
+        let lspDiags = List.map diagToLsp diags |> Array.ofList
 
         uri, lspDiags)
     |> Array.ofSeq

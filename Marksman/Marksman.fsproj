@@ -11,6 +11,7 @@
         <Compile Include="Text.fs" />
         <Compile Include="Parser.fs" />
         <Compile Include="Domain.fs" />
+        <Compile Include="Comp.fs" />
         <Compile Include="Diag.fs" />
         <Compile Include="Server.fs" />
         <Compile Include="Program.fs" />

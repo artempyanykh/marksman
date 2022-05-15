@@ -25,10 +25,17 @@ type WikiLink = { doc: option<TextNode>; heading: option<TextNode> }
 
 module WikiLink =
     let destDoc (dest: WikiLink) : option<DocName> = dest.doc |> Option.map Node.text
+
     let destHeading (dest: WikiLink) : option<string> = dest.heading |> Option.map Node.text
 
+    let fmt (wl: WikiLink) : string =
+        let lines = ResizeArray()
+        wl.doc |> Option.iter (fun d -> $"doc={d.text}; {d.range.DebuggerDisplay}" |> lines.Add)
+        wl.heading |> Option.iter (fun h -> $"head={h.text}; {h.range.DebuggerDisplay}" |> lines.Add)
+        String.Join(Environment.NewLine, lines)
+
 [<RequireQualifiedAccess>]
-type MarkdownLink =
+type MdLink =
     // inline
     | IL of label: TextNode * url: option<TextNode> * title: option<TextNode>
     // reference full
@@ -41,15 +48,15 @@ type MarkdownLink =
 type Element =
     | H of Node<Heading>
     | WL of Node<WikiLink>
-    | ML of Node<MarkdownLink>
+    | ML of Node<MdLink>
 
 and Heading = { level: int; title: TextNode; scope: Range; children: array<Element> }
 
 let rec private fmtElement =
     function
     | H h -> fmtHeading h
-    | WL x -> fmtRef x
-    | ML l -> fmtLink l
+    | WL x -> fmtWikiLink x
+    | ML l -> fmtMdLink l
 
 and private fmtHeading node =
     let inner = node.data
@@ -63,9 +70,12 @@ and private fmtHeading node =
 
     String.Join(Environment.NewLine, Array.concat [ [| l1; l2 |]; rest ])
 
-and private fmtRef node = $"R: `{node.text}`; range={node.range.DebuggerDisplay}"
+and private fmtWikiLink node =
+    let line1 = $"WL: {node.text}; {node.range.DebuggerDisplay}"
+    let rest = (indentFmt WikiLink.fmt) node.data
+    String.Join(Environment.NewLine, [ line1; rest ])
 
-and private fmtLink node = $"L: `{node.text}`; range={node.range.DebuggerDisplay}"
+and private fmtMdLink node = $"ML: {node.text}; {node.range.DebuggerDisplay}"
 
 module Heading =
     let fmt = fmtHeading
@@ -223,13 +233,16 @@ module Markdown =
     let sourceSpanToRange (text: Text) (span: SourceSpan) : Range =
         let start = text.lineMap.FindPosition(span.Start)
 
-        let endInclusive = text.lineMap.FindPosition(span.End)
+        if span.IsEmpty then
+            { Start = start; End = start }
+        else
+            let endInclusive = text.lineMap.FindPosition(span.End)
 
-        let endOffset = if Char.IsSurrogate(text.content, span.End) then 2 else 1
+            let endOffset = if Char.IsSurrogate(text.content, span.End) then 2 else 1
 
 
-        { Start = start
-          End = { endInclusive with Character = endInclusive.Character + endOffset } }
+            { Start = start
+              End = { endInclusive with Character = endInclusive.Character + endOffset } }
 
 
     let scrapeText (text: Text) : array<Element> =
@@ -242,16 +255,23 @@ module Markdown =
             | :? HeadingBlock as h ->
                 let level = h.Level
 
-                let title = text.content.Substring(h.Span.Start, h.Span.Length)
+                let fullText = text.content.Substring(h.Span.Start, h.Span.Length)
+                let title0 = fullText.TrimStart(' ', '#')
+                let headingPrefixLen = fullText.Length - title0.Length
+                let title = title0.TrimEnd(' ')
+                let headingSuffixLen = title0.Length - title.Length
+
+                let titleRange =
+                    sourceSpanToRange text (SourceSpan(h.Span.Start + headingPrefixLen, h.Span.End - headingSuffixLen))
 
                 let range = sourceSpanToRange text h.Span
 
                 let heading =
                     Node.mk
-                        title
+                        fullText
                         range
                         { level = level
-                          title = Node.mk_text title range
+                          title = Node.mk_text title titleRange
                           scope = range
                           children = [||] }
 
@@ -307,7 +327,7 @@ module Markdown =
                             Some(Node.mk_text title (sourceSpanToRange text titleSpan))
 
                     let link =
-                        MarkdownLink.IL(label = label, url = url, title = title) |> Node.mk linkText linkRange
+                        MdLink.IL(label = label, url = url, title = title) |> Node.mk linkText linkRange
 
                     elements.Add(ML link)
             | _ -> ()
@@ -346,8 +366,7 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
 
                 // Unwind further until we find a parent heading or none at all
                 if curHead.data.level >= newHead.data.level then
-                    let newScope =
-                        { Start = curHead.data.scope.Start; End = newHead.data.scope.Start }
+                    let newScope = { Start = curHead.data.scope.Start; End = newHead.data.scope.Start }
 
                     let curHead = { curHead with data = { curHead.data with scope = newScope } }
 

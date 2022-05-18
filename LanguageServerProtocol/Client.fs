@@ -91,6 +91,16 @@ type LspClient() =
 
   default __.WorkspaceSemanticTokensRefresh() = ignoreNotification
 
+  /// The `workspace/inlayHint/refresh` request is sent from the server to the client.
+  /// Servers can use it to ask clients to refresh the inlay hints currently shown in editors.
+  /// As a result the client should ask the server to recompute the inlay hints for these editors.
+  /// This is useful if a server detects a configuration change which requires a re-calculation
+  /// of all inlay hints. Note that the client still has the freedom to delay the re-calculation of the inlay hints
+  /// if for example an editor is currently not visible.
+  abstract member WorkspaceInlayHintRefresh: unit -> Async<unit>
+
+  default __.WorkspaceInlayHintRefresh() = ignoreNotification
+
   /// Diagnostics notification are sent from the server to the client to signal results of validation runs.
   ///
   /// Diagnostics are “owned” by the server so it is the server’s responsibility to clear them if necessary.

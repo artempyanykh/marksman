@@ -225,7 +225,7 @@ module Markdown =
                 false
 
     let markdigPipeline =
-        let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation()
+        let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation().EnableTrackTrivia()
 
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
         pipelineBuilder.Build()
@@ -303,7 +303,7 @@ module Markdown =
                     if labelSpan.IsEmpty then
                         String.Empty
                     else
-                        text.content.Substring(labelSpan.Start, labelSpan.End)
+                        text.content.Substring(labelSpan.Start, labelSpan.Length)
 
                 let titleSpan = l.TitleSpan
                 let title = l.Title

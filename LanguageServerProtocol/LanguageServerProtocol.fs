@@ -246,16 +246,17 @@ module Server =
     let onShutdown () =
       logger.trace (Log.setMessage "Shutdown received")
       shutdownReceived <- true
-      // VSCode Language Client has a bug that makes it to NOT send an `exit` notification when stopping a server.
-      // https://github.com/microsoft/vscode-languageserver-node/pull/776
-      // This results in a bunch of zombie language servers just hanging around.
-      // Although the fix was merged a while ago, the new client is yet to be released.
-      // As a workaround let's forcefully exit after 10s after receiving a `shutdown` request.
+      // VSCode Language Client has a bug that causes it to NOT send an `exit` notification when stopping a server:
+      // https://github.com/microsoft/vscode-languageserver-node/pull/776 This may result in a bunch of zombie language
+      // servers just hanging around after a few reloads/restarts.  Although the fix was merged a while ago, the new
+      // client is yet to be released.  As a workaround let's forcefully exit after 10s after receiving a `shutdown`
+      // request.
       task {
         do! Task.Delay(10_000)
         logger.trace (Log.setMessage "No `exit` notification within 10s after `shutdown` request. Exiting now.")
         quitSemaphore.Release() |> ignore
-      } |> ignore
+      }
+      |> ignore
 
     jsonRpc.AddLocalRpcMethod("shutdown", Action(onShutdown))
 
@@ -330,6 +331,8 @@ module Server =
       "textDocument/semanticTokens/full", requestHandling (fun s p -> s.TextDocumentSemanticTokensFull(p))
       "textDocument/semanticTokens/full/delta", requestHandling (fun s p -> s.TextDocumentSemanticTokensFullDelta(p))
       "textDocument/semanticTokens/range", requestHandling (fun s p -> s.TextDocumentSemanticTokensRange(p))
+      "textDocument/inlayHint", requestHandling (fun s p -> s.TextDocumentInlayHint(p))
+      "inlayHint/resolve", requestHandling (fun s p -> s.InlayHintResolve(p))
       "workspace/didChangeWatchedFiles",
       requestHandling (fun s p -> s.WorkspaceDidChangeWatchedFiles(p) |> notificationSuccess)
       "workspace/didChangeWorkspaceFolders",

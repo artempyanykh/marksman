@@ -141,8 +141,6 @@ module Folder =
     let tryFindDocument (uri: PathUri) (folder: Folder) : option<Document> = Map.tryFind uri folder.documents
 
     let rec private loadDocuments (root: PathUri) : seq<Document> =
-        let logger = LogProvider.getLoggerByName "readRoot"
-
         let di = DirectoryInfo(root.LocalPath)
 
         try
@@ -177,6 +175,8 @@ module Folder =
             Seq.empty
 
     let tryLoad (name: string) (root: PathUri) : option<Folder> =
+        logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
+        
         if Directory.Exists(root.LocalPath) then
             let documents =
                 loadDocuments root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq

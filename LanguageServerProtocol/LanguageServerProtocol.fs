@@ -159,11 +159,9 @@ module Server =
 
   let requestHandling<'param, 'result> (run: 'param -> AsyncLspResult<'result>) : Delegate =
     let runAsTask param ct =
-      let asyncLspResult = run param
-
       let asyncContinuation =
         async {
-          let! lspResult = asyncLspResult
+          let! lspResult = run param
 
           return
             match lspResult with

@@ -772,7 +772,7 @@ type ClientCapabilities =
     /// Client workspace capabilities specific to inlay hints.
     ///
     /// @since 3.17.0
-    InlayHint: InlayHintWorkspaceClientCapabilities
+    InlayHint: InlayHintWorkspaceClientCapabilities option
 
     /// Experimental client capabilities.
     Experimental: JToken option }

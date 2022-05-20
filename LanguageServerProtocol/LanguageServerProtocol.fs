@@ -159,9 +159,21 @@ module Server =
 
   let requestHandling<'param, 'result> (run: 'param -> AsyncLspResult<'result>) : Delegate =
     let runAsTask param ct =
+      let asyncLspResult =
+        try
+          // Although `run` returns an async result, its body may not be fully in an async context.
+          // Here we make sure that we catch and properly handle any exception before the first async.
+          run param
+        with
+        | ex ->
+          let rpcException = LocalRpcException(ex.Message)
+          rpcException.ErrorCode <- JsonRpc.ErrorCodes.internalError
+          rpcException.ErrorData <- ex.Data
+          raise rpcException
+
       let asyncContinuation =
         async {
-          let! lspResult = run param
+          let! lspResult = asyncLspResult
 
           return
             match lspResult with

@@ -20,7 +20,7 @@ let checkInlineSnapshot (document: array<Element>) snapshot =
 let scrapeString content = parseText (Text.mkText content)
 
 [<StoreSnapshotsPerClass>]
-module SnapshotTests =
+module HeadingTests =
 
     [<Fact>]
     let parse_empty () =
@@ -53,6 +53,9 @@ module SnapshotTests =
         let text = "# H1 \n## H2.1\n## H2.2\n"
         let document = scrapeString text
         checkSnapshot document
+        
+[<StoreSnapshotsPerClass>]
+module WikiLinkTests =
 
     [<Fact>]
     let parser_link_shortcut_ignore_for_now () =
@@ -131,7 +134,8 @@ module SnapshotTests =
         let document = scrapeString text
         checkSnapshot document
 
-module LinkParsing =
+[<StoreSnapshotsPerClass>]
+module MdLinkTest =
     [<Fact>]
     let parser_link_1 () =
         //          0123456789012

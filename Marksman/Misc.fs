@@ -11,11 +11,9 @@ let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 let lineEndings = [| "\r\n"; "\n" |]
 
 type String with
-    member this.Lines() : array<string> =
-        this.Split(lineEndings, StringSplitOptions.None)
+    member this.Lines() : array<string> = this.Split(lineEndings, StringSplitOptions.None)
 
-    member this.EndsWithNewline() : bool =
-        Array.exists<string> this.EndsWith lineEndings
+    member this.EndsWithNewline() : bool = Array.exists<string> this.EndsWith lineEndings
 
     member this.IsSubSequenceOf(other: string) : bool =
         let rec isMatching thisIdx otherIdx =
@@ -37,11 +35,9 @@ type String with
         let mutable chunkState = 0 // 0 no text chunk, 1 chunk in progress, 2 finished
 
         for char in this.ToCharArray() do
-            let isPunct =
-                Char.IsPunctuation(char) || Char.IsSymbol(char)
+            let isPunct = Char.IsPunctuation(char) || Char.IsSymbol(char)
 
-            let isSep =
-                Char.IsWhiteSpace(char) || char = '-'
+            let isSep = Char.IsWhiteSpace(char) || char = '-'
 
             let isToOut = not isPunct && not isSep
 
@@ -62,8 +58,7 @@ type String with
 let indentFmt (fmtA: 'A -> string) (a: 'A) =
     let reprA = fmtA a
 
-    let indentedLines =
-        reprA.Lines() |> Array.map (fun x -> "  " + x)
+    let indentedLines = reprA.Lines() |> Array.map (fun x -> "  " + x)
 
     String.Join(Environment.NewLine, indentedLines)
 
@@ -129,14 +124,11 @@ module PathUri =
         let localPath = uri.LocalPath
 
         let isWin =
-            localPath.Length >= 2
-            && Char.IsLetter(localPath[0])
-            && localPath[1] = ':'
+            localPath.Length >= 2 && Char.IsLetter(localPath[0]) && localPath[1] = ':'
 
         let localPath =
             if isWin then
-                Char.ToLower(localPath[0]).ToString()
-                + localPath[1..]
+                Char.ToLower(localPath[0]).ToString() + localPath[1..]
             else
                 localPath
 
@@ -146,15 +138,27 @@ module PathUri =
             else
                 localPathToUriString localPath
 
-        { uri = escapedUri
-          localPath = localPath }
+        { uri = escapedUri; localPath = localPath }
 
 
 type Position with
     static member Mk(line: int, char: int) : Position = { Line = line; Character = char }
     static member MkLine(line: int) : Position = Position.Mk(line, 0)
+    // TODO: use text for precise loc
+    member this.NextChar(n: int) : Position = { Line = this.Line; Character = this.Character + n }
+
+    // TODO: use text for precise loc
+    member this.PrevChar(n: int) : Position =
+        if this.Character <= n then
+            failwith $"Start of line doesn't have a previous char: ${this.DebuggerDisplay}"
+        else
+            { Line = this.Line; Character = this.Character - n }
 
 type Range with
     static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range =
         { Start = Position.Mk(startLine, startChar)
           End = Position.Mk(endLine, endChar) }
+
+    static member Mk(start: Position, end_: Position) : Range = { Start = start; End = end_ }
+
+    member this.ContainsInclusive(pos: Position) : bool = this.Start <= pos && pos <= this.End

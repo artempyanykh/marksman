@@ -118,7 +118,6 @@ module Element =
 
 module Markdown =
     open Markdig
-    open Markdig.Syntax
     open Markdig.Syntax.Inlines
     open Markdig.Parsers
     open Markdig.Helpers
@@ -202,10 +201,7 @@ module Markdown =
                                     (docText, SourceSpan(offsetDocStart, offsetDocEnd)) |> Some
 
                             let heading =
-                                if String.IsNullOrEmpty headingText then
-                                    None
-                                else
-                                    (headingText, SourceSpan(offsetHeadingStart, offsetHeadingEnd)) |> Some
+                                (headingText, SourceSpan(offsetHeadingStart, offsetHeadingEnd)) |> Some
 
                             doc, heading
 
@@ -225,7 +221,8 @@ module Markdown =
                 false
 
     let markdigPipeline =
-        let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation().EnableTrackTrivia()
+        let pipelineBuilder =
+            MarkdownPipelineBuilder().UsePreciseSourceLocation().EnableTrackTrivia()
 
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
         pipelineBuilder.Build()
@@ -419,11 +416,14 @@ let rec private sortElements (text: Text) (elements: array<Element>) : unit =
     Array.sortInPlaceBy elementStart elements
 
 let rec parseText (text: Text) : array<Element> =
-    let flatElements = Markdown.scrapeText text
+    if String.IsNullOrEmpty text.content then
+        [||]
+    else
+        let flatElements = Markdown.scrapeText text
 
-    let hierarchicalElements = reconstructHierarchy text flatElements
+        let hierarchicalElements = reconstructHierarchy text flatElements
 
-    let elements = Array.ofSeq hierarchicalElements
+        let elements = Array.ofSeq hierarchicalElements
 
-    sortElements text elements
-    elements
+        sortElements text elements
+        elements

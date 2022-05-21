@@ -1,145 +1,127 @@
 ﻿module Marksman.Comp
 
+open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
-open Parser
+open Marksman.Parser
 open Marksman.Domain
 open Marksman.Misc
 
-type Completable =
-    | WikiLink
-    | MarkdownLink
-    | PrefixWiki
-    | PrefixMarkdown
-    | EmptySquareBrackets
-    | EmptyRoundBrackets
+let private logger = LogProvider.getLoggerByName "Comp"
 
-let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> = [||]
-//    let doc = Folder.tryFindDocument docUri folder
-//
-//    match doc with
-//    | None -> [||]
-//    | Some doc ->
-//        let curDocName = doc.name
-//
-//        let isAtPoint =
-//            function
-//            | CP cp -> cp.range.End = pos
-//            | WL x -> x.range.Start <= pos && pos < x.range.End
-//            | _ -> false
-//
-//        let atPoint =
-//            Document.elementsAll doc |> Seq.tryFind isAtPoint
-//
-//        match atPoint with
-//        | None -> [||]
-//        | Some atPoint ->
-//            let wantedDoc, wantedHeading =
-//                match atPoint with
-//                | WL ref ->
-//                    let destDoc =
-//                        WikiLink.destDoc ref.dest
-//                        // Absence of explicit doc means completion inside the current doc
-//                        |> Option.defaultValue curDocName
-//                        |> Some
-//
-//                    destDoc, WikiLink.destHeading ref.dest
-//                | CP cp -> CompletionPoint.destNote cp, None
-//                | _ -> None, None
-//
-//            // Now we have 2 modes of completion to tackle
-//            match wantedDoc, wantedHeading with
-//            // Plain doc name completion
-//            | Some wantedDoc, None ->
-//                let docs =
-//                    Map.values folder.documents
-//                    |> Seq.map (fun doc -> doc, Document.title doc, doc.name)
-//
-//                let isMatchingDoc (_, title: option<Heading>, name) =
-//                    let titleMatch =
-//                        title
-//                        |> Option.map (fun t -> wantedDoc.IsSubSequenceOf(t.text))
-//                        |> Option.defaultValue false
-//
-//                    let nameMatch =
-//                        wantedDoc.IsSubSequenceOf(name)
-//
-//                    let notCurDoc = name <> curDocName
-//
-//                    (titleMatch || nameMatch) && notCurDoc
-//
-//                let matchingDocs =
-//                    docs |> Seq.filter isMatchingDoc
-//
-//                let toCompletionItem (_doc, title, name) =
-//                    let label =
-//                        Option.map Heading.text title
-//                        |> Option.defaultValue name
-//
-//                    let detail =
-//                        if Option.isSome title then
-//                            Some name
-//                        else
-//                            None
-//
-//                    let dest = WikiLink.Doc name
-//
-//                    let newText = WikiLink.fmt dest
-//
-//                    let textEdit =
-//                        { Range = Element.range atPoint
-//                          NewText = newText }
-//
-//                    { CompletionItem.Create(label) with
-//                        Detail = detail
-//                        TextEdit = Some textEdit
-//                        FilterText = Some newText }
-//
-//                matchingDocs
-//                |> Seq.map toCompletionItem
-//                |> Array.ofSeq
-//            // Heading completion inside an already specified doc
-//            | Some wantedDoc, Some wantedHeading ->
-//                let targetDoc =
-//                    Map.values folder.documents
-//                    |> Seq.tryFind (fun doc -> doc.name = wantedDoc)
-//
-//                match targetDoc with
-//                | None -> [||]
-//                | Some targetDoc ->
-//                    let matchingHeadings =
-//                        seq {
-//                            for el in Document.elementsAll targetDoc do
-//                                match Element.asHeading el with
-//                                | Some h when
-//                                    h.level <> 1
-//                                    && wantedHeading.IsSubSequenceOf(Heading.title h)
-//                                    ->
-//                                    yield h
-//                                | _ -> ()
-//                        }
-//
-//                    let toCompletionItem heading =
-//                        // TODO: consider using slug for heading
-//                        let label = Heading.title heading
-//
-//                        let destDoc =
-//                            if wantedDoc = curDocName then
-//                                None
-//                            else
-//                                Some wantedDoc
-//
-//                        let dest = WikiLink.Heading(destDoc, label)
-//                        let newText = WikiLink.fmt dest
-//
-//                        let textEdit =
-//                            { Range = Element.range atPoint
-//                              NewText = newText }
-//
-//                        { CompletionItem.Create(label) with
-//                            TextEdit = Some textEdit
-//                            FilterText = Some newText }
-//
-//                    matchingHeadings
-//                    |> Seq.map toCompletionItem
-//                    |> Array.ofSeq
-//            | _ -> [||]
+[<RequireQualifiedAccess>]
+type Comp =
+    | Title of range: Range
+    | Heading of destDoc: option<string> * range: Range
+
+    override this.ToString() =
+        match this with
+        | Comp.Title range -> $"Title: range={range.DebuggerDisplay}"
+        | Comp.Heading (destDoc, range) -> $"Heading: dest={destDoc}; range={range.DebuggerDisplay}"
+
+let compOfElement (pos: Position) (el: Element) : option<Comp> =
+    let elementRange = Element.range el
+
+    if not (elementRange.ContainsInclusive(pos)) then
+        None
+    else
+        match el with
+        | WL wl ->
+            match wl.data.doc, wl.data.heading with
+            | None, None ->
+                let range = Range.Mk(elementRange.Start.NextChar(2), elementRange.End.PrevChar(2))
+                Some(Comp.Title range)
+            | Some doc, None ->
+                if doc.range.ContainsInclusive(pos) then
+                    Some(Comp.Title doc.range)
+                else
+                    None
+            | Some doc, Some hd ->
+                if doc.range.ContainsInclusive(pos) then
+                    Some(Comp.Title doc.range)
+                else if hd.range.ContainsInclusive(pos) then
+                    let destDoc = doc.text
+                    Some(Comp.Heading(Some destDoc, hd.range))
+                else
+                    None
+            | None, Some hd ->
+                if hd.range.ContainsInclusive(pos) then
+                    Some(Comp.Heading(None, hd.range))
+                else
+                    None
+        | _ -> None
+
+let findCompAtPoint (pos: Position) (doc: Document) : option<Comp> =
+    let comp =
+        Document.elementsAll doc
+        |> Seq.map (compOfElement pos)
+        |> Seq.tryFind Option.isSome
+        |> Option.flatten
+
+    logger.trace (Log.setMessage "Processed completion points" >> Log.addContext "comp" comp)
+    comp
+
+
+let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array<CompletionItem> =
+    match comp with
+    | Comp.Title range ->
+        let input = srcDoc.text.Substring(range)
+
+        let titleWhenMatch (doc: Document) =
+            let titleText =
+                Document.title doc |> Option.map (fun t -> Heading.title t.data) |> Option.defaultValue doc.name
+
+            if input.IsSubSequenceOf(titleText) then [ titleText ] else []
+
+        let matchingTitles = folder.documents |> Map.values |> Seq.collect titleWhenMatch
+
+        let toCompletionItem title =
+            let textEdit = { Range = range; NewText = title }
+
+            { CompletionItem.Create(title) with
+                Detail = None
+                TextEdit = Some textEdit
+                FilterText = Some title }
+
+        Seq.map toCompletionItem matchingTitles |> Array.ofSeq
+    | Comp.Heading (destDocTag, range) ->
+        let destDoc =
+            match destDocTag with
+            | None -> Some srcDoc
+            | Some destDocTag ->
+                let matchTag (doc: Document) =
+                    let tag =
+                        Document.title doc |> Option.map (fun h -> h.data.title.text) |> Option.defaultValue doc.name
+
+                    tag = destDocTag
+
+                folder.documents |> Map.values |> Seq.tryFind matchTag
+
+        match destDoc with
+        | None -> [||]
+        | Some destDoc ->
+            let input = srcDoc.text.Substring(range)
+
+            let matchingHeadings =
+                Document.headings destDoc
+                |> Seq.map (fun n -> Heading.title n.data)
+                |> Seq.filter input.IsSubSequenceOf
+
+            let toCompletionItem hd =
+                let textEdit = { Range = range; NewText = hd }
+
+                { CompletionItem.Create(hd) with
+                    Detail = None
+                    TextEdit = Some textEdit
+                    FilterText = Some hd }
+
+            matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
+
+let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
+    let doc = Folder.tryFindDocument docUri folder
+
+    match doc with
+    | None -> [||]
+    | Some doc ->
+        match findCompAtPoint pos doc with
+        | None -> [||]
+        | Some comp -> findCandidatesInDoc comp doc folder

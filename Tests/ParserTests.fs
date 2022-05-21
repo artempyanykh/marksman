@@ -71,7 +71,12 @@ module SnapshotTests =
         //          01234567890123456
         let text = "[[note#heading]]"
         let document = scrapeString text
-        checkInlineSnapshot document [ "WL: [[note#heading]]; (0,0)-(0,16)"; "  doc=note; (0,2)-(0,6)"; "  head=heading; (0,7)-(0,14)" ]
+
+        checkInlineSnapshot
+            document
+            [ "WL: [[note#heading]]; (0,0)-(0,16)"
+              "  doc=note; (0,2)-(0,6)"
+              "  head=heading; (0,7)-(0,14)" ]
 
     [<Fact>]
     let parser_xref_text_before () =
@@ -102,6 +107,18 @@ module SnapshotTests =
         //          01234 0123456789012345678901
         let document = scrapeString text
         checkSnapshot document
+
+    [<Fact>]
+    let parser_wiki_empty_heading () =
+        //          0123456
+        let text = "[[T#]]"
+        let doc = scrapeString text
+
+        checkInlineSnapshot
+            doc
+            [ "WL: [[T#]]; (0,0)-(0,6)" //
+              "  doc=T; (0,2)-(0,3)"
+              "  head=; (0,4)-(0,4)" ]
 
     [<Fact>]
     let complex_example_1 () =
@@ -138,13 +155,13 @@ module LinkParsing =
     let parser_link_4 () =
         let text = "[]()"
         let document = scrapeString text
-        checkInlineSnapshot document ["ML: [](); (0,0)-(0,4)"]
+        checkInlineSnapshot document [ "ML: [](); (0,0)-(0,4)" ]
 
     [<Fact>]
     let parser_link_5 () =
         let text = "[la bel](url \"title\")"
         let document = scrapeString text
-        checkInlineSnapshot document ["ML: [la bel](url \"title\"); (0,0)-(0,21)"]
+        checkInlineSnapshot document [ "ML: [la bel](url \"title\"); (0,0)-(0,21)" ]
 
     [<Fact>]
     let parser_link_6 () =
@@ -156,7 +173,7 @@ module LinkParsing =
     let parser_link_7 () =
         let text = "[](url)"
         let document = scrapeString text
-        checkInlineSnapshot document ["ML: [](url); (0,0)-(0,7)"]
+        checkInlineSnapshot document [ "ML: [](url); (0,0)-(0,7)" ]
 
     [<Fact>]
     let parser_link_8 () =

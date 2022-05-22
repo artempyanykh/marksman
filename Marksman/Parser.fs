@@ -168,7 +168,7 @@ module Element =
         function
         | WL ref -> Some ref
         | _ -> None
-    
+
     let asLinkDef =
         function
         | MLD def -> Some def

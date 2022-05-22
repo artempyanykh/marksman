@@ -56,7 +56,8 @@ let startLSP (args: int * bool) : int =
     let requestHandlings = Server.defaultRequestHandlings ()
 
     let result =
-        Server.start requestHandlings input output MS.MarksmanClient (fun client -> new MS.MarksmanServer(client))
+        Server.start requestHandlings input output MS.MarksmanClient (fun client ->
+            new MS.MarksmanServer(client))
 
     logger.trace (Log.setMessage "Stopped Marksman LSP server")
 
@@ -68,7 +69,11 @@ let main args =
         Input.Option([ "--verbose"; "-v" ], 2, "Set logging verbosity level")
 
     let waitForDebugger =
-        Input.Option([ "--wait-for-debugger" ], false, "Wait for debugger to attach before running the program")
+        Input.Option(
+            [ "--wait-for-debugger" ],
+            false,
+            "Wait for debugger to attach before running the program"
+        )
 
     let lspCommand =
         command "server" {

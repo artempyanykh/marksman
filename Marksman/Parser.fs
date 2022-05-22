@@ -70,6 +70,13 @@ module MdLink =
             let fmtLabel = Node.fmtText label
             $"RS: label={fmtLabel}"
 
+    let referenceLabel =
+        function
+        | MdLink.RF (_, label)
+        | MdLink.RC label
+        | MdLink.RS label -> Some label
+        | MdLink.IL _ -> None
+
 type MdLinkDef = { label: TextNode; url: TextNode; title: option<TextNode> }
 
 module MdLinkDef =

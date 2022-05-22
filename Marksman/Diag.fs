@@ -24,28 +24,28 @@ let code: Entry -> string =
 type DocumentIndex =
     { path: PathUri
       titles: list<Node<Heading>>
-      headings: Map<string, list<Node<Heading>>>
+      headings: Map<Slug, list<Node<Heading>>>
       wikiLinks: array<Node<WikiLink>> }
 
 let indexDocument (doc: Document) : DocumentIndex =
     let titles = ResizeArray()
 
-    let headings = Dictionary<string, ResizeArray<Node<Heading>>>()
+    let headings = Dictionary<Slug, ResizeArray<Node<Heading>>>()
 
-    let refs = ResizeArray()
+    let wikiLinks = ResizeArray()
 
     for el in Document.elementsAll doc do
         match el with
-        | H h ->
-            let slug = (Heading.title h.data).Slug()
+        | H hn ->
+            let slug = Heading.slug hn.data
 
             if not (headings.ContainsKey(slug)) then
                 headings[slug] <- ResizeArray()
 
-            headings.[slug].Add(h)
+            headings.[slug].Add(hn)
 
-            if Heading.isTitle h.data then titles.Add(h)
-        | WL ref -> refs.Add(ref)
+            if Heading.isTitle hn.data then titles.Add(hn)
+        | WL ref -> wikiLinks.Add(ref)
         | _ -> ()
 
     let titles = titles |> List.ofSeq
@@ -57,17 +57,20 @@ let indexDocument (doc: Document) : DocumentIndex =
         }
         |> Map.ofSeq
 
-    let refs = refs.ToArray()
+    let wikiLinks = wikiLinks.ToArray()
 
-    { path = doc.path; titles = titles; headings = headings; wikiLinks = refs }
+    { path = doc.path
+      titles = titles
+      headings = headings
+      wikiLinks = wikiLinks }
 
-type FolderIndex = Map<DocName, DocumentIndex>
+type FolderIndex = Map<Slug, DocumentIndex>
 
 let indexFolder (folder: Folder) : FolderIndex =
     seq {
         for KeyValue (_, doc) in folder.documents do
             let docSummary = indexDocument doc
-            yield doc.name, docSummary
+            yield Document.name doc |> Slug.ofString, docSummary
     }
     |> Map.ofSeq
 
@@ -75,7 +78,10 @@ let checkTitles (summary: DocumentIndex) : seq<Entry> =
     match summary.titles with
     | [] -> []
     | [ _ ] -> []
-    | first :: rest -> rest |> List.map (fun dup -> DupTitle(orig = first, dup = dup)) |> Seq.ofList
+    | first :: rest ->
+        rest
+        |> List.map (fun dup -> DupTitle(orig = first, dup = dup))
+        |> Seq.ofList
 
 let checkHeadings (index: DocumentIndex) : seq<Entry> =
     seq {
@@ -88,14 +94,17 @@ let checkHeadings (index: DocumentIndex) : seq<Entry> =
                     yield DupHeading(orig = first, dup = dup)
     }
 
-let checkRefs (docName: DocName) (index: FolderIndex) : seq<Entry> =
-    let docIndex = Map.find docName index
+let checkWikiLinks (docSlug: Slug) (index: FolderIndex) : seq<Entry> =
+    let docIndex = Map.find docSlug index
 
     seq {
         for wl in docIndex.wikiLinks do
-            let destDocName = WikiLink.destDoc wl.data |> Option.defaultValue docName
+            let destDocSlug =
+                WikiLink.destDoc wl.data
+                |> Option.map Slug.ofString
+                |> Option.defaultValue docSlug
 
-            let destDocIndex = Map.tryFind destDocName index
+            let destDocIndex = Map.tryFind destDocSlug index
 
             match destDocIndex with
             | None -> yield BrokenDocWL(wl)
@@ -103,7 +112,7 @@ let checkRefs (docName: DocName) (index: FolderIndex) : seq<Entry> =
                 match WikiLink.destHeading wl.data with
                 | None -> ()
                 | Some destHeading ->
-                    let destSlug = destHeading.Slug()
+                    let destSlug = Slug.ofString destHeading
 
                     match Map.tryFind destSlug destDocIndex.headings with
                     | None -> yield BrokenHeadingWL(wl)
@@ -114,12 +123,12 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
     let folderIndex = indexFolder folder
 
     seq {
-        for KeyValue (docName, docIndex) in folderIndex do
+        for KeyValue (docSlug, docIndex) in folderIndex do
             let docDiag =
                 seq {
                     yield! checkTitles docIndex
                     yield! checkHeadings docIndex
-                    yield! checkRefs docName folderIndex
+                    yield! checkWikiLinks docSlug folderIndex
                 }
                 |> List.ofSeq
 
@@ -164,7 +173,8 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = $"Reference to non-existent heading: {WikiLink.destHeading wl.data |> Option.get}"
+          Message =
+            $"Reference to non-existent heading: {WikiLink.destHeading wl.data |> Option.get}"
           RelatedInformation = None
           Tags = None
           Data = None }
@@ -178,7 +188,9 @@ let diagnosticForFolder (folder: Folder) : array<PathUri * array<Lsp.Diagnostic>
         uri, lspDiags)
     |> Array.ofSeq
 
-let diagnosticForWorkspace (workspace: Workspace) : Map<PathUri, array<PathUri * array<Lsp.Diagnostic>>> =
+let diagnosticForWorkspace
+    (workspace: Workspace)
+    : Map<PathUri, array<PathUri * array<Lsp.Diagnostic>>> =
     seq {
         for f in Workspace.folders workspace do
             yield f.root, diagnosticForFolder f

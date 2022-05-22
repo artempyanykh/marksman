@@ -1,6 +1,7 @@
 module Marksman.Misc
 
 open System
+open System.IO
 open System.Text
 open Ionide.LanguageServerProtocol.Types
 
@@ -39,7 +40,7 @@ type String with
 
             let isSep = Char.IsWhiteSpace(char) || char = '-'
 
-            let isToOut = not isPunct && not isSep
+            let isToOut = (not isPunct && not isSep)
 
             if isSep then sepSeen <- true
 
@@ -49,11 +50,26 @@ type String with
                     sepSeen <- false
 
                 chunkState <- 1
+
                 sb <- sb.Append(Char.ToLower(char))
             else if chunkState = 1 then
                 chunkState <- 2
 
         sb.ToString()
+
+type Slug = Slug of string
+
+module Slug =
+    let ofString (s: string) = Slug(s.Slug())
+
+    let toString (Slug s) = s
+
+    let str (s: string) = s.Slug()
+
+    let isSubSequence (sub: Slug) (sup: Slug) =
+        let (Slug sub) = sub
+        let (Slug sup) = sup
+        sub.IsSubSequenceOf(sup)
 
 let indentFmt (fmtA: 'A -> string) (a: 'A) =
     let reprA = fmtA a
@@ -124,7 +140,9 @@ module PathUri =
         let localPath = uri.LocalPath
 
         let isWin =
-            localPath.Length >= 2 && Char.IsLetter(localPath[0]) && localPath[1] = ':'
+            localPath.Length >= 2
+            && Char.IsLetter(localPath[0])
+            && localPath[1] = ':'
 
         let localPath =
             if isWin then

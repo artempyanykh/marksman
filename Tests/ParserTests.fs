@@ -122,6 +122,27 @@ module WikiLinkTests =
             [ "WL: [[T#]]; (0,0)-(0,6)" //
               "  doc=T; (0,2)-(0,3)"
               "  head=; (0,4)-(0,4)" ]
+    
+    [<Fact>]
+    let parse_wiki_escaped_hash () =
+        //          01234567
+        let text = "[[F\#]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+        
+    [<Fact>]
+    let parse_wiki_escaped_hash_and_heading () =
+        //          0123456789012345
+        let text = "[[F\##Section]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+        
+    [<Fact>]
+    let parse_wiki_escaped_hash_and_heading_with_hash () =
+        //          0123456789012345
+        let text = "[[F\##Section #3]]"
+        let doc = scrapeString text
+        checkSnapshot doc
 
     [<Fact>]
     let complex_example_1 () =

@@ -118,7 +118,8 @@ module Document =
                     match el with
                     | H h -> yield! collect h.data.children
                     | WL _
-                    | ML _ -> ()
+                    | ML _
+                    | MLD _ -> ()
             }
 
         collect document.elements

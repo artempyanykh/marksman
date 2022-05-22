@@ -58,6 +58,12 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                     Some(Comp.Heading(None, hd.range))
                 else
                     None
+        | ML link ->
+            match link.data with
+            | MdLink.RF (_, label)
+            | MdLink.RS label
+            | MdLink.RC label -> Some(Comp.LinkReference(label.range, false))
+            | _ -> None
         | _ -> None
 
 let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
@@ -175,9 +181,25 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
 
             matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
     | Comp.LinkReference (range, needsClosing) ->
-        // TODO: add link def completion
         let input = srcDoc.text.Substring(range)
-        [||]
+
+        let matchingDefs =
+            Document.linkDefs srcDoc
+            |> Seq.filter (fun { data = def } -> input.IsSubSequenceOf(def.label.text))
+            |> Seq.map Node.data
+
+        let toCompletionItem def =
+            let newText = def.label.text
+            let newText = if needsClosing then newText + "]" else newText
+            let textEdit = { Range = range; NewText = newText }
+
+            { CompletionItem.Create(def.label.text) with
+                Detail = def.title |> Option.map Node.text
+                Documentation = def.url |> Node.text |> Documentation.String |> Some
+                TextEdit = Some textEdit
+                FilterText = Some def.label.text }
+
+        matchingDefs |> Seq.map toCompletionItem |> Array.ofSeq
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocument docUri folder

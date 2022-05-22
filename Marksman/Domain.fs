@@ -137,6 +137,14 @@ module Document =
 
         headings document |> Seq.tryFind matchingHeading
 
+    let linkDefs (doc: Document) : seq<Node<MdLinkDef>> =
+        seq {
+            for el in elementsAll doc do
+                match Element.asLinkDef el with
+                | Some def -> yield def
+                | _ -> ()
+        }
+
     let elementAtPos (pos: Position) (doc: Document) : option<Element> =
         elementsAll doc
         |> Seq.tryFind (fun el ->

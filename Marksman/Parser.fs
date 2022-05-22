@@ -18,20 +18,23 @@ module Node =
     let range node = node.range
     let inner node = node.data
 
-type DocName = string
-
 [<RequireQualifiedAccess>]
 type WikiLink = { doc: option<TextNode>; heading: option<TextNode> }
 
 module WikiLink =
-    let destDoc (dest: WikiLink) : option<DocName> = dest.doc |> Option.map Node.text
+    let destDoc (dest: WikiLink) : option<string> = dest.doc |> Option.map Node.text
 
     let destHeading (dest: WikiLink) : option<string> = dest.heading |> Option.map Node.text
 
     let fmt (wl: WikiLink) : string =
         let lines = ResizeArray()
-        wl.doc |> Option.iter (fun d -> $"doc={d.text}; {d.range.DebuggerDisplay}" |> lines.Add)
-        wl.heading |> Option.iter (fun h -> $"head={h.text}; {h.range.DebuggerDisplay}" |> lines.Add)
+
+        wl.doc
+        |> Option.iter (fun d -> $"doc={d.text}; {d.range.DebuggerDisplay}" |> lines.Add)
+
+        wl.heading
+        |> Option.iter (fun h -> $"head={h.text}; {h.range.DebuggerDisplay}" |> lines.Add)
+
         String.Join(Environment.NewLine, lines)
 
 [<RequireQualifiedAccess>]
@@ -50,7 +53,11 @@ type Element =
     | WL of Node<WikiLink>
     | ML of Node<MdLink>
 
-and Heading = { level: int; title: TextNode; scope: Range; children: array<Element> }
+and Heading =
+    { level: int
+      title: TextNode
+      scope: Range
+      children: array<Element> }
 
 let rec private fmtElement =
     function
@@ -80,7 +87,10 @@ and private fmtMdLink node = $"ML: {node.text}; {node.range.DebuggerDisplay}"
 module Heading =
     let fmt = fmtHeading
 
-    let title (heading: Heading) : string = (Node.text heading.title).TrimStart(' ', '#').TrimEnd(' ')
+    let name (heading: Heading) : string =
+        (Node.text heading.title).TrimStart(' ', '#').TrimEnd(' ')
+
+    let slug (heading: Heading) : Slug = name heading |> Slug.ofString
 
     let isTitle (heading: Heading) = heading.level <= 1
 
@@ -122,7 +132,12 @@ module Markdown =
     open Markdig.Parsers
     open Markdig.Helpers
 
-    type WikiLinkInline(text: string, doc: Option<string * SourceSpan>, heading: option<string * SourceSpan>) =
+    type WikiLinkInline
+        (
+            text: string,
+            doc: Option<string * SourceSpan>,
+            heading: option<string * SourceSpan>
+        ) =
         inherit LeafInline()
         member val Text = text
 
@@ -154,7 +169,9 @@ module Markdown =
                 let shouldStop (c: char) = c.IsNewLineOrLineFeed() || c.IsZero() || found
 
                 while not (shouldStop current) do
-                    if current = '#' && offsetHashDelim.IsNone then
+                    if current = '#'
+                       && slice.PeekCharExtra(-1) <> '\\'
+                       && offsetHashDelim.IsNone then
                         offsetHashDelim <- Some(processor.GetSourcePosition(slice.Start))
 
                     if current = ']' then
@@ -181,7 +198,10 @@ module Markdown =
 
                             let docText =
                                 if offsetDocEnd >= offsetDocStart then
-                                    slice.Text.Substring(start + 2, offsetDocEnd - offsetDocStart + 1)
+                                    slice.Text.Substring(
+                                        start + 2,
+                                        offsetDocEnd - offsetDocStart + 1
+                                    )
                                 else
                                     String.Empty
 
@@ -201,14 +221,18 @@ module Markdown =
                                     (docText, SourceSpan(offsetDocStart, offsetDocEnd)) |> Some
 
                             let heading =
-                                (headingText, SourceSpan(offsetHeadingStart, offsetHeadingEnd)) |> Some
+                                (headingText, SourceSpan(offsetHeadingStart, offsetHeadingEnd))
+                                |> Some
 
                             doc, heading
 
                         | None ->
                             let offsetDocStart = offsetStart + 2
                             let offsetDocEnd = offsetEnd - 2
-                            let docText = slice.Text.Substring(start + 2, offsetDocEnd - offsetDocStart + 1)
+
+                            let docText =
+                                slice.Text.Substring(start + 2, offsetDocEnd - offsetDocStart + 1)
+
                             Some(docText, SourceSpan(offsetDocStart, offsetDocEnd)), None
 
 
@@ -222,7 +246,9 @@ module Markdown =
 
     let markdigPipeline =
         let pipelineBuilder =
-            MarkdownPipelineBuilder().UsePreciseSourceLocation().EnableTrackTrivia()
+            MarkdownPipelineBuilder()
+                .UsePreciseSourceLocation()
+                .EnableTrackTrivia()
 
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
         pipelineBuilder.Build()
@@ -234,9 +260,7 @@ module Markdown =
             { Start = start; End = start }
         else
             let endInclusive = text.lineMap.FindPosition(span.End)
-
             let endOffset = if Char.IsSurrogate(text.content, span.End) then 2 else 1
-
 
             { Start = start
               End = { endInclusive with Character = endInclusive.Character + endOffset } }
@@ -259,7 +283,9 @@ module Markdown =
                 let headingSuffixLen = title0.Length - title.Length
 
                 let titleRange =
-                    sourceSpanToRange text (SourceSpan(h.Span.Start + headingPrefixLen, h.Span.End - headingSuffixLen))
+                    sourceSpanToRange
+                        text
+                        (SourceSpan(h.Span.Start + headingPrefixLen, h.Span.End - headingSuffixLen))
 
                 let range = sourceSpanToRange text h.Span
 
@@ -276,7 +302,8 @@ module Markdown =
             | :? WikiLinkInline as link ->
                 let doc =
                     match link.Doc, link.DocSpan with
-                    | Some doc, Some docSpan -> Node.mk_text doc (sourceSpanToRange text docSpan) |> Some
+                    | Some doc, Some docSpan ->
+                        Node.mk_text doc (sourceSpanToRange text docSpan) |> Some
                     | _ -> None
 
                 let heading =
@@ -324,7 +351,8 @@ module Markdown =
                             Some(Node.mk_text title (sourceSpanToRange text titleSpan))
 
                     let link =
-                        MdLink.IL(label = label, url = url, title = title) |> Node.mk linkText linkRange
+                        MdLink.IL(label = label, url = url, title = title)
+                        |> Node.mk linkText linkRange
 
                     elements.Add(ML link)
             | _ -> ()
@@ -363,9 +391,11 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
 
                 // Unwind further until we find a parent heading or none at all
                 if curHead.data.level >= newHead.data.level then
-                    let newScope = { Start = curHead.data.scope.Start; End = newHead.data.scope.Start }
+                    let newScope =
+                        { Start = curHead.data.scope.Start; End = newHead.data.scope.Start }
 
-                    let curHead = { curHead with data = { curHead.data with scope = newScope } }
+                    let curHead =
+                        { curHead with data = { curHead.data with scope = newScope } }
 
                     accChildren <- [ H curHead ]
                     headStack <- rest

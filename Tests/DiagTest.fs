@@ -9,10 +9,10 @@ open Marksman.Diag
 
 let makeFakeDocument (content: string) : Document =
     let text = Text.mkText content
-    let elements = Parser.parseText text
+    let elements = parseText text
 
     { path = PathUri.fromString "memory://fake.md"
-      name = "fake"
+      relPath = "fake.md"
       version = None
       text = text
       elements = elements }

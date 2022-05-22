@@ -5,13 +5,13 @@ open System.IO
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
-open Text
-open Parser
-open Misc
+open Marksman.Parser
+open Marksman.Text
+open Marksman.Misc
 
 type Document =
     { path: PathUri
-      name: DocName
+      relPath: string
       version: option<int>
       text: Text
       elements: array<Element> }
@@ -47,17 +47,16 @@ module Document =
 
         let newElements = parseText newText
 
-        { document with version = newVersion; text = newText; elements = newElements }
+        { document with
+            version = newVersion
+            text = newText
+            elements = newElements }
 
-    let documentName (folderPath: PathUri) (docPath: PathUri) : DocName =
+    let pathFromFolder (folderPath: PathUri) (docPath: PathUri) : string =
         let docPath = docPath.LocalPath
         let folderPath = folderPath.LocalPath
 
-        let docRelPath = Path.GetRelativePath(folderPath, docPath)
-
-        let docName = Path.GetFileNameWithoutExtension(docRelPath)
-
-        docName
+        Path.GetRelativePath(folderPath, docPath)
 
     let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Document =
         let path = PathUri.fromString item.Uri
@@ -65,7 +64,7 @@ module Document =
         let elements = parseText text
 
         { path = path
-          name = documentName root path
+          relPath = pathFromFolder root path
           version = Some item.Version
           text = text
           elements = elements }
@@ -73,14 +72,15 @@ module Document =
 
     let load (root: PathUri) (path: PathUri) : option<Document> =
         try
-            let content = using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
+            let content =
+                using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
 
             let text = mkText content
             let elements = parseText text
 
             Some
                 { path = path
-                  name = documentName root path
+                  relPath = pathFromFolder root path
                   text = text
                   elements = elements
                   version = None }
@@ -89,7 +89,9 @@ module Document =
 
     let title (doc: Document) : option<Node<Heading>> =
         let isTitle el =
-            Element.asHeading el |> Option.map (fun x -> x.data.level = 1) |> Option.defaultValue false
+            Element.asHeading el
+            |> Option.map (fun x -> x.data.level = 1)
+            |> Option.defaultValue false
 
         let titleOpt =
             doc.elements
@@ -99,6 +101,13 @@ module Document =
                 | other -> failwith $"Expected heading: {other}")
 
         titleOpt
+
+    let name (doc: Document) : string =
+        match title doc with
+        | Some { data = hd } -> Heading.name hd
+        | None -> doc.relPath |> Path.GetFileNameWithoutExtension
+
+    let slug (doc: Document) : Slug = name doc |> Slug.ofString
 
     let elementsAll (document: Document) : seq<Element> =
         let rec collect els =
@@ -122,9 +131,9 @@ module Document =
                 | _ -> ()
         }
 
-    let headingByName (name: string) (document: Document) : option<Node<Heading>> =
-        let nameSlug = name.Slug()
-        let matchingHeading h = (Heading.title h.data).Slug() = nameSlug
+    let headingBySlug (nameSlug: Slug) (document: Document) : option<Node<Heading>> =
+        let matchingHeading { data = h } = Heading.slug h = nameSlug
+
         headings document |> Seq.tryFind matchingHeading
 
     let elementAtPos (pos: Position) (doc: Document) : option<Element> =
@@ -138,7 +147,8 @@ type Folder = { name: string; root: PathUri; documents: Map<PathUri, Document> }
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
-    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Document> = Map.tryFind uri folder.documents
+    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Document> =
+        Map.tryFind uri folder.documents
 
     let rec private loadDocuments (root: PathUri) : seq<Document> =
         let di = DirectoryInfo(root.LocalPath)
@@ -163,27 +173,34 @@ module Folder =
         with
         | :? UnauthorizedAccessException as exn ->
             logger.warn (
-                Log.setMessage "Couldn't read the root folder" >> Log.addContext "root" root >> Log.addException exn
+                Log.setMessage "Couldn't read the root folder"
+                >> Log.addContext "root" root
+                >> Log.addException exn
             )
 
             Seq.empty
         | :? DirectoryNotFoundException as exn ->
             logger.warn (
-                Log.setMessage "The root folder doesn't exist" >> Log.addContext "root" root >> Log.addException exn
+                Log.setMessage "The root folder doesn't exist"
+                >> Log.addContext "root" root
+                >> Log.addException exn
             )
 
             Seq.empty
 
     let tryLoad (name: string) (root: PathUri) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
-        
+
         if Directory.Exists(root.LocalPath) then
             let documents =
                 loadDocuments root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
 
             { name = name; root = root; documents = documents } |> Some
         else
-            logger.warn (Log.setMessage "Folder path doesn't exist" >> Log.addContext "uri" root)
+            logger.warn (
+                Log.setMessage "Folder path doesn't exist"
+                >> Log.addContext "uri" root
+            )
 
             None
 
@@ -199,12 +216,9 @@ module Folder =
         { folder with documents = Map.add doc.path doc folder.documents }
 
 
-    let tryFindDocumentByName (name: DocName) (folder: Folder) : option<Document> =
-        folder.documents |> Map.values |> Seq.tryFind (fun doc -> doc.name = name)
-
-    let findDocumentByName (name: DocName) (folder: Folder) : Document =
-        tryFindDocumentByName name folder
-        |> Option.defaultWith (fun () -> failwith $"Requested document doesn't exist: {name}")
+    let tryFindDocumentBySlug (slug: Slug) (folder: Folder) : option<Document> =
+        let matchingDoc doc = Document.slug doc = slug
+        folder.documents |> Map.values |> Seq.tryFind matchingDoc
 
     let tryFindWikiLinkTarget
         (sourceDoc: Document)
@@ -217,7 +231,7 @@ module Folder =
         let destDoc =
             match destDocName with
             | None -> Some sourceDoc
-            | Some destDocName -> tryFindDocumentByName destDocName folder
+            | Some destDocName -> tryFindDocumentBySlug (Slug.ofString destDocName) folder
 
         match destDoc with
         | None -> None
@@ -227,7 +241,7 @@ module Folder =
             match WikiLink.destHeading wl with
             | None -> Some(destDoc, Document.title destDoc)
             | Some headingName ->
-                match Document.headingByName headingName destDoc with
+                match Document.headingBySlug (Slug.ofString headingName) destDoc with
                 | Some _ as heading -> Some(destDoc, heading)
                 | _ -> None
 
@@ -245,7 +259,8 @@ module Workspace =
                 yield f
         }
 
-    let tryFindFolderByPath (root: PathUri) (workspace: Workspace) : option<Folder> = Map.tryFind root workspace.folders
+    let tryFindFolderByPath (root: PathUri) (workspace: Workspace) : option<Folder> =
+        Map.tryFind root workspace.folders
 
     let tryFindFolderEnclosing (innerPath: PathUri) (workspace: Workspace) : option<Folder> =
         workspace.folders
@@ -268,8 +283,10 @@ module Workspace =
 
     let withFolders (folders: seq<Folder>) (workspace: Workspace) : Workspace =
         let newFolders =
-            folders |> Seq.fold (fun fs f -> Map.add f.root f fs) workspace.folders
+            folders
+            |> Seq.fold (fun fs f -> Map.add f.root f fs) workspace.folders
 
         { workspace with folders = newFolders }
 
-    let docCount (workspace: Workspace) : int = workspace.folders.Values |> Seq.sumBy Folder.docCount
+    let docCount (workspace: Workspace) : int =
+        workspace.folders.Values |> Seq.sumBy Folder.docCount

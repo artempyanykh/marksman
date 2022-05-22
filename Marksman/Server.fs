@@ -28,7 +28,11 @@ module ClientDescription =
     let fromParams (par: InitializeParams) : ClientDescription =
         let caps =
             par.Capabilities
-            |> Option.defaultValue { Workspace = None; TextDocument = None; Experimental = None; InlayHint = None }
+            |> Option.defaultValue
+                { Workspace = None
+                  TextDocument = None
+                  Experimental = None
+                  InlayHint = None }
 
         { info = par.ClientInfo; caps = caps }
 
@@ -52,9 +56,15 @@ module State =
         |> Option.defaultWith (fun _ -> failwith $"Expected folder now found: {uri}")
 
     let tryFindDocument (uri: PathUri) (state: State) : option<Document> =
-        tryFindFolder uri state |> Option.map (Folder.tryFindDocument uri) |> Option.flatten
+        tryFindFolder uri state
+        |> Option.map (Folder.tryFindDocument uri)
+        |> Option.flatten
 
-    let updateFoldersFromLsp (added: WorkspaceFolder []) (removed: WorkspaceFolder []) (state: State) : State =
+    let updateFoldersFromLsp
+        (added: WorkspaceFolder [])
+        (removed: WorkspaceFolder [])
+        (state: State)
+        : State =
         logger.trace (
             Log.setMessage "Updating workspace folders"
             >> Log.addContext "numAdded" added.Length
@@ -76,7 +86,8 @@ module State =
             }
 
         let newWorkspace =
-            Workspace.withoutFolders removedUris state.workspace |> Workspace.withFolders addedFolders
+            Workspace.withoutFolders removedUris state.workspace
+            |> Workspace.withFolders addedFolders
 
         { state with workspace = newWorkspace }
 
@@ -100,13 +111,21 @@ module State =
 
         { state with workspace = newWorkspace }
 
-    let findCompletionCandidates (pos: Position) (uri: PathUri) (state: State) : array<CompletionItem> =
-        tryFindFolder uri state |> Option.map (Comp.findCandidates pos uri) |> Option.defaultValue [||]
+    let findCompletionCandidates
+        (pos: Position)
+        (uri: PathUri)
+        (state: State)
+        : array<CompletionItem> =
+        tryFindFolder uri state
+        |> Option.map (Comp.findCandidates pos uri)
+        |> Option.defaultValue [||]
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
     | Some folders ->
-        folders |> Array.map (fun { Name = name; Uri = uri } -> name, PathUri.fromString uri) |> Map.ofArray
+        folders
+        |> Array.map (fun { Name = name; Uri = uri } -> name, PathUri.fromString uri)
+        |> Map.ofArray
     | _ ->
         let rootPath =
             par.RootUri
@@ -183,10 +202,16 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInforma
 
     let location = { Uri = docUri.DocumentUri; Range = h.range }
 
-    let sym = { Name = name; Kind = kind; Location = location; ContainerName = None }
+    let sym =
+        { Name = name
+          Kind = kind
+          Location = location
+          ContainerName = None }
 
     let children =
-        h.data.children |> Element.pickHeadings |> Array.collect (headingToSymbolInfo docUri)
+        h.data.children
+        |> Element.pickHeadings
+        |> Array.collect (headingToSymbolInfo docUri)
 
     Array.append [| sym |] children
 
@@ -197,7 +222,9 @@ let rec headingToDocumentSymbol (h: Node<Heading>) : DocumentSymbol =
     let selectionRange = h.range
 
     let children =
-        h.data.children |> Element.pickHeadings |> Array.map headingToDocumentSymbol
+        h.data.children
+        |> Element.pickHeadings
+        |> Array.map headingToDocumentSymbol
 
     let thisHeading =
         { Name = "."
@@ -228,7 +255,8 @@ type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientReque
     override this.TextDocumentPublishDiagnostics(par: PublishDiagnosticsParams) =
         notSender "textDocument/publishDiagnostics" (box par) |> Async.Ignore
 
-    member this.MarksmanUpdateStatus(par: MarksmanStatusParams) = notSender "marksman/status" (box par) |> Async.Ignore
+    member this.MarksmanUpdateStatus(par: MarksmanStatusParams) =
+        notSender "marksman/status" (box par) |> Async.Ignore
 
 type DiagMessage =
     | Start
@@ -283,7 +311,9 @@ type DiagAgent(client: MarksmanClient) =
 
             processMessages ())
 
-    member this.EnqueueDiagnostic(par: PublishDiagnosticsParams) : unit = agent.Post(EnqueueDiagnostic par)
+    member this.EnqueueDiagnostic(par: PublishDiagnosticsParams) : unit =
+        agent.Post(EnqueueDiagnostic par)
+
     member this.Start() : unit = agent.Post(Start)
     member this.Stop() : unit = agent.Post(Stop)
 
@@ -301,7 +331,8 @@ type StatusAgent(client: MarksmanClient) =
                     match msg with
                     | DocCount newCnt when cnt <> newCnt ->
                         logger.trace (
-                            Log.setMessage "StatusAgent sending update" >> Log.addContext "docCount" (cnt, newCnt)
+                            Log.setMessage "StatusAgent sending update"
+                            >> Log.addContext "docCount" (cnt, newCnt)
                         )
 
                         do! client.MarksmanUpdateStatus({ State = "ok"; DocCount = newCnt })
@@ -325,13 +356,15 @@ type MarksmanServer(client: MarksmanClient) =
 
     let logger = LogProvider.getLoggerByName "MarksmanServer"
 
-    let requireState () : State = Option.defaultWith (fun _ -> failwith "State was not initialized") state
+    let requireState () : State =
+        Option.defaultWith (fun _ -> failwith "State was not initialized") state
 
     let queueDiagUpdate (existingDiag: WorkspaceDiag) (newDiag: WorkspaceDiag) : unit =
         let state = requireState ()
 
         for folder in Workspace.folders state.workspace do
-            let newFolderDiag = Map.tryFind folder.root newDiag |> Option.defaultValue [||]
+            let newFolderDiag =
+                Map.tryFind folder.root newDiag |> Option.defaultValue [||]
 
             let existingFolderDiag =
                 Map.tryFind folder.root existingDiag |> Option.defaultValue [||]
@@ -345,7 +378,8 @@ type MarksmanServer(client: MarksmanClient) =
 
                 if docDiag <> existingDocDiag then
                     logger.trace (
-                        Log.setMessage "Diagnostic changed, queueing the update" >> Log.addContext "doc" docUri
+                        Log.setMessage "Diagnostic changed, queueing the update"
+                        >> Log.addContext "doc" docUri
                     )
 
                     let publishParams = { Uri = docUri.DocumentUri; Diagnostics = docDiag }
@@ -353,7 +387,10 @@ type MarksmanServer(client: MarksmanClient) =
                     diagAgent.EnqueueDiagnostic(publishParams)
 
     let updateState (newState: State) : unit =
-        logger.trace (Log.setMessage "Updating state" >> Log.addContext "curRev" newState.revision)
+        logger.trace (
+            Log.setMessage "Updating state"
+            >> Log.addContext "curRev" newState.revision
+        )
 
         let existingWorkspaceDiag = newState.diag
 
@@ -362,7 +399,9 @@ type MarksmanServer(client: MarksmanClient) =
         let newWorkspaceDiag = Diag.diagnosticForWorkspace newState.workspace
 
         let newState =
-            { newState with revision = newState.revision + 1; diag = newWorkspaceDiag }
+            { newState with
+                revision = newState.revision + 1
+                diag = newWorkspaceDiag }
 
         let docCount = Workspace.docCount newState.workspace
 
@@ -370,14 +409,20 @@ type MarksmanServer(client: MarksmanClient) =
 
         state <- Some newState
 
-        logger.trace (Log.setMessage "Updated state" >> Log.addContext "newRev" newState.revision)
+        logger.trace (
+            Log.setMessage "Updated state"
+            >> Log.addContext "newRev" newState.revision
+        )
 
         queueDiagUpdate existingWorkspaceDiag newWorkspaceDiag
 
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
         let workspaceFolders = extractWorkspaceFolders par
 
-        logger.debug (Log.setMessage "Obtained workspace folders" >> Log.addContext "workspace" workspaceFolders)
+        logger.debug (
+            Log.setMessage "Obtained workspace folders"
+            >> Log.addContext "workspace" workspaceFolders
+        )
 
         let folders = readWorkspace workspaceFolders
 
@@ -401,7 +446,8 @@ type MarksmanServer(client: MarksmanClient) =
 
         let serverCaps = mkServerCaps par
 
-        let initResult = { InitializeResult.Default with Capabilities = serverCaps }
+        let initResult =
+            { InitializeResult.Default with Capabilities = serverCaps }
 
         AsyncLspResult.success initResult
 
@@ -410,12 +456,19 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
 
         if state.client.SupportsStatus then
-            logger.debug (Log.setMessage "Client supports status notifications. Initializing agent.")
+            logger.debug (
+                Log.setMessage "Client supports status notifications. Initializing agent."
+            )
+
             statusAgent <- StatusAgent(client) |> Some
 
-            statusAgent |> Option.iter (fun x -> x.UpdateDocCount(Workspace.docCount state.workspace))
+            statusAgent
+            |> Option.iter (fun x -> x.UpdateDocCount(Workspace.docCount state.workspace))
         else
-            logger.debug (Log.setMessage "Client doesn't support status notifications. Agent won't be initialized.")
+            logger.debug (
+                Log.setMessage
+                    "Client doesn't support status notifications. Agent won't be initialized."
+            )
 
         diagAgent.Start()
 
@@ -494,7 +547,8 @@ type MarksmanServer(client: MarksmanClient) =
     override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
         let state = requireState ()
 
-        let newState = State.updateFoldersFromLsp par.Event.Added par.Event.Removed state
+        let newState =
+            State.updateFoldersFromLsp par.Event.Added par.Event.Removed state
 
         updateState newState
         async.Return()
@@ -506,7 +560,10 @@ type MarksmanServer(client: MarksmanClient) =
         let mutable newState = requireState ()
 
         for docUri in docUris do
-            logger.trace (Log.setMessage "Processing file create not" >> Log.addContext "uri" docUri)
+            logger.trace (
+                Log.setMessage "Processing file create not"
+                >> Log.addContext "uri" docUri
+            )
 
             let folder = State.tryFindFolder docUri newState
 
@@ -516,7 +573,10 @@ type MarksmanServer(client: MarksmanClient) =
                 match Document.load folder.root docUri with
                 | Some doc -> newState <- State.updateDocument doc newState
                 | _ ->
-                    logger.warn (Log.setMessage "Couldn't load created document" >> Log.addContext "uri" docUri)
+                    logger.warn (
+                        Log.setMessage "Couldn't load created document"
+                        >> Log.addContext "uri" docUri
+                    )
 
                     ()
 
@@ -526,10 +586,14 @@ type MarksmanServer(client: MarksmanClient) =
     override this.WorkspaceDidDeleteFiles(par: DeleteFilesParams) =
         let mutable newState = requireState ()
 
-        let deletedUris = par.Files |> Array.map (fun x -> PathUri.fromString x.Uri)
+        let deletedUris =
+            par.Files |> Array.map (fun x -> PathUri.fromString x.Uri)
 
         for uri in deletedUris do
-            logger.trace (Log.setMessage "Processing file delete not" >> Log.addContext "uri" uri)
+            logger.trace (
+                Log.setMessage "Processing file delete not"
+                >> Log.addContext "uri" uri
+            )
 
             newState <- State.removeDocument uri newState
 
@@ -563,6 +627,8 @@ type MarksmanServer(client: MarksmanClient) =
         | None -> AsyncLspResult.success None
 
     override this.TextDocumentCompletion(par: CompletionParams) =
+        logger.trace (Log.setMessage "Completion request start")
+
         let state = requireState ()
         let pos = par.Position
 
@@ -593,7 +659,9 @@ type MarksmanServer(client: MarksmanClient) =
                 let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
 
                 let destRange =
-                    destHeading |> Option.map Node.range |> Option.defaultWith destDoc.text.FullRange
+                    destHeading
+                    |> Option.map Node.range
+                    |> Option.defaultWith destDoc.text.FullRange
 
                 let location =
                     GotoResult.Single { Uri = destDoc.path.DocumentUri; Range = destRange }
@@ -618,9 +686,12 @@ type MarksmanServer(client: MarksmanClient) =
                 let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
 
                 let destScope =
-                    destHeading |> Option.map (fun x -> x.data.scope) |> Option.defaultWith destDoc.text.FullRange
+                    destHeading
+                    |> Option.map (fun x -> x.data.scope)
+                    |> Option.defaultWith destDoc.text.FullRange
 
-                let content = destDoc.text.Substring(destScope) |> markdown |> MarkupContent
+                let content =
+                    destDoc.text.Substring(destScope) |> markdown |> MarkupContent
 
                 let hover = { Contents = content; Range = None }
 

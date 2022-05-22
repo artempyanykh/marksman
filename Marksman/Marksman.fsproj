@@ -29,6 +29,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj" />
+        <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj" />
     </ItemGroup>
 
 </Project>

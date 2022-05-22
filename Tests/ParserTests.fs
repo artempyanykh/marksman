@@ -8,12 +8,14 @@ open Snapper
 open Misc
 
 let checkSnapshot (document: array<Element>) =
-    let lines = Array.map (fun x -> (Element.fmt x).Lines()) document |> Array.concat
+    let lines =
+        Array.map (fun x -> (Element.fmt x).Lines()) document |> Array.concat
 
     lines.ShouldMatchSnapshot()
 
 let checkInlineSnapshot (document: array<Element>) snapshot =
-    let lines = Array.map (fun x -> (Element.fmt x).Lines()) document |> Array.concat
+    let lines =
+        Array.map (fun x -> (Element.fmt x).Lines()) document |> Array.concat
 
     lines.ShouldMatchInlineSnapshot(snapshot)
 
@@ -53,16 +55,9 @@ module HeadingTests =
         let text = "# H1 \n## H2.1\n## H2.2\n"
         let document = scrapeString text
         checkSnapshot document
-        
+
 [<StoreSnapshotsPerClass>]
 module WikiLinkTests =
-
-    [<Fact>]
-    let parser_link_shortcut_ignore_for_now () =
-        let text = "[note]"
-        let document = scrapeString text
-        checkInlineSnapshot document []
-
     [<Fact>]
     let parser_xref_note () =
         let text = "[[note]]"
@@ -122,21 +117,21 @@ module WikiLinkTests =
             [ "WL: [[T#]]; (0,0)-(0,6)" //
               "  doc=T; (0,2)-(0,3)"
               "  head=; (0,4)-(0,4)" ]
-    
+
     [<Fact>]
     let parse_wiki_escaped_hash () =
         //          01234567
         let text = "[[F\#]]"
         let doc = scrapeString text
         checkSnapshot doc
-        
+
     [<Fact>]
     let parse_wiki_escaped_hash_and_heading () =
         //          0123456789012345
         let text = "[[F\##Section]]"
         let doc = scrapeString text
         checkSnapshot doc
-        
+
     [<Fact>]
     let parse_wiki_escaped_hash_and_heading_with_hash () =
         //          0123456789012345
@@ -162,58 +157,93 @@ module MdLinkTest =
         //          0123456789012
         let text = "[title](url)"
         let document = scrapeString text
-        checkInlineSnapshot document [ "ML: [title](url); (0,0)-(0,12)" ]
+
+        checkInlineSnapshot
+            document
+            [ "ML: [title](url) @ (0,0)-(0,12)"
+              "  IL: label=title @ (0,1)-(0,6); url=url @ (0,8)-(0,11); title=∅" ]
 
     [<Fact>]
     let parser_link_2 () =
+        // Without any text inside this is not considered a link
         let text = "[]"
         let document = scrapeString text
         checkInlineSnapshot document []
 
     [<Fact>]
     let parser_link_3 () =
+        // Without any text inside this is not considered a link
         let text = "[][]"
         let document = scrapeString text
         checkInlineSnapshot document []
 
     [<Fact>]
     let parser_link_4 () =
+        // This is considered a link even though the contents are empty
         let text = "[]()"
         let document = scrapeString text
-        checkInlineSnapshot document [ "ML: [](); (0,0)-(0,4)" ]
+
+        checkInlineSnapshot
+            document
+            [ "ML: []() @ (0,0)-(0,4)"
+              "  IL: label= @ (0,0)-(0,0); url=∅; title=∅" ]
 
     [<Fact>]
     let parser_link_5 () =
         let text = "[la bel](url \"title\")"
         let document = scrapeString text
-        checkInlineSnapshot document [ "ML: [la bel](url \"title\"); (0,0)-(0,21)" ]
+
+        checkInlineSnapshot
+            document
+            [ "ML: [la bel](url \"title\") @ (0,0)-(0,21)"
+              "  IL: label=la bel @ (0,1)-(0,7); url=url @ (0,9)-(0,12); title=title @ (0,13)-(0,20)" ]
 
     [<Fact>]
     let parser_link_6 () =
-        let text = "[la bel](url title)"
+        let text = "[la bel](url title)" // without quotation of title only the shortcut parses
         let document = scrapeString text
-        checkInlineSnapshot document []
+
+        checkInlineSnapshot
+            document
+            [ "ML: [la bel] @ (0,0)-(0,8)" //
+              "  RS: label=la bel @ (0,1)-(0,7)" ]
 
     [<Fact>]
     let parser_link_7 () =
         let text = "[](url)"
         let document = scrapeString text
-        checkInlineSnapshot document [ "ML: [](url); (0,0)-(0,7)" ]
+
+        checkInlineSnapshot
+            document
+            [ "ML: [](url) @ (0,0)-(0,7)"
+              "  IL: label= @ (0,0)-(0,0); url=url @ (0,3)-(0,6); title=∅" ]
 
     [<Fact>]
     let parser_link_8 () =
-        let text = "[short cut]"
+        let text = "[short_cut]"
         let document = scrapeString text
-        checkInlineSnapshot document []
+
+        checkInlineSnapshot
+            document
+            [ "ML: [short_cut] @ (0,0)-(0,11)"
+              "  RS: label=short_cut @ (0,1)-(0,10)" ]
 
     [<Fact>]
     let parser_link_9 () =
         let text = "[short cut][]"
         let document = scrapeString text
-        checkInlineSnapshot document []
+
+        checkInlineSnapshot
+            document
+            [ "ML: [short cut][] @ (0,0)-(0,13)"
+              "  RC: label=short cut @ (0,1)-(0,10)" ]
 
     [<Fact>]
     let parser_link_10 () =
         let text = "[label][ref]"
         let document = scrapeString text
-        checkInlineSnapshot document []
+
+        checkInlineSnapshot
+            document
+            [ "ML: [label][ref] @ (0,0)-(0,12)"
+              "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)" ]

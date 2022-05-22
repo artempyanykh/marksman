@@ -4,6 +4,7 @@ open System
 open Ionide.LanguageServerProtocol.Types
 
 open Markdig.Syntax
+open MarkdigPatches
 open Text
 open Misc
 
@@ -17,6 +18,7 @@ module Node =
     let text node = node.text
     let range node = node.range
     let inner node = node.data
+    let fmtText (node: TextNode) : string = $"{node.text} @ {node.range.DebuggerDisplay}"
 
 [<RequireQualifiedAccess>]
 type WikiLink = { doc: option<TextNode>; heading: option<TextNode> }
@@ -48,6 +50,25 @@ type MdLink =
     // reference shortcut
     | RS of label: TextNode
 
+module MdLink =
+    let fmt (ml: MdLink) : string =
+        match ml with
+        | MdLink.IL (label, url, title) ->
+            let fmtLabel = Node.fmtText label
+            let fmtUrl = Option.map Node.fmtText url |> Option.defaultValue "∅"
+            let fmtTitle = Option.map Node.fmtText title |> Option.defaultValue "∅"
+            $"IL: label={fmtLabel}; url={fmtUrl}; title={fmtTitle}"
+        | MdLink.RF (text, label) ->
+            let fmtText = Node.fmtText text
+            let fmtLabel = Node.fmtText label
+            $"RF: text={fmtText}; label={fmtLabel}"
+        | MdLink.RC label ->
+            let fmtLabel = Node.fmtText label
+            $"RC: label={fmtLabel}"
+        | MdLink.RS label ->
+            let fmtLabel = Node.fmtText label
+            $"RS: label={fmtLabel}"
+
 type Element =
     | H of Node<Heading>
     | WL of Node<WikiLink>
@@ -78,11 +99,14 @@ and private fmtHeading node =
     String.Join(Environment.NewLine, Array.concat [ [| l1; l2 |]; rest ])
 
 and private fmtWikiLink node =
-    let line1 = $"WL: {node.text}; {node.range.DebuggerDisplay}"
+    let first = $"WL: {node.text}; {node.range.DebuggerDisplay}"
     let rest = (indentFmt WikiLink.fmt) node.data
-    String.Join(Environment.NewLine, [ line1; rest ])
+    String.Join(Environment.NewLine, [ first; rest ])
 
-and private fmtMdLink node = $"ML: {node.text}; {node.range.DebuggerDisplay}"
+and private fmtMdLink node =
+    let first = $"ML: {node.text} @ {node.range.DebuggerDisplay}"
+    let rest = (indentFmt MdLink.fmt) node.data
+    String.Join(Environment.NewLine, [ first; rest ])
 
 module Heading =
     let fmt = fmtHeading
@@ -245,11 +269,9 @@ module Markdown =
                 false
 
     let markdigPipeline =
-        let pipelineBuilder =
-            MarkdownPipelineBuilder()
-                .UsePreciseSourceLocation()
-                .EnableTrackTrivia()
+        let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation()
 
+        pipelineBuilder.InlineParsers.Insert(0, PatchedLinkInlineParser())
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
         pipelineBuilder.Build()
 
@@ -323,6 +345,8 @@ module Markdown =
 
                 let labelSpan = l.LabelSpan
 
+                let isRegularLink = linkText.EndsWith(')')
+
                 let label =
                     if labelSpan.IsEmpty then
                         String.Empty
@@ -336,25 +360,42 @@ module Markdown =
                 let url = l.Url
 
                 if not l.IsShortcut then
+                    if isRegularLink then
+                        let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+
+                        let url =
+                            if urlSpan.IsEmpty then
+                                None
+                            else
+                                Some(Node.mk_text url (sourceSpanToRange text urlSpan))
+
+                        let title =
+                            if titleSpan.IsEmpty then
+                                None
+                            else
+                                Some(Node.mk_text title (sourceSpanToRange text titleSpan))
+
+                        let link =
+                            MdLink.IL(label = label, url = url, title = title)
+                            |> Node.mk linkText linkRange
+
+                        elements.Add(ML link)
+                    // Another hack: url span = label span => collapsed ref
+                    else if urlSpan = labelSpan then
+                        let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+                        let link = MdLink.RC label |> Node.mk linkText linkRange
+                        elements.Add(ML link)
+                    // The last remaining option is full reference
+                    else
+                        let text_ = Node.mk_text label (sourceSpanToRange text labelSpan)
+                        let label = Node.mk_text url (sourceSpanToRange text urlSpan)
+                        let link = MdLink.RF(text_, label) |> Node.mk linkText linkRange
+                        elements.Add(ML link)
+                else
                     let label = Node.mk_text label (sourceSpanToRange text labelSpan)
-
-                    let url =
-                        if urlSpan.IsEmpty then
-                            None
-                        else
-                            Some(Node.mk_text url (sourceSpanToRange text urlSpan))
-
-                    let title =
-                        if titleSpan.IsEmpty then
-                            None
-                        else
-                            Some(Node.mk_text title (sourceSpanToRange text titleSpan))
-
-                    let link =
-                        MdLink.IL(label = label, url = url, title = title)
-                        |> Node.mk linkText linkRange
-
+                    let link = MdLink.RS(label) |> Node.mk linkText linkRange
                     elements.Add(ML link)
+
             | _ -> ()
 
         elements.ToArray()

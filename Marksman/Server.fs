@@ -654,7 +654,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolder docUri state
                 let! sourceDoc = Folder.tryFindDocument docUri folder
                 let! atPos = Document.elementAtPos par.Position sourceDoc
-                let! wl = Element.asRef atPos
+                let! wl = Element.asWikiLink atPos
 
                 let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
 
@@ -681,7 +681,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolder docUri state
                 let! sourceDoc = Folder.tryFindDocument docUri folder
                 let! atPos = Document.elementAtPos par.Position sourceDoc
-                let! wl = Element.asRef atPos
+                let! wl = Element.asWikiLink atPos
 
                 let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
 

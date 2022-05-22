@@ -17,6 +17,7 @@ module Node =
     let mk_text text range : TextNode = mk text range ()
     let text node = node.text
     let range node = node.range
+    let data node = node.data
     let inner node = node.data
     let fmtText (node: TextNode) : string = $"{node.text} @ {node.range.DebuggerDisplay}"
 
@@ -163,9 +164,14 @@ module Element =
         | H h -> Some h
         | _ -> None
 
-    let asRef =
+    let asWikiLink =
         function
         | WL ref -> Some ref
+        | _ -> None
+    
+    let asLinkDef =
+        function
+        | MLD def -> Some def
         | _ -> None
 
     let pickHeadings (elements: array<Element>) : array<Node<Heading>> =

@@ -1,7 +1,7 @@
 [*.{fs,fsx}]
 indent_size=4
 max_line_length=100
-end_of_line=crlf
+end_of_line=lf
 insert_final_newline=true
 fsharp_max_if_then_else_short_width=70
 fsharp_max_infix_operator_expression=70

@@ -16,15 +16,15 @@ let private logger = LogProvider.getLoggerByName "Comp"
 type Comp =
     | Title of range: Range * needsClosing: bool
     | Heading of destDoc: option<string> * range: Range
-    | Shortcut of range: Range * needsClosing: bool
+    | LinkReference of range: Range * needsClosing: bool
 
     override this.ToString() =
         match this with
         | Comp.Title (range, needsClosing) ->
             $"Title: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.Heading (destDoc, range) -> $"Heading: dest={destDoc}; range={range.DebuggerDisplay}"
-        | Comp.Shortcut (range, needsClosing) ->
-            $"Shortcut: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
+        | Comp.LinkReference (range, needsClosing) ->
+            $"LinkReference: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
 
 let compOfElement (pos: Position) (el: Element) : option<Comp> =
     let elementRange = Element.range el
@@ -91,7 +91,7 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
         | _ ->
             if Cursor.char start = '[' then
                 let rangeStart = (Cursor.pos start).NextChar(1)
-                Some(Comp.Shortcut(Range.Mk(rangeStart, rangeEnd), true))
+                Some(Comp.LinkReference(Range.Mk(rangeStart, rangeEnd), true))
             else
                 None
     | _ -> None
@@ -174,7 +174,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
                     FilterText = Some hd }
 
             matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
-    | Comp.Shortcut (range, needsClosing) ->
+    | Comp.LinkReference (range, needsClosing) ->
         // TODO: add link def completion
         let input = srcDoc.text.Substring(range)
         [||]

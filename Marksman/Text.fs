@@ -1,6 +1,7 @@
 module Marksman.Text
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Text
 open Ionide.LanguageServerProtocol.Types
@@ -25,24 +26,17 @@ type LineMap =
                 let m = l + (h - l) / 2
                 let start, end_ = this.Map[m]
 
-                if start > offset then
-                    go l (m - 1)
-                else if start <= offset && offset < end_ then
-                    Some m
-                else if start = end_ && start = offset then
-                    Some m
-                else if offset >= end_ then
-                    go (m + 1) h
-                else
-                    None
+                if start > offset then go l (m - 1)
+                else if start <= offset && offset < end_ then Some m
+                else if start = end_ && start = offset then Some m
+                else if offset >= end_ then go (m + 1) h
+                else None
 
         match go 0 (this.Map.Length - 1) with
         | Some lineIdx ->
             let start, _ = this.Map[lineIdx]
 
-            Some
-                { Line = lineIdx
-                  Character = offset - start }
+            Some { Line = lineIdx; Character = offset - start }
         | _ -> None
 
     member this.FindPosition(offset: int) : Position =
@@ -56,10 +50,7 @@ type LineMap =
             let start, end_ = this.Map[pos.Line]
             let offset = start + pos.Character
 
-            if offset > end_ then
-                None
-            else
-                Some(offset)
+            if offset > end_ then None else Some(offset)
 
     member this.FindOffset(pos: Position) : int =
         this.TryFindOffset(pos)
@@ -95,12 +86,8 @@ type Text =
         if start = end_ then
             start, end_
         else if start = end_ - 1 then
-            if this.content[start] = '\n' then
-                start, start
-            else
-                start, end_
-        else if this.content[end_ - 2] = '\r'
-                && this.content[end_ - 1] = '\n' then
+            if this.content[start] = '\n' then start, start else start, end_
+        else if this.content[end_ - 2] = '\r' && this.content[end_ - 1] = '\n' then
             start, end_ - 2
         else if this.content[end_ - 1] = '\n' then
             start, end_ - 1
@@ -108,8 +95,7 @@ type Text =
             start, end_
 
     member this.LineContentRange(line: int) : Range =
-        let start, end_ =
-            this.LineContentOffsets(line)
+        let start, end_ = this.LineContentOffsets(line)
 
         Range.Mk(line, 0, line, end_ - start)
 
@@ -137,8 +123,7 @@ type internal TrackingTextReader(baseReader: TextReader) =
     override this.Read() : int =
         let char = baseReader.Read()
 
-        if char <> -1 then
-            this.Position <- this.Position + 1
+        if char <> -1 then this.Position <- this.Position + 1
 
         char
 
@@ -146,8 +131,7 @@ type internal TrackingTextReader(baseReader: TextReader) =
     override this.Peek() : int = baseReader.Peek()
 
 let mkLineMap (str: string) : LineMap =
-    use reader =
-        new TrackingTextReader(new StringReader(str))
+    use reader = new TrackingTextReader(new StringReader(str))
 
     let lineMap = ResizeArray<int * int>()
     let mutable start = 0
@@ -176,15 +160,16 @@ let mkText (content: string) : Text =
 
 let mkPosition (line, char) = { Line = line; Character = char }
 
-let mkRange (start, end_) =
-    { Start = mkPosition start
-      End = mkPosition end_ }
+let mkRange (start, end_) = { Start = mkPosition start; End = mkPosition end_ }
 
-let private applyChangeRaw (lineMap: LineMap) (content: string) (change: TextDocumentContentChangeEvent) : string =
+let private applyChangeRaw
+    (lineMap: LineMap)
+    (content: string)
+    (change: TextDocumentContentChangeEvent)
+    : string =
     match change.Range, change.RangeLength with
     | Some range, Some length ->
-        let start =
-            range.Start |> lineMap.FindOffset
+        let start = range.Start |> lineMap.FindOffset
 
         StringBuilder(content)
             .Remove(start, length)
@@ -199,25 +184,51 @@ let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text:
 
     mkText newContent
 
-type Span = { text: Text; start: int; end_: int }
+type Span =
+    { text: Text
+      start: int
+      end_: int }
+    override this.ToString() =
+        let substr =
+            if this.start < this.end_
+               && this.start < this.text.content.Length
+               && this.end_ <= this.text.content.Length then
+                this.text.content.Substring(this.start, this.end_ - this.start)
+            else
+                "<malformed>"
 
-type Cursor = { span: Span; pos: int }
+        $"start={this.start}; end={this.end_}; substr={substr}"
+
+type Cursor =
+    { span: Span
+      pos: int }
+    override this.ToString() = $">{this.pos} @ {this.span}"
 
 module Cursor =
     let char c = c.span.text.content[c.pos]
 
+    let pos c = c.span.text.lineMap.FindPosition(c.pos)
+
     let forward c : option<Cursor> =
-        if c.span.start < c.span.end_ then
+        if c.pos < c.span.end_ - 1 then
             Some { c with pos = c.pos + 1 }
         else
             None
 
-    let char2 c =
+    let backward c : option<Cursor> =
+        if c.pos > c.span.start then Some { c with pos = c.pos - 1 } else None
+
+    let forwardChar2 c =
         let char1 = char c
         let char2 = forward c |> Option.map char
         char2 |> Option.map (fun x -> char1, x)
 
-    let charN n c =
+    let backwardChar2 c =
+        let char1 = char c
+        let char2 = backward c |> Option.map char
+        char2 |> Option.map (fun x -> char1, x)
+
+    let forwardCharN n c =
         let rec loop acc n cursor : option<list<char>> =
             if n = 0 then
                 Some acc
@@ -240,6 +251,19 @@ module Cursor =
 
     let toSpan c : Span = { c.span with start = c.pos }
 
+    let tryFindCharMatching
+        (move: Cursor -> option<Cursor>)
+        (pred: char -> bool)
+        (cursor: Cursor)
+        : option<Cursor> =
+        let rec loop curCursor =
+            if pred (char curCursor) then
+                Some curCursor
+            else
+                move curCursor |> Option.bind loop
+
+        loop cursor
+
 module Span =
     let range span : Range =
         let start = span.text.lineMap.FindPosition(span.start)
@@ -248,11 +272,26 @@ module Span =
 
         Range.Mk(start.Line, start.Character, stop.Line, stop.Character)
 
-    let toCursor span : option<Cursor> =
+    let startCursor span : option<Cursor> =
         if span.start < span.end_ then
             Some { span = span; pos = span.start }
         else
             None
+
+    let endCursor span =
+        if span.start < span.end_ then
+            Some { span = span; pos = span.end_ - 1 }
+        else
+            None
+
+    let toCursorAt pos span =
+        match span.text.lineMap.TryFindOffset pos with
+        | None -> None
+        | Some offset ->
+            if span.start <= offset && offset < span.end_ then
+                Some { span = span; pos = offset }
+            else
+                None
 
     let forward span : option<Span> =
         if span.start < span.end_ then
@@ -260,9 +299,12 @@ module Span =
         else
             None
 
-    let startChar = toCursor >> (Option.map Cursor.char)
+    let startChar = startCursor >> (Option.map Cursor.char)
 
-type Line = { text: Text; line: int }
+type Line =
+    { text: Text
+      line: int }
+    override this.ToString() = $"Line {this.line}: {this.text}"
 
 module Line =
     let toSpan line : Span =
@@ -270,6 +312,21 @@ module Line =
 
         { text = line.text; start = start; end_ = end_ }
 
-    let toCursor = toSpan >> Span.toCursor
+    let toCursor = toSpan >> Span.startCursor
+
+    let toCursorAt (pos: Position) (line: Line) = toSpan line |> Span.toCursorAt pos
 
     let startChar = toSpan >> Span.startChar
+
+    let range = toSpan >> Span.range
+
+    let startCursor = toSpan >> Span.startCursor
+
+    let endCursor = toSpan >> Span.endCursor
+
+    let endsAt pos (line: Line) =
+        let span = toSpan line
+
+        match span.text.lineMap.TryFindOffset pos with
+        | Some off -> span.end_ = off
+        | None -> false

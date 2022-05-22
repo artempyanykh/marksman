@@ -1,21 +1,24 @@
 ﻿module Marksman.Comp
 
+open System
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
 open Marksman.Parser
 open Marksman.Domain
 open Marksman.Misc
+open Marksman.Text
 
 let private logger = LogProvider.getLoggerByName "Comp"
 
 [<RequireQualifiedAccess>]
 type Comp =
-    | Title of range: Range
+    | Title of range: Range * needsClosing: bool
     | Heading of destDoc: option<string> * range: Range
 
     override this.ToString() =
         match this with
-        | Comp.Title range -> $"Title: range={range.DebuggerDisplay}"
+        | Comp.Title (range, needsClosing) ->
+            $"Title: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.Heading (destDoc, range) -> $"Heading: dest={destDoc}; range={range.DebuggerDisplay}"
 
 let compOfElement (pos: Position) (el: Element) : option<Comp> =
@@ -31,15 +34,15 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                 let range =
                     Range.Mk(elementRange.Start.NextChar(2), elementRange.End.PrevChar(2))
 
-                Some(Comp.Title range)
+                Some(Comp.Title(range, false))
             | Some doc, None ->
                 if doc.range.ContainsInclusive(pos) then
-                    Some(Comp.Title doc.range)
+                    Some(Comp.Title(doc.range, false))
                 else
                     None
             | Some doc, Some hd ->
                 if doc.range.ContainsInclusive(pos) then
-                    Some(Comp.Title doc.range)
+                    Some(Comp.Title(doc.range, false))
                 else if hd.range.ContainsInclusive(pos) then
                     let destDoc = doc.text
                     Some(Comp.Heading(Some(destDoc), hd.range))
@@ -52,15 +55,55 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                     None
         | _ -> None
 
+let compOfText (pos: Position) (text: Text) : option<Comp> =
+    let line = { text = text; line = pos.Line }
+    let lineRange = Line.range line
+
+    let cursor =
+        match Line.toCursorAt pos line with
+        | Some cursor -> Cursor.backward cursor
+        | None -> if Line.endsAt pos line then Line.endCursor line else None
+
+
+    match cursor with
+    | None -> None
+    | Some cursor ->
+        let start =
+            Cursor.tryFindCharMatching
+                Cursor.backward
+                (fun c -> Char.IsWhiteSpace(c) || c = '[')
+                cursor
+
+        let end_ =
+            Cursor.tryFindCharMatching Cursor.forward Char.IsWhiteSpace cursor
+
+        match start with
+        | Some start ->
+            match Cursor.backwardChar2 start with
+            | Some ('[', '[') ->
+                let rangeStart = (Cursor.pos start).NextChar(1)
+
+                let rangeEnd =
+                    end_ |> Option.map Cursor.pos |> Option.defaultValue lineRange.End
+
+                Some(Comp.Title(Range.Mk(rangeStart, rangeEnd), true))
+            | _ -> None
+        | None -> None
+
 let findCompAtPoint (pos: Position) (doc: Document) : option<Comp> =
-    Document.elementsAll doc
-    |> Seq.map (compOfElement pos)
-    |> Seq.tryFind Option.isSome
-    |> Option.flatten
+    let elComp =
+        Document.elementsAll doc
+        |> Seq.map (compOfElement pos)
+        |> Seq.tryFind Option.isSome
+        |> Option.flatten
+
+    match elComp with
+    | Some _ -> elComp
+    | None -> compOfText pos doc.text
 
 let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array<CompletionItem> =
     match comp with
-    | Comp.Title range ->
+    | Comp.Title (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
         let inputSlug = Slug.ofString input
 
@@ -77,7 +120,10 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
             folder.documents |> Map.values |> Seq.collect titleWhenMatch
 
         let toCompletionItem (doc: Document, title: string) =
-            let textEdit = { Range = range; NewText = Slug.str title }
+            let newText =
+                if needsClosing then Slug.str title + "]]" else Slug.str title
+
+            let textEdit = { Range = range; NewText = newText }
 
             { CompletionItem.Create(title) with
                 Detail = Some doc.relPath

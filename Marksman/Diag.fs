@@ -27,14 +27,14 @@ type DocumentIndex =
       headings: Map<Slug, list<Node<Heading>>>
       wikiLinks: array<Node<WikiLink>> }
 
-let indexDocument (doc: Document) : DocumentIndex =
+let indexDocument (doc: Doc) : DocumentIndex =
     let titles = ResizeArray()
 
     let headings = Dictionary<Slug, ResizeArray<Node<Heading>>>()
 
     let wikiLinks = ResizeArray()
 
-    for el in Document.elementsAll doc do
+    for el in Doc.elementsAll doc do
         match el with
         | H hn ->
             let slug = Heading.slug hn.data
@@ -70,7 +70,7 @@ let indexFolder (folder: Folder) : FolderIndex =
     seq {
         for KeyValue (_, doc) in folder.documents do
             let docSummary = indexDocument doc
-            yield Document.name doc |> Slug.ofString, docSummary
+            yield Doc.name doc |> Slug.ofString, docSummary
     }
     |> Map.ofSeq
 

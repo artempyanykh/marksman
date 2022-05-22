@@ -110,9 +110,9 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
 let compOfText (pos: Position) (text: Text) : option<Comp> =
     Line.ofPos text pos |> Option.bind (matchBracketParaElement pos)
 
-let findCompAtPoint (pos: Position) (doc: Document) : option<Comp> =
+let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
     let elComp =
-        Document.elementsAll doc
+        Doc.elementsAll doc
         |> Seq.map (compOfElement pos)
         |> Seq.tryFind Option.isSome
         |> Option.flatten
@@ -121,14 +121,14 @@ let findCompAtPoint (pos: Position) (doc: Document) : option<Comp> =
     | Some _ -> elComp
     | None -> compOfText pos doc.text
 
-let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array<CompletionItem> =
+let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<CompletionItem> =
     match comp with
     | Comp.Title (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
         let inputSlug = Slug.ofString input
 
-        let titleWhenMatch (doc: Document) =
-            match Document.title doc with
+        let titleWhenMatch (doc: Doc) =
+            match Doc.title doc with
             | Some { data = heading } ->
                 let title = (Heading.name heading)
                 let titleSlug = Slug.ofString title
@@ -139,7 +139,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
         let matchingTitles =
             folder.documents |> Map.values |> Seq.collect titleWhenMatch
 
-        let toCompletionItem (doc: Document, title: string) =
+        let toCompletionItem (doc: Doc, title: string) =
             let newText =
                 if needsClosing then Slug.str title + "]]" else Slug.str title
 
@@ -158,8 +158,8 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
             | Some destDocTitle ->
                 let destDocSlug = Slug.ofString destDocTitle
 
-                let matchTitle (doc: Document) =
-                    let docSlug = Slug.ofString (Document.name doc)
+                let matchTitle (doc: Doc) =
+                    let docSlug = Slug.ofString (Doc.name doc)
                     docSlug = destDocSlug
 
                 folder.documents |> Map.values |> Seq.tryFind matchTitle
@@ -171,7 +171,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
             let inputSlug = Slug.ofString input
 
             let matchingHeadings =
-                Document.headings destDoc
+                Doc.headings destDoc
                 |> Seq.filter (fun { data = h } -> h.level <> 1)
                 |> Seq.map (fun { data = h } -> Heading.name h)
                 |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
@@ -189,7 +189,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
         let input = srcDoc.text.Substring(range)
 
         let matchingDefs =
-            Document.linkDefs srcDoc
+            Doc.linkDefs srcDoc
             |> Seq.filter (fun { data = def } -> input.IsSubSequenceOf(def.label.text))
             |> Seq.map Node.data
 

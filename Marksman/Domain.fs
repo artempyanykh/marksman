@@ -9,17 +9,17 @@ open Marksman.Parser
 open Marksman.Text
 open Marksman.Misc
 
-type Document =
+type Doc =
     { path: PathUri
       relPath: string
       version: option<int>
       text: Text
       elements: array<Element> }
 
-module Document =
-    let logger = LogProvider.getLoggerByName "Document"
+module Doc =
+    let logger = LogProvider.getLoggerByName "Doc"
 
-    let applyLspChange (change: DidChangeTextDocumentParams) (document: Document) : Document =
+    let applyLspChange (change: DidChangeTextDocumentParams) (document: Doc) : Doc =
         let newVersion = change.TextDocument.Version
 
         logger.trace (
@@ -58,7 +58,7 @@ module Document =
 
         Path.GetRelativePath(folderPath, docPath)
 
-    let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Document =
+    let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Doc =
         let path = PathUri.fromString item.Uri
         let text = mkText item.Text
         let elements = parseText text
@@ -70,7 +70,7 @@ module Document =
           elements = elements }
 
 
-    let load (root: PathUri) (path: PathUri) : option<Document> =
+    let load (root: PathUri) (path: PathUri) : option<Doc> =
         try
             let content =
                 using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
@@ -87,7 +87,7 @@ module Document =
         with
         | :? FileNotFoundException -> None
 
-    let title (doc: Document) : option<Node<Heading>> =
+    let title (doc: Doc) : option<Node<Heading>> =
         let isTitle el =
             Element.asHeading el
             |> Option.map (fun x -> x.data.level = 1)
@@ -102,14 +102,14 @@ module Document =
 
         titleOpt
 
-    let name (doc: Document) : string =
+    let name (doc: Doc) : string =
         match title doc with
         | Some { data = hd } -> Heading.name hd
         | None -> doc.relPath |> Path.GetFileNameWithoutExtension
 
-    let slug (doc: Document) : Slug = name doc |> Slug.ofString
+    let slug (doc: Doc) : Slug = name doc |> Slug.ofString
 
-    let elementsAll (document: Document) : seq<Element> =
+    let elementsAll (document: Doc) : seq<Element> =
         let rec collect els =
             seq {
                 for el in els do
@@ -124,7 +124,7 @@ module Document =
 
         collect document.elements
 
-    let headings (document: Document) : seq<Node<Heading>> =
+    let headings (document: Doc) : seq<Node<Heading>> =
         seq {
             for el in elementsAll document do
                 match Element.asHeading el with
@@ -132,12 +132,12 @@ module Document =
                 | _ -> ()
         }
 
-    let headingBySlug (nameSlug: Slug) (document: Document) : option<Node<Heading>> =
+    let headingBySlug (nameSlug: Slug) (document: Doc) : option<Node<Heading>> =
         let matchingHeading { data = h } = Heading.slug h = nameSlug
 
         headings document |> Seq.tryFind matchingHeading
 
-    let linkDefs (doc: Document) : seq<Node<MdLinkDef>> =
+    let linkDefs (doc: Doc) : seq<Node<MdLinkDef>> =
         seq {
             for el in elementsAll doc do
                 match Element.asLinkDef el with
@@ -145,25 +145,25 @@ module Document =
                 | _ -> ()
         }
 
-    let linkDefByLabel (label: string) (doc: Document) : option<Node<MdLinkDef>> =
+    let linkDefByLabel (label: string) (doc: Doc) : option<Node<MdLinkDef>> =
         linkDefs doc
         |> Seq.tryFind (fun { data = def } -> def.label.text = label)
 
-    let elementAtPos (pos: Position) (doc: Document) : option<Element> =
+    let elementAtPos (pos: Position) (doc: Doc) : option<Element> =
         elementsAll doc
         |> Seq.tryFind (fun el ->
             let range = Element.range el
             range.Start <= pos && pos < range.End)
 
-type Folder = { name: string; root: PathUri; documents: Map<PathUri, Document> }
+type Folder = { name: string; root: PathUri; documents: Map<PathUri, Doc> }
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
-    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Document> =
+    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Doc> =
         Map.tryFind uri folder.documents
 
-    let rec private loadDocuments (root: PathUri) : seq<Document> =
+    let rec private loadDocuments (root: PathUri) : seq<Doc> =
         let di = DirectoryInfo(root.LocalPath)
 
         try
@@ -174,7 +174,7 @@ module Folder =
                 for file in files do
                     let pathUri = PathUri.fromString file.FullName
 
-                    let document = Document.load root pathUri
+                    let document = Doc.load root pathUri
 
                     match document with
                     | Some document -> yield document
@@ -218,26 +218,26 @@ module Folder =
             None
 
     let loadDocument (uri: PathUri) (folder: Folder) : Folder =
-        match Document.load folder.root uri with
+        match Doc.load folder.root uri with
         | Some doc -> { folder with documents = Map.add uri doc folder.documents }
         | None -> folder
 
     let removeDocument (uri: PathUri) (folder: Folder) : Folder =
         { folder with documents = Map.remove uri folder.documents }
 
-    let addDocument (doc: Document) (folder: Folder) : Folder =
+    let addDocument (doc: Doc) (folder: Folder) : Folder =
         { folder with documents = Map.add doc.path doc folder.documents }
 
 
-    let tryFindDocumentBySlug (slug: Slug) (folder: Folder) : option<Document> =
-        let matchingDoc doc = Document.slug doc = slug
+    let tryFindDocumentBySlug (slug: Slug) (folder: Folder) : option<Doc> =
+        let matchingDoc doc = Doc.slug doc = slug
         folder.documents |> Map.values |> Seq.tryFind matchingDoc
 
     let tryFindWikiLinkTarget
-        (sourceDoc: Document)
+        (sourceDoc: Doc)
         (wl: WikiLink)
         (folder: Folder)
-        : option<Document * Option<Node<Heading>>> =
+        : option<Doc * Option<Node<Heading>>> =
         // Discover target doc.
         let destDocName = WikiLink.destDoc wl
 
@@ -252,9 +252,9 @@ module Folder =
             // Discover target heading.
             // When target heading is specified but can't be found, the whole thing turns into None.
             match WikiLink.destHeading wl with
-            | None -> Some(destDoc, Document.title destDoc)
+            | None -> Some(destDoc, Doc.title destDoc)
             | Some headingName ->
-                match Document.headingBySlug (Slug.ofString headingName) destDoc with
+                match Doc.headingBySlug (Slug.ofString headingName) destDoc with
                 | Some _ as heading -> Some(destDoc, heading)
                 | _ -> None
 

@@ -55,7 +55,7 @@ module State =
         tryFindFolder uri state
         |> Option.defaultWith (fun _ -> failwith $"Expected folder now found: {uri}")
 
-    let tryFindDocument (uri: PathUri) (state: State) : option<Document> =
+    let tryFindDocument (uri: PathUri) (state: State) : option<Doc> =
         tryFindFolder uri state
         |> Option.map (Folder.tryFindDocument uri)
         |> Option.flatten
@@ -91,7 +91,7 @@ module State =
 
         { state with workspace = newWorkspace }
 
-    let updateDocument (newDocument: Document) (state: State) : State =
+    let updateDocument (newDocument: Doc) (state: State) : State =
         let folder = findFolder newDocument.path state
 
         let newContent = folder.documents |> Map.add newDocument.path newDocument
@@ -492,7 +492,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         match doc with
         | Some doc ->
-            let newDoc = Document.applyLspChange par doc
+            let newDoc = Doc.applyLspChange par doc
 
             let newState = State.updateDocument newDoc state
 
@@ -515,7 +515,7 @@ type MarksmanServer(client: MarksmanClient) =
         match folder with
         | None -> ()
         | Some folder ->
-            let docFromDisk = Document.load folder.root path
+            let docFromDisk = Doc.load folder.root path
 
             let newState =
                 match docFromDisk with
@@ -536,7 +536,7 @@ type MarksmanServer(client: MarksmanClient) =
         match folder with
         | None -> ()
         | Some folder ->
-            let document = Document.fromLspDocument folder.root par.TextDocument
+            let document = Doc.fromLspDocument folder.root par.TextDocument
 
             let newState = State.updateDocument document (requireState ())
 
@@ -570,7 +570,7 @@ type MarksmanServer(client: MarksmanClient) =
             match folder with
             | None -> ()
             | Some folder ->
-                match Document.load folder.root docUri with
+                match Doc.load folder.root docUri with
                 | Some doc -> newState <- State.updateDocument doc newState
                 | _ ->
                     logger.warn (
@@ -653,7 +653,7 @@ type MarksmanServer(client: MarksmanClient) =
             monad {
                 let! folder = State.tryFindFolder docUri state
                 let! srcDoc = Folder.tryFindDocument docUri folder
-                let! atPos = Document.elementAtPos par.Position srcDoc
+                let! atPos = Doc.elementAtPos par.Position srcDoc
 
                 match atPos with
                 | WL wl ->
@@ -680,7 +680,7 @@ type MarksmanServer(client: MarksmanClient) =
                     )
 
                     let! label = MdLink.referenceLabel link.data
-                    let! def = Document.linkDefByLabel label.text srcDoc
+                    let! def = Doc.linkDefByLabel label.text srcDoc
 
                     let location =
                         GotoResult.Single { Uri = srcDoc.path.DocumentUri; Range = def.range }
@@ -700,7 +700,7 @@ type MarksmanServer(client: MarksmanClient) =
             monad {
                 let! folder = State.tryFindFolder docUri state
                 let! sourceDoc = Folder.tryFindDocument docUri folder
-                let! atPos = Document.elementAtPos par.Position sourceDoc
+                let! atPos = Doc.elementAtPos par.Position sourceDoc
                 let! wl = Element.asWikiLink atPos
 
                 let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder

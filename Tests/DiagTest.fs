@@ -7,7 +7,7 @@ open Marksman.Parser
 open Marksman.Domain
 open Marksman.Diag
 
-let makeFakeDocument (content: string) : Document =
+let makeFakeDocument (content: string) : Doc =
     let text = Text.mkText content
     let elements = parseText text
 

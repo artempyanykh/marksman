@@ -69,10 +69,23 @@ module MdLink =
             let fmtLabel = Node.fmtText label
             $"RS: label={fmtLabel}"
 
+type MdLinkDef = { label: TextNode; url: TextNode; title: option<TextNode> }
+
+module MdLinkDef =
+    let fmt (mld: MdLinkDef) =
+        let fmtLabel = Node.fmtText mld.label
+        let fmtUrl = Node.fmtText mld.url
+
+        let fmtTitle =
+            mld.title |> Option.map Node.fmtText |> Option.defaultValue "∅"
+
+        $"label={fmtLabel}; url={fmtUrl}; title={fmtTitle}"
+
 type Element =
     | H of Node<Heading>
     | WL of Node<WikiLink>
     | ML of Node<MdLink>
+    | MLD of Node<MdLinkDef>
 
 and Heading =
     { level: int
@@ -85,6 +98,7 @@ let rec private fmtElement =
     | H h -> fmtHeading h
     | WL x -> fmtWikiLink x
     | ML l -> fmtMdLink l
+    | MLD r -> fmtMdLinkDef r
 
 and private fmtHeading node =
     let inner = node.data
@@ -108,6 +122,11 @@ and private fmtMdLink node =
     let rest = (indentFmt MdLink.fmt) node.data
     String.Join(Environment.NewLine, [ first; rest ])
 
+and private fmtMdLinkDef node =
+    let first = $"MLD: {node.text} @ {node.range.DebuggerDisplay}"
+    let rest = (indentFmt MdLinkDef.fmt) node.data
+    String.Join(Environment.NewLine, [ first; rest ])
+
 module Heading =
     let fmt = fmtHeading
 
@@ -127,15 +146,17 @@ module Element =
 
     let range =
         function
-        | H h -> h.range
-        | WL ref -> ref.range
-        | ML l -> l.range
+        | H n -> n.range
+        | WL n -> n.range
+        | ML n -> n.range
+        | MLD n -> n.range
 
     let text =
         function
-        | H h -> h.text
-        | WL ref -> ref.text
-        | ML l -> l.text
+        | H n -> n.text
+        | WL n -> n.text
+        | ML n -> n.text
+        | MLD n -> n.text
 
     let asHeading =
         function
@@ -395,7 +416,35 @@ module Markdown =
                     let label = Node.mk_text label (sourceSpanToRange text labelSpan)
                     let link = MdLink.RS(label) |> Node.mk linkText linkRange
                     elements.Add(ML link)
+            | :? LinkReferenceDefinition as linkDef ->
+                let defRange = sourceSpanToRange text linkDef.Span
 
+                let defText =
+                    text.content.Substring(linkDef.Span.Start, linkDef.Span.Length)
+
+                let label = linkDef.Label
+                let labelSpan = linkDef.LabelSpan
+                let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+
+                let url = linkDef.Url
+                let urlSpan = linkDef.UrlSpan
+                let url = Node.mk_text url (sourceSpanToRange text urlSpan)
+
+                let title =
+                    if linkDef.TitleSpan.IsEmpty then
+                        None
+                    else
+                        let title = linkDef.Title
+                        let titleSpan = linkDef.TitleSpan
+                        Node.mk_text title (sourceSpanToRange text titleSpan) |> Some
+
+                let def =
+                    { label = label; url = url; title = title }
+                    |> Node.mk defText defRange
+
+                elements.Add(MLD def)
+
+                ()
             | _ -> ()
 
         elements.ToArray()
@@ -447,7 +496,8 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
         for el in flat do
             match el with
             | WL _
-            | ML _ ->
+            | ML _
+            | MLD _ ->
                 match headStack with
                 | _ :: _ -> accChildren <- el :: accChildren
                 | [] -> yield el

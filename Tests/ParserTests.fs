@@ -247,3 +247,35 @@ module MdLinkTest =
             document
             [ "ML: [label][ref] @ (0,0)-(0,12)"
               "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)" ]
+
+    [<Fact>]
+    let parser_link_11 () =
+        let text = "[foo]: /foo 'foo title'"
+        let document = scrapeString text
+
+        checkInlineSnapshot
+            document
+            [ "MLD: [foo]: /foo 'foo title' @ (0,0)-(0,23)"
+              "  label=foo @ (0,1)-(0,4); url=/foo @ (0,7)-(0,11); title=foo title @ (0,12)-(0,23)" ]
+
+    [<Fact>]
+    let parser_link_12 () =
+        let text = "[foo]: /foo"
+        let document = scrapeString text
+
+        checkInlineSnapshot
+            document
+            [ "MLD: [foo]: /foo @ (0,0)-(0,11)"
+              "  label=foo @ (0,1)-(0,4); url=/foo @ (0,7)-(0,11); title=∅" ]
+
+    [<Fact>]
+    let parser_link_13 () =
+        let text = "[foo]: /bar\nHere comes [foo]."
+        let document = scrapeString text
+
+        checkInlineSnapshot
+            document
+            [ "MLD: [foo]: /bar @ (0,0)-(0,11)"
+              "  label=foo @ (0,1)-(0,4); url=/bar @ (0,7)-(0,11); title=∅"
+              "ML: [foo] @ (1,11)-(1,16)"
+              "  RS: label=foo @ (1,12)-(1,15)" ]

@@ -79,12 +79,13 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
 
     let paraElStart = scanCursor |> Option.bind findOpenOrWs
 
-    let findEndWs =
-        Cursor.tryFindCharMatching Cursor.forward Char.IsWhiteSpace
+    let findCloseOrWs =
+        Cursor.tryFindCharMatching Cursor.forward (fun c -> Char.IsWhiteSpace(c) || c = ']')
+
+    let paraElEnd = scanCursor |> Option.bind findCloseOrWs
 
     let rangeEnd =
-        scanCursor
-        |> Option.bind findEndWs
+        paraElEnd
         |> Option.map Cursor.pos
         |> Option.defaultValue lineRange.End
 
@@ -97,7 +98,11 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
         | _ ->
             if Cursor.char start = '[' then
                 let rangeStart = (Cursor.pos start).NextChar(1)
-                Some(Comp.LinkReference(Range.Mk(rangeStart, rangeEnd), true))
+
+                let needsClosing =
+                    paraElEnd |> Option.exists (fun c -> Cursor.char c = ']') |> not
+
+                Some(Comp.LinkReference(Range.Mk(rangeStart, rangeEnd), needsClosing))
             else
                 None
     | _ -> None
@@ -190,7 +195,9 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
 
         let toCompletionItem def =
             let newText = def.label.text
+
             let newText = if needsClosing then newText + "]" else newText
+
             let textEdit = { Range = range; NewText = newText }
 
             { CompletionItem.Create(def.label.text) with

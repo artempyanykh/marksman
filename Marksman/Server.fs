@@ -652,21 +652,41 @@ type MarksmanServer(client: MarksmanClient) =
         let goto =
             monad {
                 let! folder = State.tryFindFolder docUri state
-                let! sourceDoc = Folder.tryFindDocument docUri folder
-                let! atPos = Document.elementAtPos par.Position sourceDoc
-                let! wl = Element.asWikiLink atPos
+                let! srcDoc = Folder.tryFindDocument docUri folder
+                let! atPos = Document.elementAtPos par.Position srcDoc
 
-                let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
+                match atPos with
+                | WL wl ->
+                    logger.trace (
+                        Log.setMessage "Searching definition of a wiki-link"
+                        >> Log.addContext "wiki" (WikiLink.fmt wl.data)
+                    )
 
-                let destRange =
-                    destHeading
-                    |> Option.map Node.range
-                    |> Option.defaultWith destDoc.text.FullRange
+                    let! destDoc, destHeading = Folder.tryFindWikiLinkTarget srcDoc wl.data folder
 
-                let location =
-                    GotoResult.Single { Uri = destDoc.path.DocumentUri; Range = destRange }
+                    let destRange =
+                        destHeading
+                        |> Option.map Node.range
+                        |> Option.defaultWith destDoc.text.FullRange
 
-                location
+                    let location =
+                        GotoResult.Single { Uri = destDoc.path.DocumentUri; Range = destRange }
+
+                    location
+                | ML link ->
+                    logger.trace (
+                        Log.setMessage "Searching definition of a link reference"
+                        >> Log.addContext "ref" (MdLink.fmt link.data)
+                    )
+
+                    let! label = MdLink.referenceLabel link.data
+                    let! def = Document.linkDefByLabel label.text srcDoc
+
+                    let location =
+                        GotoResult.Single { Uri = srcDoc.path.DocumentUri; Range = def.range }
+
+                    location
+                | _ -> return! None
             }
 
         AsyncLspResult.success goto

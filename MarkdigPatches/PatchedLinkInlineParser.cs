@@ -136,8 +136,8 @@ namespace MarkdigPatches
             int endPosition,
             LocalLabel localLabel)
         {
-            bool hasLinkDefinition =
-                state.Document.TryGetLinkReferenceDefinition(label, out LinkReferenceDefinition? linkRef);
+            // Result = do we have a link definition
+            state.Document.TryGetLinkReferenceDefinition(label, out LinkReferenceDefinition? linkRef);
 
             // DO NOT BAIL OUT ON MISSING LINK REFERENCE DEFINITIONS
             // if (!state.Document.TryGetLinkReferenceDefinition(label, out LinkReferenceDefinition? linkRef))
@@ -146,11 +146,11 @@ namespace MarkdigPatches
             // }
 
             Inline? link = null;
-            // Try to use a callback directly defined on the LinkReferenceDefinition
-            if (linkRef != null && linkRef.CreateLinkInline != null)
-            {
-                link = linkRef.CreateLinkInline(state, linkRef, parent.FirstChild);
-            }
+            // DO NOT try to use a callback directly defined on the LinkReferenceDefinition
+            // if (linkRef != null && linkRef.CreateLinkInline != null)
+            // {
+            //     link = linkRef.CreateLinkInline(state, linkRef, parent.FirstChild);
+            // }
 
             // Create a default link if the callback was not found
             if (link is null)
@@ -160,11 +160,11 @@ namespace MarkdigPatches
                 {
                     // label here is the label of the actual reference that should have a definition somewhere
                     // while parent.Label is the "label" part of the collapsed reference
-                    Url = HtmlHelper.Unescape(linkRef?.Url ?? label),
+                    Url = HtmlHelper.Unescape(label),
                     Title = HtmlHelper.Unescape(linkRef?.Title),
                     Label = parent.Label,
                     LabelSpan = parent.LabelSpan,
-                    UrlSpan = linkRef?.UrlSpan ?? labelSpan,
+                    UrlSpan = labelSpan,
                     IsImage = parent.IsImage,
                     IsShortcut = isShortcut,
                     Reference = linkRef,

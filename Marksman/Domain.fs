@@ -145,6 +145,10 @@ module Document =
                 | _ -> ()
         }
 
+    let linkDefByLabel (label: string) (doc: Document) : option<Node<MdLinkDef>> =
+        linkDefs doc
+        |> Seq.tryFind (fun { data = def } -> def.label.text = label)
+
     let elementAtPos (pos: Position) (doc: Document) : option<Element> =
         elementsAll doc
         |> Seq.tryFind (fun el ->

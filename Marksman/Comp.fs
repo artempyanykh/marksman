@@ -1,8 +1,10 @@
 ﻿module Marksman.Comp
 
 open System
+
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
+
 open Marksman.Parser
 open Marksman.Domain
 open Marksman.Misc
@@ -14,12 +16,15 @@ let private logger = LogProvider.getLoggerByName "Comp"
 type Comp =
     | Title of range: Range * needsClosing: bool
     | Heading of destDoc: option<string> * range: Range
+    | Shortcut of range: Range * needsClosing: bool
 
     override this.ToString() =
         match this with
         | Comp.Title (range, needsClosing) ->
             $"Title: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.Heading (destDoc, range) -> $"Heading: dest={destDoc}; range={range.DebuggerDisplay}"
+        | Comp.Shortcut (range, needsClosing) ->
+            $"Shortcut: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
 
 let compOfElement (pos: Position) (el: Element) : option<Comp> =
     let elementRange = Element.range el
@@ -55,40 +60,44 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                     None
         | _ -> None
 
-let compOfText (pos: Position) (text: Text) : option<Comp> =
-    let line = { text = text; line = pos.Line }
+let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
     let lineRange = Line.range line
 
-    let cursor =
-        match Line.toCursorAt pos line with
+    let scanCursor =
+        match line |> Line.toCursorAt pos with
         | Some cursor -> Cursor.backward cursor
         | None -> if Line.endsAt pos line then Line.endCursor line else None
 
+    let findOpenOrWs =
+        Cursor.tryFindCharMatching Cursor.backward (fun c -> Char.IsWhiteSpace(c) || c = '[')
 
-    match cursor with
-    | None -> None
-    | Some cursor ->
-        let start =
-            Cursor.tryFindCharMatching
-                Cursor.backward
-                (fun c -> Char.IsWhiteSpace(c) || c = '[')
-                cursor
+    let paraElStart = scanCursor |> Option.bind findOpenOrWs
 
-        let end_ =
-            Cursor.tryFindCharMatching Cursor.forward Char.IsWhiteSpace cursor
+    let findEndWs =
+        Cursor.tryFindCharMatching Cursor.forward Char.IsWhiteSpace
 
-        match start with
-        | Some start ->
-            match Cursor.backwardChar2 start with
-            | Some ('[', '[') ->
+    let rangeEnd =
+        scanCursor
+        |> Option.bind findEndWs
+        |> Option.map Cursor.pos
+        |> Option.defaultValue lineRange.End
+
+    match paraElStart with
+    | Some start ->
+        match Cursor.backwardChar2 start with
+        | Some ('[', '[') ->
+            let rangeStart = (Cursor.pos start).NextChar(1)
+            Some(Comp.Title(Range.Mk(rangeStart, rangeEnd), true))
+        | _ ->
+            if Cursor.char start = '[' then
                 let rangeStart = (Cursor.pos start).NextChar(1)
+                Some(Comp.Shortcut(Range.Mk(rangeStart, rangeEnd), true))
+            else
+                None
+    | _ -> None
 
-                let rangeEnd =
-                    end_ |> Option.map Cursor.pos |> Option.defaultValue lineRange.End
-
-                Some(Comp.Title(Range.Mk(rangeStart, rangeEnd), true))
-            | _ -> None
-        | None -> None
+let compOfText (pos: Position) (text: Text) : option<Comp> =
+    Line.ofPos text pos |> Option.bind (matchBracketParaElement pos)
 
 let findCompAtPoint (pos: Position) (doc: Document) : option<Comp> =
     let elComp =
@@ -165,6 +174,10 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Document) (folder: Folder) : array
                     FilterText = Some hd }
 
             matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
+    | Comp.Shortcut (range, needsClosing) ->
+        // TODO: add link def completion
+        let input = srcDoc.text.Substring(range)
+        [||]
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocument docUri folder

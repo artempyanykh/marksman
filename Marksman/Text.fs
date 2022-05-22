@@ -307,6 +307,12 @@ type Line =
     override this.ToString() = $"Line {this.line}: {this.text}"
 
 module Line =
+    let ofPos (text: Text) (pos: Position) =
+        if text.lineMap.TryFindOffset pos |> Option.isSome then
+            Some { text = text; line = pos.Line }
+        else
+            None
+
     let toSpan line : Span =
         let start, end_ = line.text.LineContentOffsets(line.line)
 

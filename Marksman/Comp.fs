@@ -5,6 +5,8 @@ open System
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
 
+open FSharpPlus.GenericBuilders
+
 open Marksman.Parser
 open Marksman.Domain
 open Marksman.Misc
@@ -14,15 +16,19 @@ let private logger = LogProvider.getLoggerByName "Comp"
 
 [<RequireQualifiedAccess>]
 type Comp =
-    | Title of range: Range * needsClosing: bool
-    | Heading of destDoc: option<string> * range: Range
+    | DocPath of range: Range * needsClosing: bool
+    | WikiTitle of range: Range * needsClosing: bool
+    | WikiHeading of destDoc: option<string> * range: Range
     | LinkReference of range: Range * needsClosing: bool
 
     override this.ToString() =
         match this with
-        | Comp.Title (range, needsClosing) ->
-            $"Title: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.Heading (destDoc, range) -> $"Heading: dest={destDoc}; range={range.DebuggerDisplay}"
+        | Comp.DocPath (range, needsClosing) ->
+            $"DocPath: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
+        | Comp.WikiTitle (range, needsClosing) ->
+            $"WikiTitle: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
+        | Comp.WikiHeading (destDoc, range) ->
+            $"WikiHeading: dest={destDoc}; range={range.DebuggerDisplay}"
         | Comp.LinkReference (range, needsClosing) ->
             $"LinkReference: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
 
@@ -39,23 +45,23 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                 let range =
                     Range.Mk(elementRange.Start.NextChar(2), elementRange.End.PrevChar(2))
 
-                Some(Comp.Title(range, false))
+                Some(Comp.WikiTitle(range, false))
             | Some doc, None ->
                 if doc.range.ContainsInclusive(pos) then
-                    Some(Comp.Title(doc.range, false))
+                    Some(Comp.WikiTitle(doc.range, false))
                 else
                     None
             | Some doc, Some hd ->
                 if doc.range.ContainsInclusive(pos) then
-                    Some(Comp.Title(doc.range, false))
+                    Some(Comp.WikiTitle(doc.range, false))
                 else if hd.range.ContainsInclusive(pos) then
                     let destDoc = doc.text
-                    Some(Comp.Heading(Some(destDoc), hd.range))
+                    Some(Comp.WikiHeading(Some(destDoc), hd.range))
                 else
                     None
             | None, Some hd ->
                 if hd.range.ContainsInclusive(pos) then
-                    Some(Comp.Heading(None, hd.range))
+                    Some(Comp.WikiHeading(None, hd.range))
                 else
                     None
         | ML link ->
@@ -94,7 +100,7 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
         match Cursor.backwardChar2 start with
         | Some ('[', '[') ->
             let rangeStart = (Cursor.pos start).NextChar(1)
-            Some(Comp.Title(Range.Mk(rangeStart, rangeEnd), true))
+            Some(Comp.WikiTitle(Range.Mk(rangeStart, rangeEnd), true))
         | _ ->
             if Cursor.char start = '[' then
                 let rangeStart = (Cursor.pos start).NextChar(1)
@@ -107,8 +113,52 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
                 None
     | _ -> None
 
+let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
+    let lineRange = Line.range line
+
+    let scanCursor =
+        match line |> Line.toCursorAt pos with
+        | Some cursor -> Cursor.backward cursor
+        | None -> if Line.endsAt pos line then Line.endCursor line else None
+
+    let findOpenOrWs =
+        Cursor.tryFindCharMatching Cursor.backward (fun c -> Char.IsWhiteSpace(c) || c = '(')
+
+    let paraElStart = scanCursor |> Option.bind findOpenOrWs
+
+    let findCloseOrWs =
+        Cursor.tryFindCharMatching Cursor.forward (fun c -> Char.IsWhiteSpace(c) || c = ')')
+
+    let paraElEnd = scanCursor |> Option.bind findCloseOrWs
+
+    let rangeEnd =
+        paraElEnd
+        |> Option.map Cursor.pos
+        |> Option.defaultValue lineRange.End
+
+    match paraElStart with
+    | Some start ->
+        if Cursor.char start = '(' then
+            let rangeStart = (Cursor.pos start).NextChar(1)
+
+            let needsClosing =
+                paraElEnd |> Option.exists (fun c -> Cursor.char c = ')') |> not
+
+            Some(Comp.DocPath(Range.Mk(rangeStart, rangeEnd), needsClosing))
+        else
+            None
+    | _ -> None
+
 let compOfText (pos: Position) (text: Text) : option<Comp> =
-    Line.ofPos text pos |> Option.bind (matchBracketParaElement pos)
+    monad {
+        let! line = Line.ofPos text pos
+
+        let! comp =
+            matchBracketParaElement pos line
+            |> Option.orElseWith (fun () -> matchParenParaElement pos line)
+
+        comp
+    }
 
 let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
     let elComp =
@@ -123,7 +173,7 @@ let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
 
 let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<CompletionItem> =
     match comp with
-    | Comp.Title (range, needsClosing) ->
+    | Comp.WikiTitle (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
         let inputSlug = Slug.ofString input
 
@@ -151,7 +201,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some title }
 
         Seq.map toCompletionItem matchingTitles |> Array.ofSeq
-    | Comp.Heading (destDocTitle, range) ->
+    | Comp.WikiHeading (destDocTitle, range) ->
         let destDoc =
             match destDocTitle with
             | None -> Some srcDoc
@@ -207,6 +257,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some def.label.text }
 
         matchingDefs |> Seq.map toCompletionItem |> Array.ofSeq
+    | Comp.DocPath (_range, _needsClosing) -> [||]
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocument docUri folder

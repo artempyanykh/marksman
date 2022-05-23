@@ -1,7 +1,6 @@
 module Marksman.Misc
 
 open System
-open System.IO
 open System.Text
 open Ionide.LanguageServerProtocol.Types
 
@@ -56,6 +55,10 @@ type String with
                 chunkState <- 2
 
         sb.ToString()
+
+    member this.UrlEncode() : string = Uri.EscapeDataString(this)
+
+    member this.AbsPathUrlEncode() : string = "/" + this.TrimStart('/').UrlEncode()
 
 type Slug = Slug of string
 

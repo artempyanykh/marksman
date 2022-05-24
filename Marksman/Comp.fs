@@ -81,7 +81,7 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
         | None -> if Line.endsAt pos line then Line.endCursor line else None
 
     let findOpenOrWs =
-        Cursor.tryFindCharMatching Cursor.backward (fun c -> Char.IsWhiteSpace(c) || c = '[')
+        Cursor.tryFindCharMatching Cursor.backward (fun c -> Char.IsWhiteSpace(c) || c = '[' || c = '(')
 
     let paraElStart = scanCursor |> Option.bind findOpenOrWs
 
@@ -257,7 +257,26 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some def.label.text }
 
         matchingDefs |> Seq.map toCompletionItem |> Array.ofSeq
-    | Comp.DocPath (_range, _needsClosing) -> [||]
+    | Comp.DocPath (range, needsClosing) ->
+        let input = srcDoc.text.Substring(range)
+
+        let isMatching doc =
+            input.IsSubSequenceOf(doc.relPath)
+            || input.IsSubSequenceOf(doc.relPath.AbsPathUrlEncode())
+
+        let matchingDocs = folder.documents |> Map.values |> Seq.filter isMatching
+
+        let toCompletionItem doc =
+            let newText = doc.relPath.AbsPathUrlEncode()
+            let newText = if needsClosing then newText + ")" else newText
+            let textEdit = { Range = range; NewText = newText }
+
+            { CompletionItem.Create(doc.relPath) with
+                Detail = Some(Doc.name doc)
+                TextEdit = Some textEdit
+                FilterText = Some doc.relPath }
+
+        matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocument docUri folder

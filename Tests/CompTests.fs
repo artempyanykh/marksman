@@ -163,3 +163,13 @@ module DocPathOfText =
             Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 1), needsClosing = false)
 
         Assert.Equal(Some expected, comp)
+        
+    [<Fact>]
+    let bracketsAndOpenParen () =
+        let text = Text.mkText "[]("
+        let comp = compOfText (Position.Mk(0, 3)) text
+
+        let expected =
+            Helpers.mkDocPathComp (Range.Mk(0, 3, 1, 0))
+
+        Assert.Equal(Some expected, comp)

@@ -56,18 +56,24 @@ module StringExtensionsTests =
         Assert.Equal<string>([| "Line 1"; "Line 2"; "Line 3" |], "Line 1\nLine 2\r\nLine 3".Lines())
 
     [<Fact>]
-    let abspath_urlencode_1 () = Assert.Equal("/file.md", "file.md".AbsPathUrlEncode())
+    let abspath_urlencode_1 () =
+        Assert.Equal("/file.md", "file.md".AbsPathUrlEncode())
+        Assert.Equal("/file.md".AbsPathUrlEncodedToRelPath(), "file.md")
 
     [<Fact>]
-    let abspath_urlencode_2 () = Assert.Equal("/file.md", "/file.md".AbsPathUrlEncode())
+    let abspath_urlencode_2 () =
+        Assert.Equal("/file.md", "/file.md".AbsPathUrlEncode())
 
     [<Fact>]
     let abspath_urlencode_3 () =
         Assert.Equal("/file%20with%20spaces.md", "file with spaces.md".AbsPathUrlEncode())
+        Assert.Equal("/file%20with%20spaces.md".AbsPathUrlEncodedToRelPath(), "file with spaces.md")
 
     [<Fact>]
-    let abspath_urlencode_4 () = Assert.Equal("/file%23name.md", "file#name.md".AbsPathUrlEncode())
-
+    let abspath_urlencode_4 () =
+        Assert.Equal("/file%23name.md", "file#name.md".AbsPathUrlEncode())
+        Assert.Equal("/file%23name.md".AbsPathUrlEncodedToRelPath(), "file#name.md")
+    
 module PathUriTests =
     [<Fact>]
     let testWinPathFromUri () =

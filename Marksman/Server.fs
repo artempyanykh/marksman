@@ -189,7 +189,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         DocumentSymbolProvider = Some(not clientDesc.IsVSCode)
         CompletionProvider =
             Some
-                { TriggerCharacters = Some [| '['; '#' |]
+                { TriggerCharacters = Some [| '['; '#'; '(' |]
                   ResolveProvider = None
                   AllCommitCharacters = None }
         DefinitionProvider = Some true

@@ -68,7 +68,7 @@ type FolderIndex = Map<Slug, DocumentIndex>
 
 let indexFolder (folder: Folder) : FolderIndex =
     seq {
-        for KeyValue (_, doc) in folder.documents do
+        for KeyValue (_, doc) in folder.docs do
             let docSummary = indexDocument doc
             yield Doc.name doc |> Slug.ofString, docSummary
     }

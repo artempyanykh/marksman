@@ -94,9 +94,9 @@ module State =
     let updateDocument (newDocument: Doc) (state: State) : State =
         let folder = findFolder newDocument.path state
 
-        let newContent = folder.documents |> Map.add newDocument.path newDocument
+        let newContent = folder.docs |> Map.add newDocument.path newDocument
 
-        let newFolder = { folder with documents = newContent }
+        let newFolder = { folder with docs = newContent }
 
         let newWorkspace = Workspace.withFolder newFolder state.workspace
 
@@ -426,7 +426,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         let folders = readWorkspace workspaceFolders
 
-        let numNotes = folders |> List.sumBy (fun x -> x.documents.Count)
+        let numNotes = folders |> List.sumBy (fun x -> x.docs.Count)
 
         logger.debug (
             Log.setMessage "Completed reading workspace folders"
@@ -673,13 +673,31 @@ type MarksmanServer(client: MarksmanClient) =
                         GotoResult.Single { Uri = destDoc.path.DocumentUri; Range = destRange }
 
                     location
-                | ML link ->
+                | ML { data = MdLink.IL (_, url, _) as link } ->
                     logger.trace (
-                        Log.setMessage "Searching definition of a link reference"
-                        >> Log.addContext "ref" (MdLink.fmt link.data)
+                        Log.setMessage "Searching definition of an inline link"
+                        >> Log.addContext "link" (MdLink.fmt link)
                     )
 
-                    let! label = MdLink.referenceLabel link.data
+                    let! url = url
+                    let! targetDoc = Folder.tryFindInlineLinkTarget url.text folder
+
+                    let targetRange =
+                        Doc.title targetDoc
+                        |> Option.map Node.range
+                        |> Option.defaultWith targetDoc.text.FullRange
+
+                    let location =
+                        GotoResult.Single { Uri = targetDoc.path.DocumentUri; Range = targetRange }
+
+                    location
+                | ML { data = link } ->
+                    logger.trace (
+                        Log.setMessage "Searching definition of a link reference"
+                        >> Log.addContext "ref" (MdLink.fmt link)
+                    )
+
+                    let! label = MdLink.referenceLabel link
                     let! def = Doc.linkDefByLabel label.text srcDoc
 
                     let location =

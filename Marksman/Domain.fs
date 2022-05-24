@@ -155,13 +155,12 @@ module Doc =
             let range = Element.range el
             range.Start <= pos && pos < range.End)
 
-type Folder = { name: string; root: PathUri; documents: Map<PathUri, Doc> }
+type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
-    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Doc> =
-        Map.tryFind uri folder.documents
+    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
 
     let rec private loadDocuments (root: PathUri) : seq<Doc> =
         let di = DirectoryInfo(root.LocalPath)
@@ -208,7 +207,7 @@ module Folder =
             let documents =
                 loadDocuments root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
 
-            { name = name; root = root; documents = documents } |> Some
+            { name = name; root = root; docs = documents } |> Some
         else
             logger.warn (
                 Log.setMessage "Folder path doesn't exist"
@@ -219,19 +218,19 @@ module Folder =
 
     let loadDocument (uri: PathUri) (folder: Folder) : Folder =
         match Doc.load folder.root uri with
-        | Some doc -> { folder with documents = Map.add uri doc folder.documents }
+        | Some doc -> { folder with docs = Map.add uri doc folder.docs }
         | None -> folder
 
     let removeDocument (uri: PathUri) (folder: Folder) : Folder =
-        { folder with documents = Map.remove uri folder.documents }
+        { folder with docs = Map.remove uri folder.docs }
 
     let addDocument (doc: Doc) (folder: Folder) : Folder =
-        { folder with documents = Map.add doc.path doc folder.documents }
+        { folder with docs = Map.add doc.path doc folder.docs }
 
 
     let tryFindDocumentBySlug (slug: Slug) (folder: Folder) : option<Doc> =
         let matchingDoc doc = Doc.slug doc = slug
-        folder.documents |> Map.values |> Seq.tryFind matchingDoc
+        folder.docs |> Map.values |> Seq.tryFind matchingDoc
 
     let tryFindWikiLinkTarget
         (sourceDoc: Doc)
@@ -258,7 +257,11 @@ module Folder =
                 | Some _ as heading -> Some(destDoc, heading)
                 | _ -> None
 
-    let docCount (folder: Folder) : int = folder.documents.Values.Count
+    let tryFindInlineLinkTarget (url: string) (folder: Folder) : option<Doc> =
+        let isMatching doc = doc.relPath.AbsPathUrlEncode() = url
+        folder.docs |> Map.values |> Seq.tryFind isMatching
+
+    let docCount (folder: Folder) : int = folder.docs.Values.Count
 
 type Workspace = { folders: Map<PathUri, Folder> }
 

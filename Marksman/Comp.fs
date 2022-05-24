@@ -187,7 +187,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
             | None -> []
 
         let matchingTitles =
-            folder.documents |> Map.values |> Seq.collect titleWhenMatch
+            folder.docs |> Map.values |> Seq.collect titleWhenMatch
 
         let toCompletionItem (doc: Doc, title: string) =
             let newText =
@@ -212,7 +212,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                     let docSlug = Slug.ofString (Doc.name doc)
                     docSlug = destDocSlug
 
-                folder.documents |> Map.values |> Seq.tryFind matchTitle
+                folder.docs |> Map.values |> Seq.tryFind matchTitle
 
         match destDoc with
         | None -> [||]
@@ -264,7 +264,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
             input.IsSubSequenceOf(doc.relPath)
             || input.IsSubSequenceOf(doc.relPath.AbsPathUrlEncode())
 
-        let matchingDocs = folder.documents |> Map.values |> Seq.filter isMatching
+        let matchingDocs = folder.docs |> Map.values |> Seq.filter isMatching
 
         let toCompletionItem doc =
             let newText = doc.relPath.AbsPathUrlEncode()

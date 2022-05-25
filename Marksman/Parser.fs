@@ -14,7 +14,7 @@ type TextNode = Node<unit>
 
 module Node =
     let mk text range inner = { text = text; range = range; data = inner }
-    let mk_text text range : TextNode = mk text range ()
+    let mkText text range : TextNode = mk text range ()
     let text node = node.text
     let range node = node.range
     let data node = node.data
@@ -50,6 +50,59 @@ type MdLink =
     | RC of label: TextNode
     // reference shortcut
     | RS of label: TextNode
+
+type DocUrl =
+    { docUrl: Option<TextNode>
+      anchor: Option<TextNode> }
+    override this.ToString() : string =
+        let parts =
+            [ this.docUrl
+              |> Option.map Node.fmtText
+              |> Option.map (fun x -> $"docUrl={x}")
+              |> Option.toList
+              this.anchor
+              |> Option.map Node.fmtText
+              |> Option.map (fun x -> $"anchor={x}")
+              |> Option.toList ]
+            |> List.concat
+
+        String.Join(';', parts)
+
+module DocUrl =
+    let ofUrlNode (url: TextNode) : DocUrl =
+        let offsetHash = url.text.IndexOf('#')
+
+        if offsetHash < 0 then
+            { docUrl = Some url; anchor = None }
+        else if offsetHash = 0 then
+            let anchor =
+                { url with
+                    text = url.text.TrimStart('#')
+                    range = { url.range with Start = url.range.Start.NextChar(1) } }
+
+            { docUrl = None; anchor = Some anchor }
+        else
+            let docText = url.text.Substring(0, offsetHash)
+
+            let docRange =
+                { url.range with
+                    End = Position.Mk(url.range.End.Line, url.range.Start.Character + offsetHash) }
+
+            let docUrl = Node.mkText docText docRange
+
+            let anchorText = url.text.Substring(offsetHash + 1)
+
+            let anchorRange =
+                { url.range with
+                    Start =
+                        Position.Mk(
+                            url.range.Start.Line,
+                            url.range.Start.Character + offsetHash + 1
+                        ) }
+
+            let anchor = Node.mkText anchorText anchorRange
+
+            { docUrl = Some docUrl; anchor = Some anchor }
 
 module MdLink =
     let fmt (ml: MdLink) : string =
@@ -350,7 +403,7 @@ module Markdown =
                         fullText
                         range
                         { level = level
-                          title = Node.mk_text title titleRange
+                          title = Node.mkText title titleRange
                           scope = range
                           children = [||] }
 
@@ -359,13 +412,13 @@ module Markdown =
                 let doc =
                     match link.Doc, link.DocSpan with
                     | Some doc, Some docSpan ->
-                        Node.mk_text doc (sourceSpanToRange text docSpan) |> Some
+                        Node.mkText doc (sourceSpanToRange text docSpan) |> Some
                     | _ -> None
 
                 let heading =
                     match link.Heading, link.HeadingSpan with
                     | Some heading, Some headingSpan ->
-                        Node.mk_text heading (sourceSpanToRange text headingSpan) |> Some
+                        Node.mkText heading (sourceSpanToRange text headingSpan) |> Some
                     | _ -> None
 
                 let wikiLink: WikiLink = { doc = doc; heading = heading }
@@ -395,19 +448,19 @@ module Markdown =
 
                 if not l.IsShortcut then
                     if isRegularLink then
-                        let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+                        let label = Node.mkText label (sourceSpanToRange text labelSpan)
 
                         let url =
                             if urlSpan.IsEmpty then
                                 None
                             else
-                                Some(Node.mk_text url (sourceSpanToRange text urlSpan))
+                                Some(Node.mkText url (sourceSpanToRange text urlSpan))
 
                         let title =
                             if titleSpan.IsEmpty then
                                 None
                             else
-                                Some(Node.mk_text title (sourceSpanToRange text titleSpan))
+                                Some(Node.mkText title (sourceSpanToRange text titleSpan))
 
                         let link =
                             MdLink.IL(label = label, url = url, title = title)
@@ -416,17 +469,17 @@ module Markdown =
                         elements.Add(ML link)
                     // Another hack: url span = label span => collapsed ref
                     else if urlSpan = labelSpan then
-                        let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+                        let label = Node.mkText label (sourceSpanToRange text labelSpan)
                         let link = MdLink.RC label |> Node.mk linkText linkRange
                         elements.Add(ML link)
                     // The last remaining option is full reference
                     else
-                        let text_ = Node.mk_text label (sourceSpanToRange text labelSpan)
-                        let label = Node.mk_text url (sourceSpanToRange text urlSpan)
+                        let text_ = Node.mkText label (sourceSpanToRange text labelSpan)
+                        let label = Node.mkText url (sourceSpanToRange text urlSpan)
                         let link = MdLink.RF(text_, label) |> Node.mk linkText linkRange
                         elements.Add(ML link)
                 else
-                    let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+                    let label = Node.mkText label (sourceSpanToRange text labelSpan)
                     let link = MdLink.RS(label) |> Node.mk linkText linkRange
                     elements.Add(ML link)
             | :? LinkReferenceDefinition as linkDef ->
@@ -437,11 +490,11 @@ module Markdown =
 
                 let label = linkDef.Label
                 let labelSpan = linkDef.LabelSpan
-                let label = Node.mk_text label (sourceSpanToRange text labelSpan)
+                let label = Node.mkText label (sourceSpanToRange text labelSpan)
 
                 let url = linkDef.Url
                 let urlSpan = linkDef.UrlSpan
-                let url = Node.mk_text url (sourceSpanToRange text urlSpan)
+                let url = Node.mkText url (sourceSpanToRange text urlSpan)
 
                 let title =
                     if linkDef.TitleSpan.IsEmpty then
@@ -449,7 +502,7 @@ module Markdown =
                     else
                         let title = linkDef.Title
                         let titleSpan = linkDef.TitleSpan
-                        Node.mk_text title (sourceSpanToRange text titleSpan) |> Some
+                        Node.mkText title (sourceSpanToRange text titleSpan) |> Some
 
                 let def =
                     { label = label; url = url; title = title }
@@ -518,7 +571,7 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
 
         let guardHead =
             { level = -1
-              title = Node.mk_text "" (text.EndRange())
+              title = Node.mkText "" (text.EndRange())
               scope = text.EndRange()
               children = [||] }
             |> Node.mk "" (text.EndRange())

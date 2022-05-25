@@ -1,5 +1,6 @@
 module Marksman.ParserTests
 
+open Ionide.LanguageServerProtocol.Types
 open Snapper.Attributes
 open Xunit
 
@@ -291,3 +292,30 @@ module MdLinkTest =
               "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)"
               "MLD: [ref]: https://some.url @ (2,0)-(2,23)"
               "  label=ref @ (2,1)-(2,4); url=https://some.url @ (2,7)-(2,23); title=∅" ]
+
+module DocUrlTests =
+    let mkTextNode str = Node.mkText str (Range.Mk(0, 0, 0, str.Length))
+
+    [<Fact>]
+    let test1 () =
+        let actual = mkTextNode "/some.md" |> DocUrl.ofUrlNode
+        Assert.Equal("docUrl=/some.md @ (0,0)-(0,8)", actual.ToString())
+
+    [<Fact>]
+    let test2 () =
+        let actual = mkTextNode "/some.md#anchor" |> DocUrl.ofUrlNode
+
+        Assert.Equal(
+            "docUrl=/some.md @ (0,0)-(0,8);anchor=anchor @ (0,9)-(0,15)",
+            actual.ToString()
+        )
+
+    [<Fact>]
+    let test3 () =
+        //                       01234567
+        let actual = mkTextNode "#anchor" |> DocUrl.ofUrlNode
+
+        Assert.Equal(
+            "anchor=anchor @ (0,1)-(0,7)",
+            actual.ToString()
+        )

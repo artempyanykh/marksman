@@ -17,7 +17,7 @@ let private logger = LogProvider.getLoggerByName "Comp"
 [<RequireQualifiedAccess>]
 type Comp =
     | DocPath of range: Range * needsClosing: bool
-    | DocAnchor of destDoc: option<string> * range: Range
+    | DocAnchor of destDoc: option<string> * range: Range * needsClosing: bool
     | WikiTitle of range: Range * needsClosing: bool
     | WikiHeading of destDoc: option<string> * range: Range
     | LinkReference of range: Range * needsClosing: bool
@@ -26,8 +26,8 @@ type Comp =
         match this with
         | Comp.DocPath (range, needsClosing) ->
             $"DocPath: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.DocAnchor (destDoc, range) ->
-            $"DocAnchor: dest={destDoc}; range={range.DebuggerDisplay}"
+        | Comp.DocAnchor (destDoc, range, needsClosing) ->
+            $"DocAnchor: dest={destDoc}; range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.WikiTitle (range, needsClosing) ->
             $"WikiTitle: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.WikiHeading (destDoc, range) ->
@@ -72,6 +72,16 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
             | MdLink.RF (_, label)
             | MdLink.RS label
             | MdLink.RC label -> Some(Comp.LinkReference(label.range, false))
+            | MdLink.IL (_, Some url, _) ->
+                let docUrl = DocUrl.ofUrlNode url
+
+                match docUrl.url, docUrl.anchor with
+                | Some url, _ when url.range.ContainsInclusive pos ->
+                    Some(Comp.DocPath(url.range, false))
+                | docUrl, Some anchor when anchor.range.ContainsInclusive pos ->
+                    let destDoc = docUrl |> Option.map Node.text
+                    Some(Comp.DocAnchor(destDoc, anchor.range, false))
+                | _ -> None
             | _ -> None
         | _ -> None
 
@@ -144,11 +154,21 @@ let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
     | Some start ->
         if Cursor.char start = '(' then
             let rangeStart = (Cursor.pos start).NextChar(1)
+            let range = Range.Mk(rangeStart, rangeEnd)
+            let input = line.text.Substring(range)
+            let docUrl = DocUrl.ofUrlNode (Node.mkText input range)
 
             let needsClosing =
                 paraElEnd |> Option.exists (fun c -> Cursor.char c = ')') |> not
 
-            Some(Comp.DocPath(Range.Mk(rangeStart, rangeEnd), needsClosing))
+            match docUrl.url, docUrl.anchor with
+            | Some url, anchor when url.range.ContainsInclusive pos ->
+                Some(Comp.DocPath(url.range, Option.isNone anchor && needsClosing))
+            | docUrl, Some anchor when anchor.range.ContainsInclusive pos ->
+                let destDoc = docUrl |> Option.map Node.text
+                Some(Comp.DocAnchor(destDoc, anchor.range, needsClosing))
+            | _ -> None
+
         else
             None
     | _ -> None
@@ -281,7 +301,37 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some doc.relPath }
 
         matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
-    | Comp.DocAnchor (_destDoc, _range) -> [||]
+    | Comp.DocAnchor (destDocUrl, range, needsClosing) ->
+        let destDoc =
+            match destDocUrl with
+            | Some url ->
+                let isMatching doc = doc.relPath.AbsPathUrlEncode() = url
+                folder.docs |> Map.values |> Seq.tryFind isMatching
+            | None -> Some srcDoc
+
+        match destDoc with
+        | Some destDoc ->
+            let input = srcDoc.text.Substring(range)
+            let inputSlug = Slug.ofString input
+
+            let matchingHeadings =
+                Doc.headings destDoc
+                |> Seq.filter (fun { data = h } -> h.level <> 1)
+                |> Seq.map (fun { data = h } -> Heading.name h)
+                |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
+
+            let toCompletionItem hd =
+                let newText = Slug.str hd
+                let newText = if needsClosing then newText + ")" else newText
+                let textEdit = { Range = range; NewText = newText }
+
+                { CompletionItem.Create(hd) with
+                    Detail = None
+                    TextEdit = Some textEdit
+                    FilterText = Some hd }
+
+            matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
+        | None -> [||]
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocument docUri folder

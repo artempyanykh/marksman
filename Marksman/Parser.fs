@@ -52,11 +52,11 @@ type MdLink =
     | RS of label: TextNode
 
 type DocUrl =
-    { docUrl: Option<TextNode>
+    { url: Option<TextNode>
       anchor: Option<TextNode> }
     override this.ToString() : string =
         let parts =
-            [ this.docUrl
+            [ this.url
               |> Option.map Node.fmtText
               |> Option.map (fun x -> $"docUrl={x}")
               |> Option.toList
@@ -73,20 +73,20 @@ module DocUrl =
         let offsetHash = url.text.IndexOf('#')
 
         if offsetHash < 0 then
-            { docUrl = Some url; anchor = None }
+            { url = Some url; anchor = None }
         else if offsetHash = 0 then
             let anchor =
                 { url with
                     text = url.text.TrimStart('#')
                     range = { url.range with Start = url.range.Start.NextChar(1) } }
 
-            { docUrl = None; anchor = Some anchor }
+            { url = None; anchor = Some anchor }
         else
             let docText = url.text.Substring(0, offsetHash)
 
             let docRange =
                 { url.range with
-                    End = Position.Mk(url.range.End.Line, url.range.Start.Character + offsetHash) }
+                    End = Position.Mk(url.range.Start.Line, url.range.Start.Character + offsetHash) }
 
             let docUrl = Node.mkText docText docRange
 
@@ -102,7 +102,7 @@ module DocUrl =
 
             let anchor = Node.mkText anchorText anchorRange
 
-            { docUrl = Some docUrl; anchor = Some anchor }
+            { url = Some docUrl; anchor = Some anchor }
 
 module MdLink =
     let fmt (ml: MdLink) : string =

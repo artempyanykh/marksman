@@ -1,6 +1,7 @@
 module Marksman.Misc
 
 open System
+open System.IO
 open System.Text
 open Ionide.LanguageServerProtocol.Types
 
@@ -58,12 +59,14 @@ type String with
 
     member this.UrlEncode() : string = Uri.EscapeDataString(this)
 
-    member this.AbsPathUrlEncode() : string = "/" + this.TrimStart('/').UrlEncode()
-    
+    member this.AbsPathUrlEncode() : string =
+        let parts = this.TrimStart('/').Split([| '\\'; '/' |])
+        let encodedParts = parts |> Seq.map (fun s -> s.UrlEncode())
+        "/" + String.Join('/', encodedParts)
+
     member this.UrlDecode() : string = Uri.UnescapeDataString(this)
-    
-    member this.AbsPathUrlEncodedToRelPath() : string =
-        this.TrimStart('/').UrlDecode()
+
+    member this.AbsPathUrlEncodedToRelPath() : string = this.TrimStart('/').UrlDecode()
 
 type Slug = Slug of string
 

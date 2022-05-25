@@ -17,6 +17,7 @@ let private logger = LogProvider.getLoggerByName "Comp"
 [<RequireQualifiedAccess>]
 type Comp =
     | DocPath of range: Range * needsClosing: bool
+    | DocAnchor of destDoc: option<string> * range: Range
     | WikiTitle of range: Range * needsClosing: bool
     | WikiHeading of destDoc: option<string> * range: Range
     | LinkReference of range: Range * needsClosing: bool
@@ -25,6 +26,8 @@ type Comp =
         match this with
         | Comp.DocPath (range, needsClosing) ->
             $"DocPath: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
+        | Comp.DocAnchor (destDoc, range) ->
+            $"DocAnchor: dest={destDoc}; range={range.DebuggerDisplay}"
         | Comp.WikiTitle (range, needsClosing) ->
             $"WikiTitle: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.WikiHeading (destDoc, range) ->
@@ -81,7 +84,8 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
         | None -> if Line.endsAt pos line then Line.endCursor line else None
 
     let findOpenOrWs =
-        Cursor.tryFindCharMatching Cursor.backward (fun c -> Char.IsWhiteSpace(c) || c = '[' || c = '(')
+        Cursor.tryFindCharMatching Cursor.backward (fun c ->
+            Char.IsWhiteSpace(c) || c = '[' || c = '(')
 
     let paraElStart = scanCursor |> Option.bind findOpenOrWs
 
@@ -277,6 +281,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some doc.relPath }
 
         matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
+    | Comp.DocAnchor (_destDoc, _range) -> [||]
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocument docUri folder

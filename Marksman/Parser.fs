@@ -237,6 +237,13 @@ module Element =
     let pickHeadings (elements: array<Element>) : array<Node<Heading>> =
         elements |> Array.map asHeading |> Array.collect Option.toArray
 
+    let isLink =
+        function
+        | WL _
+        | ML _ -> true
+        | H _
+        | MLD _ -> false
+
 module Markdown =
     open Markdig
     open Markdig.Syntax.Inlines

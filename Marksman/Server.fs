@@ -653,7 +653,7 @@ type MarksmanServer(client: MarksmanClient) =
             monad {
                 let! folder = State.tryFindFolder docUri state
                 let! srcDoc = Folder.tryFindDocument docUri folder
-                let! atPos = Doc.elementAtPos par.Position srcDoc
+                let! atPos = Doc.linkAtPos par.Position srcDoc
 
                 match atPos with
                 | WL wl ->
@@ -713,7 +713,7 @@ type MarksmanServer(client: MarksmanClient) =
             monad {
                 let! folder = State.tryFindFolder docUri state
                 let! srcDoc = Folder.tryFindDocument docUri folder
-                let! atPos = Doc.elementAtPos par.Position srcDoc
+                let! atPos = Doc.linkAtPos par.Position srcDoc
 
                 let! linkTarget =
                     match atPos with

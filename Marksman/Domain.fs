@@ -151,8 +151,9 @@ module Doc =
         linkDefs doc
         |> Seq.tryFind (fun { data = def } -> def.label.text = label)
 
-    let elementAtPos (pos: Position) (doc: Doc) : option<Element> =
+    let linkAtPos (pos: Position) (doc: Doc) : option<Element> =
         elementsAll doc
+        |> Seq.filter Element.isLink
         |> Seq.tryFind (fun el ->
             let range = Element.range el
             range.Start <= pos && pos < range.End)

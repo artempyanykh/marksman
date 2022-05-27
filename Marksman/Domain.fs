@@ -5,6 +5,8 @@ open System.IO
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
+open FSharpPlus.Operators
+
 open Marksman.Parser
 open Marksman.Text
 open Marksman.Misc
@@ -155,6 +157,32 @@ module Doc =
             let range = Element.range el
             range.Start <= pos && pos < range.End)
 
+
+[<RequireQualifiedAccess>]
+type LinkTarget =
+    | Doc of Doc
+    | Heading of Doc * Node<Heading>
+
+module LinkTarget =
+    let doc: LinkTarget -> Doc =
+        function
+        | LinkTarget.Doc doc -> doc
+        | LinkTarget.Heading (doc, _) -> doc
+
+    let range: LinkTarget -> Range =
+        function
+        | LinkTarget.Doc doc ->
+            Doc.title doc
+            |> Option.map Node.range
+            |> Option.defaultWith doc.text.FullRange
+        | LinkTarget.Heading (_, heading) -> heading.range
+
+    let scope: LinkTarget -> Range =
+        function
+        | LinkTarget.Doc doc -> doc.text.FullRange()
+        | LinkTarget.Heading (_, heading) -> heading.data.scope
+
+
 type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 
 module Folder =
@@ -236,7 +264,7 @@ module Folder =
         (sourceDoc: Doc)
         (wl: WikiLink)
         (folder: Folder)
-        : option<Doc * Option<Node<Heading>>> =
+        : option<LinkTarget> =
         // Discover target doc.
         let destDocName = WikiLink.destDoc wl
 
@@ -251,15 +279,41 @@ module Folder =
             // Discover target heading.
             // When target heading is specified but can't be found, the whole thing turns into None.
             match WikiLink.destHeading wl with
-            | None -> Some(destDoc, Doc.title destDoc)
+            | None ->
+                match Doc.title destDoc with
+                | Some title -> LinkTarget.Heading(destDoc, title) |> Some
+                | None -> LinkTarget.Doc(destDoc) |> Some
             | Some headingName ->
                 match Doc.headingBySlug (Slug.ofString headingName) destDoc with
-                | Some _ as heading -> Some(destDoc, heading)
+                | Some heading -> LinkTarget.Heading(destDoc, heading) |> Some
                 | _ -> None
 
-    let tryFindInlineLinkTarget (url: string) (folder: Folder) : option<Doc> =
-        let isMatching doc = doc.relPath.AbsPathUrlEncode() = url
-        folder.docs |> Map.values |> Seq.tryFind isMatching
+    let tryFindInlineLinkTarget
+        (docUrl: DocUrl)
+        (srcDoc: Doc)
+        (folder: Folder)
+        : option<LinkTarget> =
+        let targetDocUrl =
+            docUrl.url
+            |> Option.map Node.text
+            |> Option.defaultWith (fun () -> srcDoc.relPath.AbsPathUrlEncode())
+
+        let isMatchingDoc doc = doc.relPath.AbsPathUrlEncode() = targetDocUrl
+
+        let matchingDoc = folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
+
+        let tryMatch doc =
+            if doc.relPath.AbsPathUrlEncode() = targetDocUrl then
+                match docUrl.anchor with
+                | Some anchor ->
+                    match Doc.headingBySlug (Slug.ofString anchor.text) doc with
+                    | Some h -> LinkTarget.Heading(doc, h) |> Some
+                    | None -> None
+                | None -> LinkTarget.Doc doc |> Some
+            else
+                None
+
+        matchingDoc >>= tryMatch
 
     let docCount (folder: Folder) : int = folder.docs.Values.Count
 

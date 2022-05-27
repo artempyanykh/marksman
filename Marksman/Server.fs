@@ -662,12 +662,10 @@ type MarksmanServer(client: MarksmanClient) =
                         >> Log.addContext "wiki" (WikiLink.fmt wl.data)
                     )
 
-                    let! destDoc, destHeading = Folder.tryFindWikiLinkTarget srcDoc wl.data folder
+                    let! linkTarget = Folder.tryFindWikiLinkTarget srcDoc wl.data folder
 
-                    let destRange =
-                        destHeading
-                        |> Option.map Node.range
-                        |> Option.defaultWith destDoc.text.FullRange
+                    let destRange = LinkTarget.range linkTarget
+                    let destDoc = LinkTarget.doc linkTarget
 
                     let location =
                         GotoResult.Single { Uri = destDoc.path.DocumentUri; Range = destRange }
@@ -679,16 +677,13 @@ type MarksmanServer(client: MarksmanClient) =
                         >> Log.addContext "link" (MdLink.fmt link)
                     )
 
-                    let! url = url
-                    let! targetDoc = Folder.tryFindInlineLinkTarget url.text folder
+                    let! docUrl = url |> Option.map DocUrl.ofUrlNode
 
-                    let targetRange =
-                        Doc.title targetDoc
-                        |> Option.map Node.range
-                        |> Option.defaultWith targetDoc.text.FullRange
+                    let! linkTarget = Folder.tryFindInlineLinkTarget docUrl srcDoc folder
+                    let targetUri = (LinkTarget.doc linkTarget).path.DocumentUri
+                    let targetRange = LinkTarget.range linkTarget
 
-                    let location =
-                        GotoResult.Single { Uri = targetDoc.path.DocumentUri; Range = targetRange }
+                    let location = GotoResult.Single { Uri = targetUri; Range = targetRange }
 
                     location
                 | ML { data = link } ->
@@ -721,15 +716,14 @@ type MarksmanServer(client: MarksmanClient) =
                 let! atPos = Doc.elementAtPos par.Position sourceDoc
                 let! wl = Element.asWikiLink atPos
 
-                let! destDoc, destHeading = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
+                let! linkTarget = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
 
-                let destScope =
-                    destHeading
-                    |> Option.map (fun x -> x.data.scope)
-                    |> Option.defaultWith destDoc.text.FullRange
+                let destScope = LinkTarget.scope linkTarget
 
                 let content =
-                    destDoc.text.Substring(destScope) |> markdown |> MarkupContent
+                    (LinkTarget.doc linkTarget).text.Substring destScope
+                    |> markdown
+                    |> MarkupContent
 
                 let hover = { Contents = content; Range = None }
 

@@ -712,11 +712,18 @@ type MarksmanServer(client: MarksmanClient) =
         let hover =
             monad {
                 let! folder = State.tryFindFolder docUri state
-                let! sourceDoc = Folder.tryFindDocument docUri folder
-                let! atPos = Doc.elementAtPos par.Position sourceDoc
-                let! wl = Element.asWikiLink atPos
+                let! srcDoc = Folder.tryFindDocument docUri folder
+                let! atPos = Doc.elementAtPos par.Position srcDoc
 
-                let! linkTarget = Folder.tryFindWikiLinkTarget sourceDoc wl.data folder
+                let! linkTarget =
+                    match atPos with
+                    | WL wl -> Folder.tryFindWikiLinkTarget srcDoc wl.data folder
+                    | ML { data = MdLink.IL (_, url, _) as link } ->
+                        url
+                        |> Option.map DocUrl.ofUrlNode
+                        |> Option.bind (fun docUrl ->
+                            Folder.tryFindInlineLinkTarget docUrl srcDoc folder)
+                    | _ -> None
 
                 let destScope = LinkTarget.scope linkTarget
 

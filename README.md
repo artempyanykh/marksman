@@ -7,27 +7,33 @@ _Markdown LSP server for note-taking and more._
 [![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
 
 **OBLIGATORY DISCLAIMER:**
-Marksman is a _work-in-progress_. For me it works fine, but there wasn't
-much testing and stability in general isn't guaranteed.
+Marksman is a _work-in-progress_. For my day-to-day note taking it works fine but stability in general isn't guaranteed.
 
 ---
 
-Marksman is an LSP server that helps you write and manage your Markdown notes. The
-primary focus is to support [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note
-taking by providing an easy way to **cross-reference notes**. See more about
+Marksman is an LSP server for Markdown that provides completion, goto definition, diagnostics,
+etc. In addition to regular Markdown features it also supports **wiki-link**-style references that
+enable [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about
 Marksman's features below.
 
-But you don't have to go all-in on Zettelkasten to get value out of Marksman:
+In terms of **regular Markdown** features you get:
+1. Document symbols based on headings.
+2. Completion, goto definition, and hover preview for inline links e.g. `[text](/file.md#heading-slug)`.
+3. Completion, and goto definition for reference links e.g.
+   ```md
+   See [reference].
 
-1. Write your notes that way you like.
-2. Cross-reference notes using _reference_ links in a _wiki-link_ format:
+   [reference]: /url "Title"
+   ```
+
+For **Zettelkasten**-style note-taking you can use.
+
+1. Cross-reference notes using _reference_ links in a _wiki-link_ format:
     - `[[another-note]]` - a reference to another note.
-    - `[[another-note#Section]]` - a reference to a section of a note.
-    - `[[#Inner subsection]]` - a reference to a section of the current note.
-
-   Auto-completion provided by Marksman makes this process quick and easy.
-3. **Go To Definition**, **Hover** preview, **Code Lenses**, and
-   **Diagnostics** simplify navigating and maintaining notes.
+    - `[[another-note#section]]` - a reference to a section of a note.
+    - `[[#inner-subsection]]` - a reference to a section of the current note.
+2. **Go To Definition**, **Hover** preview, and **Diagnostics** to simplify navigating and
+   maintaining notes.
 
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
@@ -80,12 +86,12 @@ But you don't have to go all-in on Zettelkasten to get value out of Marksman:
 - ✅ Hover prevew for references.
 - ✅ Diagnostics about broken references.
 - 🗓 Code Lens with "# references" on headings.
-- 🗓 Add support for _regular_ links (diagnostics, completion, goto).
-- 🗓 Support references in titles.
+- ✅ Add support for _regular_ links (diagnostics, completion, goto).
+- ✅ Support references in titles.
 - ✅ Support multi-folder workspaces.
 - ✅ Custom parser for more fine-grained note structure.
 - 🗓 Rename refactor.
-- 🗓 Support heading slugs.
+- ✅ Support heading slugs.
 - 🗓 Add "check" command for standalone workspace checking.
 - 🗓 Add "build" command that rewrites all cross-references into proper
   relative markdown links for further embedding into a static site generator

@@ -19,6 +19,9 @@ type ClientDescription =
     member this.IsVSCode: bool =
         this.info |> Option.exists (fun x -> x.Name = "Visual Studio Code")
 
+    member this.IsEmacs: bool =
+        this.info |> Option.exists (fun x -> x.Name = "emacs")
+
     member this.SupportsStatus: bool =
         match this.caps.Experimental with
         | None -> false
@@ -215,7 +218,7 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInforma
 
     Array.append [| sym |] children
 
-let rec headingToDocumentSymbol (h: Node<Heading>) : DocumentSymbol =
+let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
     let name = h.text.TrimStart([| '#'; ' ' |])
     let kind = SymbolKind.String
     let range = h.data.scope
@@ -224,21 +227,25 @@ let rec headingToDocumentSymbol (h: Node<Heading>) : DocumentSymbol =
     let children =
         h.data.children
         |> Element.pickHeadings
-        |> Array.map headingToDocumentSymbol
-
-    let thisHeading =
-        { Name = "."
-          Detail = None
-          Kind = kind
-          Range = range
-          SelectionRange = selectionRange
-          Children = None }
+        |> Array.map (headingToDocumentSymbol isEmacs)
 
     let children =
         if Array.isEmpty children then
             None
-        else
+        else if isEmacs then
+            // Emacs' imenu with consult/counsel/etc. doesn't allow selecting intermediate
+            // nodes that have children. As a workaround we add a '.' this node.
+            let thisHeading =
+                { Name = "."
+                  Detail = None
+                  Kind = kind
+                  Range = selectionRange
+                  SelectionRange = selectionRange
+                  Children = None }
+
             Some(Array.append [| thisHeading |] children)
+        else
+            Some children
 
     { Name = name
       Detail = None
@@ -619,7 +626,9 @@ type MarksmanServer(client: MarksmanClient) =
 
             let response =
                 if supportsHierarchy then
-                    headings |> Array.map headingToDocumentSymbol |> Second
+                    headings
+                    |> Array.map (headingToDocumentSymbol state.client.IsEmacs)
+                    |> Second
                 else
                     headings |> Array.collect (headingToSymbolInfo docUri) |> First
 

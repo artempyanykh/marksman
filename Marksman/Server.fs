@@ -27,6 +27,14 @@ type ClientDescription =
         | None -> false
         | Some exp -> exp.Value<bool>("statusNotification")
 
+    member this.SupportsHierarchy: bool =
+        monad' {
+            let! textDoc = this.caps.TextDocument
+            let! docSymbol = textDoc.DocumentSymbol
+            return! docSymbol.HierarchicalDocumentSymbolSupport
+        }
+        |> Option.defaultValue false
+
 module ClientDescription =
     let fromParams (par: InitializeParams) : ClientDescription =
         let caps =
@@ -612,28 +620,19 @@ type MarksmanServer(client: MarksmanClient) =
 
         let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        match State.tryFindDocument docUri state with
-        | Some doc ->
+        let getSymbols doc =
             let headings = Element.pickHeadings doc.elements
 
-            let supportsHierarchy =
-                monad' {
-                    let! textDoc = state.client.caps.TextDocument
-                    let! docSymbol = textDoc.DocumentSymbol
-                    return! docSymbol.HierarchicalDocumentSymbolSupport
-                }
-                |> Option.defaultValue false
+            if state.client.SupportsHierarchy then
+                headings
+                |> Array.map (headingToDocumentSymbol state.client.IsEmacs)
+                |> Second
+            else
+                headings |> Array.collect (headingToSymbolInfo docUri) |> First
 
-            let response =
-                if supportsHierarchy then
-                    headings
-                    |> Array.map (headingToDocumentSymbol state.client.IsEmacs)
-                    |> Second
-                else
-                    headings |> Array.collect (headingToSymbolInfo docUri) |> First
+        let response = State.tryFindDocument docUri state |> Option.map getSymbols
 
-            AsyncLspResult.success (Some response)
-        | None -> AsyncLspResult.success None
+        AsyncLspResult.success response
 
     override this.TextDocumentCompletion(par: CompletionParams) =
         logger.trace (Log.setMessage "Completion request start")
@@ -665,13 +664,13 @@ type MarksmanServer(client: MarksmanClient) =
                 let! atPos = Doc.linkAtPos par.Position srcDoc
 
                 match atPos with
-                | WL wl ->
+                | WL { data = wl } ->
                     logger.trace (
                         Log.setMessage "Searching definition of a wiki-link"
-                        >> Log.addContext "wiki" (WikiLink.fmt wl.data)
+                        >> Log.addContext "wiki" (WikiLink.fmt wl)
                     )
 
-                    let! linkTarget = Folder.tryFindWikiLinkTarget srcDoc wl.data folder
+                    let! linkTarget = Folder.tryFindWikiLinkTarget srcDoc wl folder
 
                     let destRange = LinkTarget.range linkTarget
                     let destDoc = LinkTarget.doc linkTarget
@@ -727,7 +726,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let! linkTarget =
                     match atPos with
                     | WL wl -> Folder.tryFindWikiLinkTarget srcDoc wl.data folder
-                    | ML { data = MdLink.IL (_, url, _) as link } ->
+                    | ML { data = MdLink.IL (_, url, _) } ->
                         url
                         |> Option.map DocUrl.ofUrlNode
                         |> Option.bind (fun docUrl ->

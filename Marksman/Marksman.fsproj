@@ -10,7 +10,7 @@
         <Compile Include="Misc.fs" />
         <Compile Include="Text.fs" />
         <Compile Include="Parser.fs" />
-        <Compile Include="Domain.fs" />
+        <Compile Include="Workspace.fs" />
         <Compile Include="DB.fsi" />
         <Compile Include="DB.fs" />
         <Compile Include="Comp.fs" />

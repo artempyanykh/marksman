@@ -1,4 +1,4 @@
-module Marksman.Domain
+module Marksman.Workspace
 
 open System
 open System.IO

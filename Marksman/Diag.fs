@@ -4,7 +4,7 @@ module Lsp = Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 open Marksman.Parser
-open Marksman.Domain
+open Marksman.Workspace
 open Marksman.DB
 
 type Entry =

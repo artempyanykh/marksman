@@ -8,7 +8,7 @@ open Ionide.LanguageServerProtocol.Types
 open FSharpPlus.GenericBuilders
 
 open Marksman.Parser
-open Marksman.Domain
+open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Text
 

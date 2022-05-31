@@ -10,7 +10,7 @@ open FSharpPlus.GenericBuilders
 
 open Marksman.Misc
 open Marksman.Parser
-open Marksman.Domain
+open Marksman.Workspace
 open Microsoft.FSharp.Control
 
 type ClientDescription =

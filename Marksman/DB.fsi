@@ -1,6 +1,6 @@
 module Marksman.DB
 
-open Marksman.Domain
+open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Parser
 

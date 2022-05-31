@@ -2,7 +2,7 @@ module Marksman.DB
 
 open Misc
 open Parser
-open Domain
+open Workspace
 
 type Dictionary<'K, 'V> = System.Collections.Generic.Dictionary<'K, 'V>
 

@@ -15,6 +15,7 @@
         <Compile Include="DB.fs" />
         <Compile Include="Comp.fs" />
         <Compile Include="Diag.fs" />
+        <Compile Include="State.fs" />
         <Compile Include="Server.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>

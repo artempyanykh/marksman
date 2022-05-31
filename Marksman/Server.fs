@@ -8,128 +8,12 @@ open Ionide.LanguageServerProtocol.Server
 open Ionide.LanguageServerProtocol.Logging
 open FSharpPlus.GenericBuilders
 
+open Marksman.Diag
 open Marksman.Misc
 open Marksman.Parser
 open Marksman.Workspace
+open Marksman.State
 open Microsoft.FSharp.Control
-
-type ClientDescription =
-    { info: ClientInfo option
-      caps: ClientCapabilities }
-    member this.IsVSCode: bool =
-        this.info |> Option.exists (fun x -> x.Name = "Visual Studio Code")
-
-    member this.IsEmacs: bool =
-        this.info |> Option.exists (fun x -> x.Name = "emacs")
-
-    member this.SupportsStatus: bool =
-        match this.caps.Experimental with
-        | None -> false
-        | Some exp -> exp.Value<bool>("statusNotification")
-
-    member this.SupportsHierarchy: bool =
-        monad' {
-            let! textDoc = this.caps.TextDocument
-            let! docSymbol = textDoc.DocumentSymbol
-            return! docSymbol.HierarchicalDocumentSymbolSupport
-        }
-        |> Option.defaultValue false
-
-module ClientDescription =
-    let fromParams (par: InitializeParams) : ClientDescription =
-        let caps =
-            par.Capabilities
-            |> Option.defaultValue
-                { Workspace = None
-                  TextDocument = None
-                  Experimental = None
-                  InlayHint = None }
-
-        { info = par.ClientInfo; caps = caps }
-
-type WorkspaceDiag = Map<PathUri, array<PathUri * array<Diagnostic>>>
-
-type State =
-    { client: ClientDescription
-      workspace: Workspace
-      revision: int
-      diag: WorkspaceDiag }
-
-module State =
-    let logger = LogProvider.getLoggerByName "State"
-
-    let tryFindFolder (uri: PathUri) (state: State) : option<Folder> =
-        Workspace.tryFindFolderEnclosing uri state.workspace
-
-
-    let findFolder (uri: PathUri) (state: State) : Folder =
-        tryFindFolder uri state
-        |> Option.defaultWith (fun _ -> failwith $"Expected folder now found: {uri}")
-
-    let tryFindDocument (uri: PathUri) (state: State) : option<Doc> =
-        tryFindFolder uri state
-        |> Option.map (Folder.tryFindDocument uri)
-        |> Option.flatten
-
-    let updateFoldersFromLsp
-        (added: WorkspaceFolder[])
-        (removed: WorkspaceFolder[])
-        (state: State)
-        : State =
-        logger.trace (
-            Log.setMessage "Updating workspace folders"
-            >> Log.addContext "numAdded" added.Length
-            >> Log.addContext "numRemoved" removed.Length
-        )
-
-        let removedUris = removed |> Array.map (fun f -> PathUri.fromString f.Uri)
-
-        let addedFolders =
-            seq {
-                for f in added do
-                    let rootUri = PathUri.fromString f.Uri
-
-                    let folder = Folder.tryLoad f.Name rootUri
-
-                    match folder with
-                    | Some folder -> yield folder
-                    | _ -> ()
-            }
-
-        let newWorkspace =
-            Workspace.withoutFolders removedUris state.workspace
-            |> Workspace.withFolders addedFolders
-
-        { state with workspace = newWorkspace }
-
-    let updateDocument (newDocument: Doc) (state: State) : State =
-        let folder = findFolder newDocument.path state
-
-        let newContent = folder.docs |> Map.add newDocument.path newDocument
-
-        let newFolder = { folder with docs = newContent }
-
-        let newWorkspace = Workspace.withFolder newFolder state.workspace
-
-        { state with workspace = newWorkspace }
-
-    let removeDocument (path: PathUri) (state: State) : State =
-        let folder = findFolder path state
-
-        let newFolder = Folder.removeDocument path folder
-
-        let newWorkspace = Workspace.withFolder newFolder state.workspace
-
-        { state with workspace = newWorkspace }
-
-    let findCompletionCandidates
-        (pos: Position)
-        (uri: PathUri)
-        (state: State)
-        : array<CompletionItem> =
-        tryFindFolder uri state
-        |> Option.map (Comp.findCandidates pos uri)
-        |> Option.defaultValue [||]
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -192,7 +76,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
             Change = Some TextDocumentSyncKind.Incremental }
 
 
-    let clientDesc = ClientDescription.fromParams par
+    let clientDesc = ClientDescription.ofParams par
 
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
@@ -206,7 +90,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         DefinitionProvider = Some true
         HoverProvider = Some true }
 
-let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
+let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation [] =
     let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
@@ -282,7 +166,7 @@ type DiagAgent(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "BackgroundAgent"
 
     let agent: MailboxProcessor<DiagMessage> =
-        MailboxProcessor.Start(fun inbox ->
+        MailboxProcessor.Start (fun inbox ->
             let mutable shouldStart = false
             let mutable shouldStop = false
 
@@ -338,7 +222,7 @@ type StatusAgent(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "StatusAgent"
 
     let agent =
-        MailboxProcessor.Start(fun inbox ->
+        MailboxProcessor.Start (fun inbox ->
             let rec loop cnt =
                 async {
                     let! msg = inbox.Receive()
@@ -377,7 +261,7 @@ type MarksmanServer(client: MarksmanClient) =
     let queueDiagUpdate (existingDiag: WorkspaceDiag) (newDiag: WorkspaceDiag) : unit =
         let state = requireState ()
 
-        for folder in Workspace.folders state.workspace do
+        for folder in State.workspace state |> Workspace.folders do
             let newFolderDiag =
                 Map.tryFind folder.root newDiag |> Option.defaultValue [||]
 
@@ -402,23 +286,19 @@ type MarksmanServer(client: MarksmanClient) =
                     diagAgent.EnqueueDiagnostic(publishParams)
 
     let updateState (newState: State) : unit =
+        let curState = state
+
         logger.trace (
             Log.setMessage "Updating state"
-            >> Log.addContext "curRev" newState.revision
+            >> Log.addContext "curRev" (curState |> Option.map State.revision)
         )
 
-        let existingWorkspaceDiag = newState.diag
+        let existingWorkspaceDiag =
+            curState |> Option.map State.diag |> Option.defaultValue Map.empty
 
-        logger.trace (Log.setMessage "Computing workspace diagnostic")
+        let newWorkspaceDiag = State.diag newState
 
-        let newWorkspaceDiag = Diag.diagnosticForWorkspace newState.workspace
-
-        let newState =
-            { newState with
-                revision = newState.revision + 1
-                diag = newWorkspaceDiag }
-
-        let docCount = Workspace.docCount newState.workspace
+        let docCount = State.workspace newState |> Workspace.docCount
 
         statusAgent |> Option.iter (fun x -> x.UpdateDocCount(docCount))
 
@@ -426,7 +306,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         logger.trace (
             Log.setMessage "Updated state"
-            >> Log.addContext "newRev" newState.revision
+            >> Log.addContext "newRev" (State.revision newState)
         )
 
         queueDiagUpdate existingWorkspaceDiag newWorkspaceDiag
@@ -449,13 +329,9 @@ type MarksmanServer(client: MarksmanClient) =
             >> Log.addContext "numNotes" numNotes
         )
 
-        let clientDesc = ClientDescription.fromParams par
+        let clientDesc = ClientDescription.ofParams par
 
-        let state =
-            { client = clientDesc
-              workspace = Workspace.ofFolders folders
-              revision = 0
-              diag = Map.empty }
+        let state = State.mk clientDesc (Workspace.ofFolders folders)
 
         updateState state
 
@@ -470,7 +346,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.Initialized(_: InitializedParams) =
         let state = requireState ()
 
-        if state.client.SupportsStatus then
+        if (State.client state).SupportsStatus then
             logger.debug (
                 Log.setMessage "Client supports status notifications. Initializing agent."
             )
@@ -478,7 +354,7 @@ type MarksmanServer(client: MarksmanClient) =
             statusAgent <- StatusAgent(client) |> Some
 
             statusAgent
-            |> Option.iter (fun x -> x.UpdateDocCount(Workspace.docCount state.workspace))
+            |> Option.iter (fun x -> x.UpdateDocCount(State.workspace state |> Workspace.docCount))
         else
             logger.debug (
                 Log.setMessage
@@ -525,7 +401,7 @@ type MarksmanServer(client: MarksmanClient) =
         let path = par.TextDocument.Uri |> PathUri.fromString
 
         let state = requireState ()
-        let folder = State.tryFindFolder path state
+        let folder = State.tryFindFolderEnclosing path state
 
         match folder with
         | None -> ()
@@ -546,7 +422,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         let path = par.TextDocument.Uri |> PathUri.fromString
 
-        let folder = State.tryFindFolder path state
+        let folder = State.tryFindFolderEnclosing path state
 
         match folder with
         | None -> ()
@@ -580,7 +456,7 @@ type MarksmanServer(client: MarksmanClient) =
                 >> Log.addContext "uri" docUri
             )
 
-            let folder = State.tryFindFolder docUri newState
+            let folder = State.tryFindFolderEnclosing docUri newState
 
             match folder with
             | None -> ()
@@ -623,9 +499,9 @@ type MarksmanServer(client: MarksmanClient) =
         let getSymbols doc =
             let headings = Element.pickHeadings doc.elements
 
-            if state.client.SupportsHierarchy then
+            if (State.client state).SupportsHierarchy then
                 headings
-                |> Array.map (headingToDocumentSymbol state.client.IsEmacs)
+                |> Array.map (headingToDocumentSymbol (State.client state).IsEmacs)
                 |> Second
             else
                 headings |> Array.collect (headingToSymbolInfo docUri) |> First
@@ -638,19 +514,20 @@ type MarksmanServer(client: MarksmanClient) =
         logger.trace (Log.setMessage "Completion request start")
 
         let state = requireState ()
-        let pos = par.Position
 
+        let pos = par.Position
         let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let compCandidates = State.findCompletionCandidates pos docUri state
+        let candidates =
+            monad' {
+                let! folder = State.tryFindFolderEnclosing docUri state
 
-        let compList =
-            if compCandidates.Length = 0 then
-                None
-            else
-                { IsIncomplete = true; Items = compCandidates } |> Some
+                match Comp.findCandidates pos docUri folder with
+                | [||] -> return! None
+                | candidates -> { IsIncomplete = true; Items = candidates }
+            }
 
-        AsyncLspResult.success compList
+        AsyncLspResult.success candidates
 
     override this.TextDocumentDefinition(par: TextDocumentPositionParams) =
         let state = requireState ()
@@ -659,7 +536,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         let goto =
             monad {
-                let! folder = State.tryFindFolder docUri state
+                let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDocument docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
 
@@ -719,7 +596,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         let hover =
             monad {
-                let! folder = State.tryFindFolder docUri state
+                let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDocument docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
 

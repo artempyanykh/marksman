@@ -59,23 +59,23 @@ module DocDB =
     let headingsBySlug db = db.headings
     let tryFindHeadingBySlug slug db = db.headings |> Map.tryFind slug |> Option.bind List.tryHead
 
-type FolderDB = F of array<struct (Doc * DocDB)>
+type FolderDB = F of Map<Doc, DocDB>
 
 module FolderDB =
     let ofFolder (folder: Folder) : FolderDB =
         seq {
             for KeyValue (_, doc) in folder.docs do
                 let docDB = DocDB.ofDoc doc
-                yield struct (doc, docDB)
+                yield doc, docDB
         }
-        |> Array.ofSeq
+        |> Map.ofSeq
         |> F
 
     let data (F data) = data
 
     let tryFindDocBySlug (slug: Slug) (fdb: FolderDB) : option<DocDB> =
         data fdb
-        |> Array.tryPick (fun struct (doc, db) -> if Doc.slug doc = slug then Some db else None)
+        |> Map.tryPick (fun doc db -> if Doc.slug doc = slug then Some db else None)
 
     let findDocBySlug slug fdb =
         tryFindDocBySlug slug fdb
@@ -83,16 +83,23 @@ module FolderDB =
 
     let tryFindDocByRelPath (relPath: string) (fdb: FolderDB) : option<DocDB> =
         data fdb
-        |> Array.tryPick (fun struct (doc, db) ->
+        |> Map.tryPick (fun doc db ->
             if doc.relPath.AbsPathUrlEncode() = relPath.AbsPathUrlEncode() then
                 Some db
             else
                 None)
 
-    let docsBySlug fdb =
-        data fdb
-        |> Seq.ofArray
-        |> Seq.map (fun struct (doc, db) -> Doc.slug doc, db)
+    let docsBySlug fdb = data fdb |> Map.toSeq |> Seq.map (fun (doc, db) -> Doc.slug doc, db)
+
+    let withDoc doc fdb =
+        // TODO: assert that doc is inside a folder
+        let docDB = DocDB.ofDoc doc
+        let newData = Map.add doc docDB (data fdb)
+        F newData
+
+    let withoutDoc path fdb =
+        let newData = Map.remove path (data fdb)
+        F newData
 
 type WorkspaceDB = WS of Map<PathUri, FolderDB>
 
@@ -110,3 +117,9 @@ module WorkspaceDB =
     let findByPath (path: PathUri) (ws: WorkspaceDB) : FolderDB =
         tryFindByPath path ws
         |> Option.defaultWith (fun () -> failwith $"No DB for ${path.LocalPath}")
+
+    let folders wdb = data wdb |> Map.toSeq
+    
+    let withDoc (doc: Doc) wdb =
+        folders wdb |> Seq.tryFind (fun (path, fdb) -> )
+            

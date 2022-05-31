@@ -262,29 +262,47 @@ type MarksmanServer(client: MarksmanClient) =
         Option.defaultWith (fun _ -> failwith "State was not initialized") state
 
     let queueDiagUpdate (existingDiag: WorkspaceDiag) (newDiag: WorkspaceDiag) : unit =
-        let state = requireState ()
+        let allFolders =
+            Set.union (Map.keys existingDiag |> Set.ofSeq) (Map.keys newDiag |> Set.ofSeq)
 
-        for folder in State.workspace state |> Workspace.folders do
-            let newFolderDiag =
-                Map.tryFind folder.root newDiag |> Option.defaultValue [||]
-
+        for folderPath in allFolders do
             let existingFolderDiag =
-                Map.tryFind folder.root existingDiag |> Option.defaultValue [||]
+                Map.tryFind folderPath existingDiag |> Option.defaultValue [||]
 
-            for docUri, docDiag in newFolderDiag do
+            let newFolderDiag =
+                Map.tryFind folderPath newDiag |> Option.defaultValue [||]
+
+            let allDocs =
+                Set.union
+                    (Array.map fst newFolderDiag |> Set.ofArray)
+                    (Array.map fst existingFolderDiag |> Set.ofArray)
+
+            logger.trace (
+                Log.setMessage "Updating folder diag"
+                >> Log.addContext "folder" folderPath
+                >> Log.addContext "num_docs" allDocs.Count
+            )
+
+            for docUri in allDocs do
                 let existingDocDiag =
                     existingFolderDiag
                     |> Array.tryFind (fun (uri, _) -> uri = docUri)
                     |> Option.map snd
                     |> Option.defaultValue [||]
 
-                if docDiag <> existingDocDiag then
+                let newDocDiag =
+                    newFolderDiag
+                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
+                    |> Option.map snd
+                    |> Option.defaultValue [||]
+
+                if newDocDiag <> existingDocDiag then
                     logger.trace (
                         Log.setMessage "Diagnostic changed, queueing the update"
                         >> Log.addContext "doc" docUri
                     )
 
-                    let publishParams = { Uri = docUri.DocumentUri; Diagnostics = docDiag }
+                    let publishParams = { Uri = docUri.DocumentUri; Diagnostics = newDocDiag }
 
                     diagAgent.EnqueueDiagnostic(publishParams)
 
@@ -334,9 +352,9 @@ type MarksmanServer(client: MarksmanClient) =
 
         let clientDesc = ClientDescription.ofParams par
 
-        let state = State.mk clientDesc (Workspace.ofFolders folders)
+        let newState = State.mk clientDesc (Workspace.ofFolders folders)
 
-        updateState state
+        updateState newState
 
         let serverCaps = mkServerCaps par
 
@@ -413,8 +431,8 @@ type MarksmanServer(client: MarksmanClient) =
 
             let newState =
                 match docFromDisk with
-                | Some doc -> State.updateDocument doc (requireState ())
-                | _ -> State.removeDocument path (requireState ())
+                | Some doc -> State.updateDocument doc state
+                | _ -> State.removeDocument path state
 
             updateState newState
 
@@ -432,7 +450,7 @@ type MarksmanServer(client: MarksmanClient) =
         | Some folder ->
             let document = Doc.fromLspDocument folder.root par.TextDocument
 
-            let newState = State.updateDocument document (requireState ())
+            let newState = State.updateDocument document state
 
             updateState newState
 

@@ -48,14 +48,14 @@ type State =
     private
         { client: ClientDescription
           workspace: Workspace
-          revision: int
-          diag: WorkspaceDiag }
+          revision: int }
+    member this.Diag: WorkspaceDiag = WorkspaceDiag.mk this.workspace
 
 module State =
     let private logger = LogProvider.getLoggerByName "State"
 
     let mk (client: ClientDescription) (ws: Workspace) =
-        { client = client; workspace = ws; revision = 0; diag = Map.empty }
+        { client = client; workspace = ws; revision = 0 }
 
     let client s = s.client
 
@@ -63,7 +63,7 @@ module State =
 
     let revision s = s.revision
 
-    let diag s = s.diag
+    let diag (s: State) = s.Diag
 
     let tryFindFolderEnclosing (uri: PathUri) (state: State) : option<Folder> =
         Workspace.tryFindFolderEnclosing uri state.workspace
@@ -108,8 +108,7 @@ module State =
 
         { client = state.client
           workspace = newWorkspace
-          revision = state.revision + 1
-          diag = WorkspaceDiag.mk newWorkspace }
+          revision = state.revision + 1 }
 
     let updateDocument (newDocument: Doc) (state: State) : State =
         let folder = findFolderEnclosing newDocument.path state
@@ -120,12 +119,9 @@ module State =
 
         let newWs = Workspace.withFolder newFolder state.workspace
 
-        let newWsDiag = WorkspaceDiag.mk newWs
-
         { client = state.client
           workspace = newWs
-          revision = state.revision + 1
-          diag = newWsDiag }
+          revision = state.revision + 1 }
 
 
     let removeDocument (path: PathUri) (state: State) : State =
@@ -134,9 +130,7 @@ module State =
         let newFolder = Folder.removeDoc path folder
 
         let newWs = Workspace.withFolder newFolder state.workspace
-        let newWsDiag = WorkspaceDiag.mk newWs
 
         { client = state.client
           workspace = newWs
-          revision = state.revision + 1
-          diag = newWsDiag }
+          revision = state.revision + 1 }

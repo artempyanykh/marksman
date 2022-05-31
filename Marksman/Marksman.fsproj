@@ -9,10 +9,10 @@
     <ItemGroup>
         <Compile Include="Misc.fs" />
         <Compile Include="Text.fs" />
+        <Compile Include="Cst.fs" />
         <Compile Include="Parser.fs" />
+        <Compile Include="Index.fs" />
         <Compile Include="Workspace.fs" />
-        <Compile Include="DB.fsi" />
-        <Compile Include="DB.fs" />
         <Compile Include="Comp.fs" />
         <Compile Include="Diag.fs" />
         <Compile Include="State.fs" />

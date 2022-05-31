@@ -7,7 +7,7 @@ open Ionide.LanguageServerProtocol.Types
 
 open FSharpPlus.GenericBuilders
 
-open Marksman.Parser
+open Marksman.Cst
 open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Text
@@ -186,7 +186,7 @@ let compOfText (pos: Position) (text: Text) : option<Comp> =
 
 let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
     let elComp =
-        Doc.elementsAll doc
+        Cst.elementsAll doc.cst
         |> Seq.map (compOfElement pos)
         |> Seq.tryFind Option.isSome
         |> Option.flatten
@@ -220,7 +220,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
             let textEdit = { Range = range; NewText = newText }
 
             { CompletionItem.Create(title) with
-                Detail = Some doc.relPath
+                Detail = Some doc.RelPath
                 TextEdit = Some textEdit
                 FilterText = Some title }
 
@@ -284,28 +284,28 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
     | Comp.DocPath (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
 
-        let isMatching doc =
-            input.IsSubSequenceOf(doc.relPath)
-            || input.IsSubSequenceOf(doc.relPath.AbsPathUrlEncode())
+        let isMatching (doc: Doc) =
+            input.IsSubSequenceOf(doc.RelPath)
+            || input.IsSubSequenceOf(doc.RelPath.AbsPathUrlEncode())
 
         let matchingDocs = folder.docs |> Map.values |> Seq.filter isMatching
 
-        let toCompletionItem doc =
-            let newText = doc.relPath.AbsPathUrlEncode()
+        let toCompletionItem (doc: Doc) =
+            let newText = doc.RelPath.AbsPathUrlEncode()
             let newText = if needsClosing then newText + ")" else newText
             let textEdit = { Range = range; NewText = newText }
 
-            { CompletionItem.Create(doc.relPath) with
+            { CompletionItem.Create(doc.RelPath) with
                 Detail = Some(Doc.name doc)
                 TextEdit = Some textEdit
-                FilterText = Some doc.relPath }
+                FilterText = Some doc.RelPath }
 
         matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
     | Comp.DocAnchor (destDocUrl, range, needsClosing) ->
         let destDoc =
             match destDocUrl with
             | Some url ->
-                let isMatching doc = doc.relPath.AbsPathUrlEncode() = url
+                let isMatching (doc: Doc) = doc.RelPath.AbsPathUrlEncode() = url
                 folder.docs |> Map.values |> Seq.tryFind isMatching
             | None -> Some srcDoc
 
@@ -334,7 +334,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
         | None -> [||]
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
-    let doc = Folder.tryFindDocument docUri folder
+    let doc = Folder.tryFindDoc docUri folder
 
     match doc with
     | None -> [||]

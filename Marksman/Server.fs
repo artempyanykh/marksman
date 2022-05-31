@@ -2,18 +2,21 @@ module Marksman.Server
 
 open System.Collections.Generic
 open System.IO
+
+open Microsoft.FSharp.Control
+
 open Ionide.LanguageServerProtocol
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Server
 open Ionide.LanguageServerProtocol.Logging
 open FSharpPlus.GenericBuilders
 
+open Marksman.Cst
 open Marksman.Diag
 open Marksman.Misc
-open Marksman.Parser
 open Marksman.Workspace
 open Marksman.State
-open Microsoft.FSharp.Control
+open Marksman.Index
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -496,15 +499,19 @@ type MarksmanServer(client: MarksmanClient) =
 
         let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let getSymbols doc =
-            let headings = Element.pickHeadings doc.elements
+        let getSymbols (doc: Doc) =
+            let headings = Index.headings doc.Index
 
             if (State.client state).SupportsHierarchy then
                 headings
-                |> Array.map (headingToDocumentSymbol (State.client state).IsEmacs)
+                |> Seq.map (headingToDocumentSymbol (State.client state).IsEmacs)
+                |> Array.ofSeq
                 |> Second
             else
-                headings |> Array.collect (headingToSymbolInfo docUri) |> First
+                headings
+                |> Seq.collect (headingToSymbolInfo docUri)
+                |> Array.ofSeq
+                |> First
 
         let response = State.tryFindDocument docUri state |> Option.map getSymbols
 
@@ -537,7 +544,7 @@ type MarksmanServer(client: MarksmanClient) =
         let goto =
             monad {
                 let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDocument docUri folder
+                let! srcDoc = Folder.tryFindDoc docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
 
                 match atPos with
@@ -597,7 +604,7 @@ type MarksmanServer(client: MarksmanClient) =
         let hover =
             monad {
                 let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDocument docUri folder
+                let! srcDoc = Folder.tryFindDoc docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
 
                 let! linkTarget =

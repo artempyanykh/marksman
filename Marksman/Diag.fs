@@ -1,12 +1,11 @@
 module Marksman.Diag
 
-open System.Collections.Generic
-
 module Lsp = Ionide.LanguageServerProtocol.Types
 
-open Misc
-open Parser
-open Domain
+open Marksman.Misc
+open Marksman.Parser
+open Marksman.Domain
+open Marksman.DB
 
 type Entry =
     | DupTitle of orig: Node<Heading> * dup: Node<Heading>
@@ -21,61 +20,8 @@ let code: Entry -> string =
     | BrokenDocWL _ -> "3"
     | BrokenHeadingWL _ -> "4"
 
-type DocumentIndex =
-    { path: PathUri
-      titles: list<Node<Heading>>
-      headings: Map<Slug, list<Node<Heading>>>
-      wikiLinks: array<Node<WikiLink>> }
-
-let indexDocument (doc: Doc) : DocumentIndex =
-    let titles = ResizeArray()
-
-    let headings = Dictionary<Slug, ResizeArray<Node<Heading>>>()
-
-    let wikiLinks = ResizeArray()
-
-    for el in Doc.elementsAll doc do
-        match el with
-        | H hn ->
-            let slug = Heading.slug hn.data
-
-            if not (headings.ContainsKey(slug)) then
-                headings[slug] <- ResizeArray()
-
-            headings.[slug].Add(hn)
-
-            if Heading.isTitle hn.data then titles.Add(hn)
-        | WL ref -> wikiLinks.Add(ref)
-        | _ -> ()
-
-    let titles = titles |> List.ofSeq
-
-    let headings =
-        seq {
-            for KeyValue (slug, headings) in headings do
-                yield slug, headings |> List.ofSeq
-        }
-        |> Map.ofSeq
-
-    let wikiLinks = wikiLinks.ToArray()
-
-    { path = doc.path
-      titles = titles
-      headings = headings
-      wikiLinks = wikiLinks }
-
-type FolderIndex = Map<Slug, DocumentIndex>
-
-let indexFolder (folder: Folder) : FolderIndex =
-    seq {
-        for KeyValue (_, doc) in folder.docs do
-            let docSummary = indexDocument doc
-            yield Doc.name doc |> Slug.ofString, docSummary
-    }
-    |> Map.ofSeq
-
-let checkTitles (summary: DocumentIndex) : seq<Entry> =
-    match summary.titles with
+let checkTitles (db: DocDB) : seq<Entry> =
+    match DocDB.titles db with
     | [] -> []
     | [ _ ] -> []
     | first :: rest ->
@@ -83,9 +29,9 @@ let checkTitles (summary: DocumentIndex) : seq<Entry> =
         |> List.map (fun dup -> DupTitle(orig = first, dup = dup))
         |> Seq.ofList
 
-let checkHeadings (index: DocumentIndex) : seq<Entry> =
+let checkHeadings (db: DocDB) : seq<Entry> =
     seq {
-        for KeyValue (_, hs) in index.headings do
+        for KeyValue (_, hs) in DocDB.headingsBySlug db do
             match hs with
             | [] -> ()
             | [ _ ] -> ()
@@ -94,45 +40,45 @@ let checkHeadings (index: DocumentIndex) : seq<Entry> =
                     yield DupHeading(orig = first, dup = dup)
     }
 
-let checkWikiLinks (docSlug: Slug) (index: FolderIndex) : seq<Entry> =
-    let docIndex = Map.find docSlug index
+let checkWikiLinks (docSlug: Slug) (fdb: FolderDB) : seq<Entry> =
+    let docDB = FolderDB.findDocBySlug docSlug fdb
 
     seq {
-        for wl in docIndex.wikiLinks do
+        for wl in DocDB.wikiLinks docDB do
             let destDocSlug =
                 WikiLink.destDoc wl.data
                 |> Option.map Slug.ofString
                 |> Option.defaultValue docSlug
 
-            let destDocIndex = Map.tryFind destDocSlug index
+            let destDocDB = FolderDB.tryFindDocBySlug destDocSlug fdb
 
-            match destDocIndex with
+            match destDocDB with
             | None -> yield BrokenDocWL(wl)
-            | Some destDocIndex ->
+            | Some destDocDB ->
                 match WikiLink.destHeading wl.data with
                 | None -> ()
                 | Some destHeading ->
                     let destSlug = Slug.ofString destHeading
 
-                    match Map.tryFind destSlug destDocIndex.headings with
+                    match DocDB.tryFindHeadingBySlug destSlug destDocDB with
                     | None -> yield BrokenHeadingWL(wl)
                     | Some _ -> ()
     }
 
 let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
-    let folderIndex = indexFolder folder
+    let folderDB = FolderDB.ofFolder folder
 
     seq {
-        for KeyValue (docSlug, docIndex) in folderIndex do
+        for docSlug, docDB in FolderDB.docsBySlug folderDB do
             let docDiag =
                 seq {
-                    yield! checkTitles docIndex
-                    yield! checkHeadings docIndex
-                    yield! checkWikiLinks docSlug folderIndex
+                    yield! checkTitles docDB
+                    yield! checkHeadings docDB
+                    yield! checkWikiLinks docSlug folderDB
                 }
                 |> List.ofSeq
 
-            docIndex.path, docDiag
+            DocDB.path docDB, docDiag
     }
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =

@@ -7,29 +7,31 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Misc.fs"/>
-        <Compile Include="Text.fs"/>
-        <Compile Include="Parser.fs"/>
-        <Compile Include="Domain.fs"/>
-        <Compile Include="Comp.fs"/>
-        <Compile Include="Diag.fs"/>
-        <Compile Include="Server.fs"/>
-        <Compile Include="Program.fs"/>
+        <Compile Include="Misc.fs" />
+        <Compile Include="Text.fs" />
+        <Compile Include="Parser.fs" />
+        <Compile Include="Domain.fs" />
+        <Compile Include="DB.fsi" />
+        <Compile Include="DB.fs" />
+        <Compile Include="Comp.fs" />
+        <Compile Include="Diag.fs" />
+        <Compile Include="Server.fs" />
+        <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.4"/>
-        <PackageReference Include="FSharp.SystemCommandLine" Version="0.10.0-beta"/>
-        <PackageReference Include="FSharpPlus" Version="1.2.3"/>
-        <PackageReference Include="Markdig" Version="0.30.2"/>
+        <PackageReference Update="FSharp.Core" Version="6.0.4" />
+        <PackageReference Include="FSharp.SystemCommandLine" Version="0.10.0-beta" />
+        <PackageReference Include="FSharpPlus" Version="1.2.3" />
+        <PackageReference Include="Markdig" Version="0.30.2" />
         <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->
-        <PackageReference Include="Serilog" Version="2.11.0"/>
-        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
+        <PackageReference Include="Serilog" Version="2.11.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj"/>
-        <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj"/>
+        <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj" />
+        <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj" />
     </ItemGroup>
 
 </Project>

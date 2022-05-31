@@ -1,5 +1,6 @@
 module Marksman.DiagTest
 
+open Marksman.DB
 open Xunit
 
 open Marksman.Misc
@@ -21,8 +22,8 @@ let makeFakeDocument (content: string) : Doc =
 [<Fact>]
 let documentIndex_1 () =
     let doc = makeFakeDocument "# T1\n# T2"
-    let index = indexDocument doc
+    let db = DocDB.ofDoc doc
 
-    let titles = index.titles |> List.map (fun x -> x.data.title.text)
+    let titles = DocDB.titles db |> List.map (fun x -> x.data.title.text)
 
     Assert.Equal<string>([ "T1"; "T2" ], titles)

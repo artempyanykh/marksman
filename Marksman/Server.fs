@@ -207,7 +207,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         HoverProvider = Some true }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation [] =
-    let name = h.text.TrimStart([| '#'; ' ' |])
+    let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
 
@@ -227,7 +227,7 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInforma
     Array.append [| sym |] children
 
 let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
-    let name = h.text.TrimStart([| '#'; ' ' |])
+    let name = Heading.name h.data
     let kind = SymbolKind.String
     let range = h.data.scope
     let selectionRange = h.range

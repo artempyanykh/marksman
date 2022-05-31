@@ -6,18 +6,27 @@ open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
 open FSharpPlus.Operators
-open FSharpPlus.GenericBuilders
 
 open Marksman.Parser
 open Marksman.Text
 open Marksman.Misc
+open Marksman.Cst
+open Marksman.Index
 
 type Doc =
     { path: PathUri
-      relPath: string
+      rootPath: PathUri
       version: option<int>
       text: Text
-      elements: array<Element> }
+      cst: Cst }
+
+    member this.RelPath: string =
+        let docPath = this.path.LocalPath
+        let folderPath = this.rootPath.LocalPath
+
+        Path.GetRelativePath(folderPath, docPath)
+
+    member this.Index: Index = Index.ofCst this.cst
 
 module Doc =
     let logger = LogProvider.getLoggerByName "Doc"
@@ -48,29 +57,18 @@ module Doc =
 
         let newText = applyTextChange change.ContentChanges document.text
 
-        let newElements = parseText newText
-
-        { document with
-            version = newVersion
-            text = newText
-            elements = newElements }
-
-    let pathFromFolder (folderPath: PathUri) (docPath: PathUri) : string =
-        let docPath = docPath.LocalPath
-        let folderPath = folderPath.LocalPath
-
-        Path.GetRelativePath(folderPath, docPath)
+        { document with version = newVersion; text = newText }
 
     let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Doc =
         let path = PathUri.fromString item.Uri
         let text = mkText item.Text
-        let elements = parseText text
+        let cst = parseText text
 
         { path = path
-          relPath = pathFromFolder root path
+          rootPath = root
           version = Some item.Version
           text = text
-          elements = elements }
+          cst = cst }
 
 
     let load (root: PathUri) (path: PathUri) : option<Doc> =
@@ -79,85 +77,40 @@ module Doc =
                 using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
 
             let text = mkText content
-            let elements = parseText text
+            let cst = parseText text
 
             Some
                 { path = path
-                  relPath = pathFromFolder root path
+                  rootPath = root
                   text = text
-                  elements = elements
+                  cst = cst
                   version = None }
         with
         | :? FileNotFoundException -> None
 
-    let title (doc: Doc) : option<Node<Heading>> =
-        let isTitle el =
-            Element.asHeading el
-            |> Option.map (fun x -> x.data.level = 1)
-            |> Option.defaultValue false
+    let title (doc: Doc) : option<Node<Heading>> = Index.title doc.Index
 
-        let titleOpt =
-            doc.elements
-            |> Array.tryFind isTitle
-            |> Option.map (function
-                | H h -> h
-                | other -> failwith $"Expected heading: {other}")
-
-        titleOpt
+    let index (doc: Doc) : Index = doc.Index
 
     let name (doc: Doc) : string =
         match title doc with
         | Some { data = hd } -> Heading.name hd
-        | None -> doc.relPath |> Path.GetFileNameWithoutExtension
+        | None -> doc.RelPath |> Path.GetFileNameWithoutExtension
 
     let slug (doc: Doc) : Slug = name doc |> Slug.ofString
 
-    let elementsAll (document: Doc) : seq<Element> =
-        let rec collect els =
-            seq {
-                for el in els do
-                    yield el
-
-                    match el with
-                    | H h -> yield! collect h.data.children
-                    | WL _
-                    | ML _
-                    | MLD _ -> ()
-            }
-
-        collect document.elements
-
-    let headings (document: Doc) : seq<Node<Heading>> =
-        seq {
-            for el in elementsAll document do
-                match Element.asHeading el with
-                | Some h -> yield h
-                | _ -> ()
-        }
+    let headings (doc: Doc) : seq<Node<Heading>> = Index.headings doc.Index
 
     let headingBySlug (nameSlug: Slug) (document: Doc) : option<Node<Heading>> =
-        let matchingHeading { data = h } = Heading.slug h = nameSlug
+        document.Index |> Index.tryFindHeadingBySlug nameSlug
 
-        headings document |> Seq.tryFind matchingHeading
-
-    let linkDefs (doc: Doc) : seq<Node<MdLinkDef>> =
-        seq {
-            for el in elementsAll doc do
-                match Element.asLinkDef el with
-                | Some def -> yield def
-                | _ -> ()
-        }
+    let linkDefs (doc: Doc) : array<Node<MdLinkDef>> = Index.linkDefs doc.Index
 
     let linkDefByLabel (label: string) (doc: Doc) : option<Node<MdLinkDef>> =
         linkDefs doc
         |> Seq.tryFind (fun { data = def } -> def.label.text = label)
 
-    let linkAtPos (pos: Position) (doc: Doc) : option<Element> =
-        elementsAll doc
-        |> Seq.filter Element.isLink
-        |> Seq.tryFind (fun el ->
-            let range = Element.range el
-            range.Start <= pos && pos < range.End)
+    let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.Index
 
 
 [<RequireQualifiedAccess>]
@@ -190,9 +143,11 @@ type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
-    let tryFindDocument (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
+    let tryFindDoc (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
 
-    let rec private loadDocuments (root: PathUri) : seq<Doc> =
+    let docs (folder: Folder) : seq<Doc> = seq { for doc in folder.docs |> Map.values -> doc }
+
+    let rec private loadDocs (root: PathUri) : seq<Doc> =
         let di = DirectoryInfo(root.LocalPath)
 
         try
@@ -210,7 +165,7 @@ module Folder =
                     | _ -> ()
 
                 for dir in dirs do
-                    yield! loadDocuments (PathUri.fromString dir.FullName)
+                    yield! loadDocs (PathUri.fromString dir.FullName)
             }
         with
         | :? UnauthorizedAccessException as exn ->
@@ -235,7 +190,7 @@ module Folder =
 
         if Directory.Exists(root.LocalPath) then
             let documents =
-                loadDocuments root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
+                loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
 
             { name = name; root = root; docs = documents } |> Some
         else
@@ -246,19 +201,19 @@ module Folder =
 
             None
 
-    let loadDocument (uri: PathUri) (folder: Folder) : Folder =
+    let loadDoc (uri: PathUri) (folder: Folder) : Folder =
         match Doc.load folder.root uri with
         | Some doc -> { folder with docs = Map.add uri doc folder.docs }
         | None -> folder
 
-    let removeDocument (uri: PathUri) (folder: Folder) : Folder =
+    let removeDoc (uri: PathUri) (folder: Folder) : Folder =
         { folder with docs = Map.remove uri folder.docs }
 
-    let addDocument (doc: Doc) (folder: Folder) : Folder =
+    let addDoc (doc: Doc) (folder: Folder) : Folder =
         { folder with docs = Map.add doc.path doc folder.docs }
 
 
-    let tryFindDocumentBySlug (slug: Slug) (folder: Folder) : option<Doc> =
+    let tryFindDocBySlug (slug: Slug) (folder: Folder) : option<Doc> =
         let matchingDoc doc = Doc.slug doc = slug
         folder.docs |> Map.values |> Seq.tryFind matchingDoc
 
@@ -273,7 +228,7 @@ module Folder =
         let destDoc =
             match destDocName with
             | None -> Some sourceDoc
-            | Some destDocName -> tryFindDocumentBySlug (Slug.ofString destDocName) folder
+            | Some destDocName -> tryFindDocBySlug (Slug.ofString destDocName) folder
 
         match destDoc with
         | None -> None
@@ -298,14 +253,14 @@ module Folder =
         let targetDocUrl =
             docUrl.url
             |> Option.map Node.text
-            |> Option.defaultWith (fun () -> srcDoc.relPath.AbsPathUrlEncode())
+            |> Option.defaultWith (fun () -> srcDoc.RelPath.AbsPathUrlEncode())
 
-        let isMatchingDoc doc = doc.relPath.AbsPathUrlEncode() = targetDocUrl
+        let isMatchingDoc (doc: Doc) = doc.RelPath.AbsPathUrlEncode() = targetDocUrl
 
         let matchingDoc = folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
-        let tryMatch doc =
-            if doc.relPath.AbsPathUrlEncode() = targetDocUrl then
+        let tryMatch (doc: Doc) =
+            if doc.RelPath.AbsPathUrlEncode() = targetDocUrl then
                 match docUrl.anchor with
                 | Some anchor ->
                     match Doc.headingBySlug (Slug.ofString anchor.text) doc with

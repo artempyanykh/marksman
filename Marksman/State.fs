@@ -7,7 +7,6 @@ open FSharpPlus.GenericBuilders
 
 open Marksman.Diag
 open Marksman.Workspace
-open Marksman.DB
 open Marksman.Misc
 
 type ClientDescription =
@@ -50,18 +49,13 @@ type State =
         { client: ClientDescription
           workspace: Workspace
           revision: int
-          db: WorkspaceDB
           diag: WorkspaceDiag }
 
 module State =
     let private logger = LogProvider.getLoggerByName "State"
 
     let mk (client: ClientDescription) (ws: Workspace) =
-        { client = client
-          workspace = ws
-          revision = 0
-          db = WorkspaceDB.ofWorkspace ws
-          diag = Map.empty }
+        { client = client; workspace = ws; revision = 0; diag = Map.empty }
 
     let client s = s.client
 
@@ -80,7 +74,7 @@ module State =
 
     let tryFindDocument (uri: PathUri) (state: State) : option<Doc> =
         tryFindFolderEnclosing uri state
-        |> Option.map (Folder.tryFindDocument uri)
+        |> Option.map (Folder.tryFindDoc uri)
         |> Option.flatten
 
     let updateFoldersFromLsp
@@ -112,13 +106,10 @@ module State =
             Workspace.withoutFolders removedUris state.workspace
             |> Workspace.withFolders addedFolders
 
-        let newDB = WorkspaceDB.ofWorkspace newWorkspace
-
         { client = state.client
           workspace = newWorkspace
           revision = state.revision + 1
-          db = newDB
-          diag = diagnosticForWorkspace newDB }
+          diag = WorkspaceDiag.mk newWorkspace }
 
     let updateDocument (newDocument: Doc) (state: State) : State =
         let folder = findFolderEnclosing newDocument.path state
@@ -129,28 +120,23 @@ module State =
 
         let newWs = Workspace.withFolder newFolder state.workspace
 
-        let newWsDB = WorkspaceDB.withDoc newDocument state.db
-
-        let newWsDiag = diagnosticForWorkspace newWsDB
+        let newWsDiag = WorkspaceDiag.mk newWs
 
         { client = state.client
           workspace = newWs
           revision = state.revision + 1
-          db = newWsDB
           diag = newWsDiag }
 
 
     let removeDocument (path: PathUri) (state: State) : State =
         let folder = findFolderEnclosing path state
 
-        let newFolder = Folder.removeDocument path folder
+        let newFolder = Folder.removeDoc path folder
 
         let newWs = Workspace.withFolder newFolder state.workspace
-        let newWsDb = WorkspaceDB.withoutDoc path state.db
-        let newWsDiag = diagnosticForWorkspace newWsDb
+        let newWsDiag = WorkspaceDiag.mk newWs
 
         { client = state.client
           workspace = newWs
           revision = state.revision + 1
-          db = newWsDb
           diag = newWsDiag }

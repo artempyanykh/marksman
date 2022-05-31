@@ -1,10 +1,12 @@
 module Marksman.Diag
 
+open Marksman.Workspace
+
 module Lsp = Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
-open Marksman.Parser
-open Marksman.DB
+open Marksman.Cst
+open Marksman.Index
 
 type Entry =
     | DupTitle of orig: Node<Heading> * dup: Node<Heading>
@@ -19,8 +21,8 @@ let code: Entry -> string =
     | BrokenDocWL _ -> "3"
     | BrokenHeadingWL _ -> "4"
 
-let checkTitles (db: DocDB) : seq<Entry> =
-    match DocDB.titles db with
+let checkTitles (index: Index) : seq<Entry> =
+    match Index.titles index |> List.ofArray with
     | [] -> []
     | [ _ ] -> []
     | first :: rest ->
@@ -28,9 +30,9 @@ let checkTitles (db: DocDB) : seq<Entry> =
         |> List.map (fun dup -> DupTitle(orig = first, dup = dup))
         |> Seq.ofList
 
-let checkHeadings (db: DocDB) : seq<Entry> =
+let checkHeadings (db: Index) : seq<Entry> =
     seq {
-        for KeyValue (_, hs) in DocDB.headingsBySlug db do
+        for KeyValue (_, hs) in Index.headingsBySlug db do
             match hs with
             | [] -> ()
             | [ _ ] -> ()
@@ -39,43 +41,43 @@ let checkHeadings (db: DocDB) : seq<Entry> =
                     yield DupHeading(orig = first, dup = dup)
     }
 
-let checkWikiLinks (docSlug: Slug) (fdb: FolderDB) : seq<Entry> =
-    let docDB = FolderDB.findDocBySlug docSlug fdb
+let checkWikiLinks (doc: Doc) (folder: Folder) : seq<Entry> =
+    let docSlug = Doc.slug doc
 
     seq {
-        for wl in DocDB.wikiLinks docDB do
+        for wl in Index.wikiLinks doc.Index do
             let destDocSlug =
                 WikiLink.destDoc wl.data
                 |> Option.map Slug.ofString
                 |> Option.defaultValue docSlug
 
-            let destDocDB = FolderDB.tryFindDocBySlug destDocSlug fdb
+            let destDoc = Folder.tryFindDocBySlug destDocSlug folder
 
-            match destDocDB with
+            match destDoc with
             | None -> yield BrokenDocWL(wl)
-            | Some destDocDB ->
+            | Some destDoc ->
                 match WikiLink.destHeading wl.data with
                 | None -> ()
                 | Some destHeading ->
                     let destSlug = Slug.ofString destHeading
 
-                    match DocDB.tryFindHeadingBySlug destSlug destDocDB with
+                    match Index.tryFindHeadingBySlug destSlug destDoc.Index with
                     | None -> yield BrokenHeadingWL(wl)
                     | Some _ -> ()
     }
 
-let checkFolder (fdb: FolderDB) : seq<PathUri * list<Entry>> =
+let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
     seq {
-        for docSlug, docDB in FolderDB.docsBySlug fdb do
+        for doc in Folder.docs folder do
             let docDiag =
                 seq {
-                    yield! checkTitles docDB
-                    yield! checkHeadings docDB
-                    yield! checkWikiLinks docSlug fdb
+                    yield! checkTitles doc.Index
+                    yield! checkHeadings doc.Index
+                    yield! checkWikiLinks doc folder
                 }
                 |> List.ofSeq
 
-            DocDB.path docDB, docDiag
+            doc.path, docDiag
     }
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
@@ -124,17 +126,19 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
 
 type FolderDiag = array<PathUri * array<Lsp.Diagnostic>>
 
-let diagnosticForFolder (fdb: FolderDB) : FolderDiag =
-    checkFolder fdb
-    |> Seq.map (fun (uri, diags) ->
-        let lspDiags = List.map diagToLsp diags |> Array.ofList
+module FolderDiag =
+    let mk (folder: Folder) : FolderDiag =
+        checkFolder folder
+        |> Seq.map (fun (uri, diags) ->
+            let lspDiags = List.map diagToLsp diags |> Array.ofList
 
-        uri, lspDiags)
-    |> Array.ofSeq
+            uri, lspDiags)
+        |> Array.ofSeq
 
 type WorkspaceDiag = Map<PathUri, FolderDiag>
 
-let diagnosticForWorkspace (wdb: WorkspaceDB) : WorkspaceDiag =
-    WorkspaceDB.folders wdb
-    |> Seq.map (fun (root, fdb) -> root, diagnosticForFolder fdb)
-    |> Map.ofSeq
+module WorkspaceDiag =
+    let mk (ws: Workspace) : WorkspaceDiag =
+        Workspace.folders ws
+        |> Seq.map (fun folder -> folder.root, FolderDiag.mk folder)
+        |> Map.ofSeq

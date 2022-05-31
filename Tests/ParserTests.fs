@@ -1,12 +1,14 @@
 module Marksman.ParserTests
 
 open Ionide.LanguageServerProtocol.Types
+
+open Snapper
 open Snapper.Attributes
 open Xunit
 
-open Parser
-open Snapper
-open Misc
+open Marksman.Cst
+open Marksman.Parser
+open Marksman.Misc
 
 let checkSnapshot (document: array<Element>) =
     let lines =
@@ -315,7 +317,4 @@ module DocUrlTests =
         //                       01234567
         let actual = mkTextNode "#anchor" |> DocUrl.ofUrlNode
 
-        Assert.Equal(
-            "anchor=anchor @ (0,1)-(0,7)",
-            actual.ToString()
-        )
+        Assert.Equal("anchor=anchor @ (0,1)-(0,7)", actual.ToString())

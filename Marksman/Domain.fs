@@ -86,8 +86,8 @@ module Doc =
                   text = text
                   elements = elements
                   version = None }
-        with
-        | :? FileNotFoundException -> None
+        with :? FileNotFoundException ->
+            None
 
     let title (doc: Doc) : option<Node<Heading>> =
         let isTitle el =

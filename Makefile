@@ -48,6 +48,10 @@ build:
 run:
 	dotnet run --project Marksman -- $(ARGS)
 
+.PHONY: fmt
+fmt:
+	dotnet fantomas Marksman
+
 .PHONY: publish
 publish:
 	dotnet publish -c Release -r $(RID) --self-contained true \

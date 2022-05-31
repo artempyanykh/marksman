@@ -21,8 +21,13 @@ module FolderDB =
     val tryFindDocBySlug: Slug -> FolderDB -> option<DocDB>
     val findDocBySlug: Slug -> FolderDB -> DocDB
     val docsBySlug: FolderDB -> seq<Slug * DocDB>
+    val withDoc: Doc -> FolderDB -> FolderDB
+    val withoutDoc: PathUri -> FolderDB -> FolderDB
 
 type WorkspaceDB
 
 module WorkspaceDB =
     val ofWorkspace: Workspace -> WorkspaceDB
+    val folders: WorkspaceDB -> seq<PathUri * FolderDB>
+    val withDoc: Doc -> WorkspaceDB -> WorkspaceDB
+    val withoutDoc: PathUri -> WorkspaceDB -> WorkspaceDB

@@ -4,7 +4,6 @@ module Lsp = Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 open Marksman.Parser
-open Marksman.Workspace
 open Marksman.DB
 
 type Entry =
@@ -65,16 +64,14 @@ let checkWikiLinks (docSlug: Slug) (fdb: FolderDB) : seq<Entry> =
                     | Some _ -> ()
     }
 
-let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
-    let folderDB = FolderDB.ofFolder folder
-
+let checkFolder (fdb: FolderDB) : seq<PathUri * list<Entry>> =
     seq {
-        for docSlug, docDB in FolderDB.docsBySlug folderDB do
+        for docSlug, docDB in FolderDB.docsBySlug fdb do
             let docDiag =
                 seq {
                     yield! checkTitles docDB
                     yield! checkHeadings docDB
-                    yield! checkWikiLinks docSlug folderDB
+                    yield! checkWikiLinks docSlug fdb
                 }
                 |> List.ofSeq
 
@@ -125,20 +122,19 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           Tags = None
           Data = None }
 
+type FolderDiag = array<PathUri * array<Lsp.Diagnostic>>
 
-let diagnosticForFolder (folder: Folder) : array<PathUri * array<Lsp.Diagnostic>> =
-    checkFolder folder
+let diagnosticForFolder (fdb: FolderDB) : FolderDiag =
+    checkFolder fdb
     |> Seq.map (fun (uri, diags) ->
         let lspDiags = List.map diagToLsp diags |> Array.ofList
 
         uri, lspDiags)
     |> Array.ofSeq
 
-let diagnosticForWorkspace
-    (workspace: Workspace)
-    : Map<PathUri, array<PathUri * array<Lsp.Diagnostic>>> =
-    seq {
-        for f in Workspace.folders workspace do
-            yield f.root, diagnosticForFolder f
-    }
+type WorkspaceDiag = Map<PathUri, FolderDiag>
+
+let diagnosticForWorkspace (wdb: WorkspaceDB) : WorkspaceDiag =
+    WorkspaceDB.folders wdb
+    |> Seq.map (fun (root, fdb) -> root, diagnosticForFolder fdb)
     |> Map.ofSeq

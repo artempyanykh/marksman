@@ -518,7 +518,7 @@ type MarksmanServer(client: MarksmanClient) =
         let docUri = par.TextDocument.Uri |> PathUri.fromString
 
         let getSymbols (doc: Doc) =
-            let headings = Index.headings doc.Index
+            let headings = Index.headings doc.index
 
             if (State.client state).SupportsHierarchy then
                 headings

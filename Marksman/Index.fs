@@ -59,7 +59,11 @@ module Index =
     let title = titles >> Array.tryHead
 
     let wikiLinks index = index.wikiLinks
-    let mdiLinks index = index.mdLinks
+
+    let mdLinks index = index.mdLinks
+
+    let links index =
+        Seq.append (wikiLinks index |> Seq.map WL) (mdLinks index |> Seq.map ML)
 
     let linkDefs index = index.linkDefs
 

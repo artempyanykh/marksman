@@ -44,7 +44,7 @@ module Doc =
     let withText newText doc =
         let newCst = parseText newText
         let newIndex = Index.ofCst newCst
-        { doc with cst = newCst; index = newIndex }
+        { doc with text = newText; cst = newCst; index = newIndex }
 
 
     let applyLspChange (change: DidChangeTextDocumentParams) (document: Doc) : Doc =

@@ -13,6 +13,7 @@
         <Compile Include="MiscTests.fs" />
         <Compile Include="DiagTest.fs" />
         <Compile Include="CompTests.fs" />
+        <Compile Include="WorkspaceTest.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

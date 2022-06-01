@@ -18,7 +18,8 @@ type Doc =
       rootPath: PathUri
       version: option<int>
       text: Text
-      cst: Cst }
+      cst: Cst
+      index: Index }
 
     member this.RelPath: string =
         let docPath = this.path.LocalPath
@@ -26,10 +27,25 @@ type Doc =
 
         Path.GetRelativePath(folderPath, docPath)
 
-    member this.Index: Index = Index.ofCst this.cst
-
 module Doc =
     let logger = LogProvider.getLoggerByName "Doc"
+
+    let mk path rootPath version text =
+        let cst = parseText text
+        let index = Index.ofCst cst
+
+        { path = path
+          rootPath = rootPath
+          version = version
+          text = text
+          cst = cst
+          index = index }
+
+    let withText newText doc =
+        let newCst = parseText newText
+        let newIndex = Index.ofCst newCst
+        { doc with cst = newCst; index = newIndex }
+
 
     let applyLspChange (change: DidChangeTextDocumentParams) (document: Doc) : Doc =
         let newVersion = change.TextDocument.Version
@@ -57,19 +73,13 @@ module Doc =
 
         let newText = applyTextChange change.ContentChanges document.text
 
-        { document with version = newVersion; text = newText }
+        { withText newText document with version = newVersion }
 
     let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Doc =
         let path = PathUri.fromString item.Uri
         let text = mkText item.Text
-        let cst = parseText text
 
-        { path = path
-          rootPath = root
-          version = Some item.Version
-          text = text
-          cst = cst }
-
+        mk path root (Some item.Version) text
 
     let load (root: PathUri) (path: PathUri) : option<Doc> =
         try
@@ -77,20 +87,14 @@ module Doc =
                 using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
 
             let text = mkText content
-            let cst = parseText text
 
-            Some
-                { path = path
-                  rootPath = root
-                  text = text
-                  cst = cst
-                  version = None }
+            Some(mk path root None text)
         with
         | :? FileNotFoundException -> None
 
-    let title (doc: Doc) : option<Node<Heading>> = Index.title doc.Index
+    let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
 
-    let index (doc: Doc) : Index = doc.Index
+    let index (doc: Doc) : Index = doc.index
 
     let name (doc: Doc) : string =
         match title doc with
@@ -99,18 +103,18 @@ module Doc =
 
     let slug (doc: Doc) : Slug = name doc |> Slug.ofString
 
-    let headings (doc: Doc) : seq<Node<Heading>> = Index.headings doc.Index
+    let headings (doc: Doc) : seq<Node<Heading>> = Index.headings doc.index
 
     let headingBySlug (nameSlug: Slug) (document: Doc) : option<Node<Heading>> =
-        document.Index |> Index.tryFindHeadingBySlug nameSlug
+        document.index |> Index.tryFindHeadingBySlug nameSlug
 
-    let linkDefs (doc: Doc) : array<Node<MdLinkDef>> = Index.linkDefs doc.Index
+    let linkDefs (doc: Doc) : array<Node<MdLinkDef>> = Index.linkDefs doc.index
 
     let linkDefByLabel (label: string) (doc: Doc) : option<Node<MdLinkDef>> =
         linkDefs doc
         |> Seq.tryFind (fun { data = def } -> def.label.text = label)
 
-    let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.Index
+    let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.index
 
 
 [<RequireQualifiedAccess>]
@@ -215,6 +219,7 @@ module Folder =
 
     let tryFindDocBySlug (slug: Slug) (folder: Folder) : option<Doc> =
         let matchingDoc doc = Doc.slug doc = slug
+
         folder.docs |> Map.values |> Seq.tryFind matchingDoc
 
     let tryFindWikiLinkTarget

@@ -45,7 +45,7 @@ let checkWikiLinks (doc: Doc) (folder: Folder) : seq<Entry> =
     let docSlug = Doc.slug doc
 
     seq {
-        for wl in Index.wikiLinks doc.Index do
+        for wl in Index.wikiLinks doc.index do
             let destDocSlug =
                 WikiLink.destDoc wl.data
                 |> Option.map Slug.ofString
@@ -61,7 +61,7 @@ let checkWikiLinks (doc: Doc) (folder: Folder) : seq<Entry> =
                 | Some destHeading ->
                     let destSlug = Slug.ofString destHeading
 
-                    match Index.tryFindHeadingBySlug destSlug destDoc.Index with
+                    match Index.tryFindHeadingBySlug destSlug destDoc.index with
                     | None -> yield BrokenHeadingWL(wl)
                     | Some _ -> ()
     }
@@ -71,8 +71,8 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
         for doc in Folder.docs folder do
             let docDiag =
                 seq {
-                    yield! checkTitles doc.Index
-                    yield! checkHeadings doc.Index
+                    yield! checkTitles doc.index
+                    yield! checkHeadings doc.index
                     yield! checkWikiLinks doc folder
                 }
                 |> List.ofSeq

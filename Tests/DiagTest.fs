@@ -10,20 +10,13 @@ open Marksman.Diag
 
 let makeFakeDocument (content: string) : Doc =
     let text = Text.mkText content
-    let cst = parseText text
-
-    { path = PathUri.fromString "memory://fake.md"
-      rootPath = PathUri.fromString "memory://"
-      version = None
-      text = text
-      cst = cst }
-
+    Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text
 
 [<Fact>]
 let documentIndex_1 () =
     let doc = makeFakeDocument "# T1\n# T2"
 
     let titles =
-        Index.titles doc.Index |> Array.map (fun x -> x.data.title.text)
+        Index.titles doc.index |> Array.map (fun x -> x.data.title.text)
 
     Assert.Equal<string>([ "T1"; "T2" ], titles)

@@ -8,6 +8,7 @@ open Ionide.LanguageServerProtocol.Types
 open FSharpPlus.GenericBuilders
 
 open Marksman.Cst
+open Marksman.Index
 open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Text
@@ -186,7 +187,9 @@ let compOfText (pos: Position) (text: Text) : option<Comp> =
 
 let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
     let elComp =
-        Cst.elementsAll doc.cst
+        doc
+        |> Doc.index
+        |> Index.links
         |> Seq.map (compOfElement pos)
         |> Seq.tryFind Option.isSome
         |> Option.flatten

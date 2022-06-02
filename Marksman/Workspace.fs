@@ -215,7 +215,7 @@ type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
-    let tryFindDoc (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
+    let tryFindDocByPath (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
 
     let docs (folder: Folder) : seq<Doc> = seq { for doc in folder.docs |> Map.values -> doc }
 

@@ -29,7 +29,7 @@ module Index =
                 if not (headings.ContainsKey(slug)) then
                     headings[slug] <- ResizeArray()
 
-                headings.[slug].Add(hn)
+                headings[ slug ].Add(hn)
 
                 if Heading.isTitle hn.data then titles.Add(hn)
             | WL wl -> wikiLinks.Add(wl)
@@ -87,3 +87,13 @@ module Index =
         let fromMd () = Array.tryFind matching index.mdLinks |> Option.map ML
 
         fromWiki () |> Option.orElseWith fromMd
+
+    let declAtPos (pos: Position) (index: Index) : option<Element> =
+        let matching el =
+            let range = Node.range el
+            range.Start <= pos && pos < range.End
+
+        let fromHeadings () = Seq.tryFind matching (headings index) |> Option.map H
+        let fromLinkDefs () = Array.tryFind matching index.linkDefs |> Option.map MLD
+
+        fromHeadings () |> Option.orElseWith fromLinkDefs

@@ -20,7 +20,7 @@ type Comp =
     | DocPath of range: Range * needsClosing: bool
     | DocAnchor of destDoc: option<string> * range: Range * needsClosing: bool
     | WikiTitle of range: Range * needsClosing: bool
-    | WikiHeading of destDoc: option<string> * range: Range
+    | WikiHeading of destDoc: option<string> * range: Range * needsClosing: bool
     | LinkReference of range: Range * needsClosing: bool
 
     override this.ToString() =
@@ -31,8 +31,8 @@ type Comp =
             $"DocAnchor: dest={destDoc}; range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.WikiTitle (range, needsClosing) ->
             $"WikiTitle: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.WikiHeading (destDoc, range) ->
-            $"WikiHeading: dest={destDoc}; range={range.DebuggerDisplay}"
+        | Comp.WikiHeading (destDoc, range, needsClosing) ->
+            $"WikiHeading: dest={destDoc}; range={range.DebuggerDisplay}; needsClosing={needsClosing}"
         | Comp.LinkReference (range, needsClosing) ->
             $"LinkReference: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
 
@@ -60,12 +60,12 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                     Some(Comp.WikiTitle(doc.range, false))
                 else if hd.range.ContainsInclusive(pos) then
                     let destDoc = doc.text
-                    Some(Comp.WikiHeading(Some(destDoc), hd.range))
+                    Some(Comp.WikiHeading(Some(destDoc), hd.range, false))
                 else
                     None
             | None, Some hd ->
                 if hd.range.ContainsInclusive(pos) then
-                    Some(Comp.WikiHeading(None, hd.range))
+                    Some(Comp.WikiHeading(None, hd.range, false))
                 else
                     None
         | ML link ->
@@ -114,8 +114,12 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
     | Some start ->
         match Cursor.backwardChar2 start with
         | Some ('[', '[') ->
-            let rangeStart = (Cursor.pos start).NextChar(1)
-            Some(Comp.WikiTitle(Range.Mk(rangeStart, rangeEnd), true))
+            if Cursor.forwardChar start = Some '#' then
+                let rangeStart = (Cursor.pos start).NextChar(2)
+                Some(Comp.WikiHeading(None, Range.Mk(rangeStart, rangeEnd), true))
+            else
+                let rangeStart = (Cursor.pos start).NextChar(1)
+                Some(Comp.WikiTitle(Range.Mk(rangeStart, rangeEnd), true))
         | _ ->
             if Cursor.char start = '[' then
                 let rangeStart = (Cursor.pos start).NextChar(1)
@@ -228,7 +232,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some title }
 
         Seq.map toCompletionItem matchingTitles |> Array.ofSeq
-    | Comp.WikiHeading (destDocTitle, range) ->
+    | Comp.WikiHeading (destDocTitle, range, needsClosing) ->
         let destDoc =
             match destDocTitle with
             | None -> Some srcDoc
@@ -254,7 +258,9 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
 
             let toCompletionItem hd =
-                let textEdit = { Range = range; NewText = Slug.str hd }
+                let newText = Slug.str hd
+                let newText = if needsClosing then newText + "]]" else newText
+                let textEdit = { Range = range; NewText = newText }
 
                 { CompletionItem.Create(hd) with
                     Detail = None

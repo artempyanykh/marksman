@@ -218,6 +218,8 @@ module Cursor =
     let backward c : option<Cursor> =
         if c.pos > c.span.start then Some { c with pos = c.pos - 1 } else None
 
+    let forwardChar c = forward c |> Option.map char
+
     let forwardChar2 c =
         let char1 = char c
         let char2 = forward c |> Option.map char

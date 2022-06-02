@@ -170,6 +170,12 @@ module Ref =
         | Ref.Heading (doc, _) -> doc
         | Ref.LinkDef (doc, _) -> doc
 
+    let element: Ref -> Element option =
+        function
+        | Ref.Doc d -> Doc.title d |>> H
+        | Ref.Heading (_, h) -> Some(H h)
+        | Ref.LinkDef (_, ld) -> Some(MLD ld)
+
     let range: Ref -> Range =
         function
         | Ref.Doc doc ->

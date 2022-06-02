@@ -91,7 +91,8 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                   ResolveProvider = None
                   AllCommitCharacters = None }
         DefinitionProvider = Some true
-        HoverProvider = Some true }
+        HoverProvider = Some true
+        ReferencesProvider = Some true }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation [] =
     let name = Heading.name h.data
@@ -566,7 +567,7 @@ type MarksmanServer(client: MarksmanClient) =
         let goto =
             monad {
                 let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDoc docUri folder
+                let! srcDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
                 let! uref = URef.ofElement atPos
                 let! ref = Folder.resolveRef uref srcDoc folder
@@ -583,7 +584,7 @@ type MarksmanServer(client: MarksmanClient) =
         let hover =
             monad {
                 let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDoc docUri folder
+                let! srcDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
                 let! uref = URef.ofElement atPos
                 let! ref = Folder.resolveRef uref srcDoc folder
@@ -599,5 +600,74 @@ type MarksmanServer(client: MarksmanClient) =
             }
 
         AsyncLspResult.success hover
+
+
+    override this.TextDocumentReferences(par: ReferenceParams) =
+        let state = requireState ()
+        let docUri = par.TextDocument.Uri |> PathUri.fromString
+
+        let locs =
+            monad' {
+                let! folder = State.tryFindFolderEnclosing docUri state
+                let! srcDoc = Folder.tryFindDocByPath docUri folder
+                let! atPos = Index.declAtPos par.Position srcDoc.index
+
+                // This is very inefficient and should be reworked using reference/reverse-reference map.
+                let referencingEls =
+                    seq {
+                        for KeyValue (_, doc) in folder.docs do
+                            let links = Doc.index >> Index.links <| doc
+
+                            for link in links do
+                                let ref =
+                                    monad' {
+                                        let! uref = URef.ofElement link
+                                        return! Folder.resolveRef uref srcDoc folder
+                                    }
+
+                                match ref with
+                                | Some ref ->
+                                    match ref with
+                                    | Ref.Doc rdoc ->
+                                        if rdoc = srcDoc && Element.isTitle atPos then
+                                            yield doc, link
+                                        else
+                                            ()
+                                    | Ref.Heading (rdoc, heading) ->
+                                        let sameDoc = rdoc = srcDoc
+
+                                        let sameHeading =
+                                            Element.asHeading atPos
+                                            |> Option.map (fun x -> x.data = heading.data)
+                                            |> Option.defaultValue false
+
+                                        if sameDoc && sameHeading then yield doc, link else ()
+                                    | Ref.LinkDef (rdoc, linkDef) ->
+                                        if rdoc = srcDoc then
+                                            let sameHeading =
+                                                Element.asLinkDef atPos
+                                                |> Option.map (fun x -> x.data = linkDef.data)
+                                                |> Option.defaultValue false
+
+                                            if sameHeading then yield doc, link else ()
+                                        else
+                                            ()
+                                | None -> ()
+                    }
+
+                let referencingEls =
+                    if par.Context.IncludeDeclaration then
+                        Seq.append referencingEls [ srcDoc, atPos ]
+                    else
+                        referencingEls
+
+                let toLoc (doc, el) = { Uri = doc.path.DocumentUri; Range = Element.range el }
+
+                referencingEls |> Seq.map toLoc |> Array.ofSeq
+            }
+
+        let locs = Option.map Array.ofSeq locs
+
+        AsyncLspResult.success locs
 
     override this.Dispose() = ()

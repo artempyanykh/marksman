@@ -74,7 +74,7 @@ module State =
 
     let tryFindDocument (uri: PathUri) (state: State) : option<Doc> =
         tryFindFolderEnclosing uri state
-        |> Option.map (Folder.tryFindDoc uri)
+        |> Option.map (Folder.tryFindDocByPath uri)
         |> Option.flatten
 
     let updateFoldersFromLsp

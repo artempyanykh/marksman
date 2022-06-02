@@ -1,7 +1,10 @@
 ﻿module Marksman.Cst
 
 open System
+
 open Ionide.LanguageServerProtocol.Types
+
+open FSharpPlus.Operators
 
 open Marksman.Misc
 
@@ -240,6 +243,10 @@ module Element =
         | ML _ -> true
         | H _
         | MLD _ -> false
+
+    let isTitle el =
+        asHeading el |>> Node.data |>> Heading.isTitle
+        |> Option.defaultValue false
 
 type Cst = array<Element>
 

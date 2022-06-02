@@ -337,7 +337,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
         | None -> [||]
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
-    let doc = Folder.tryFindDoc docUri folder
+    let doc = Folder.tryFindDocByPath docUri folder
 
     match doc with
     | None -> [||]

@@ -225,43 +225,46 @@ module Folder =
 
     let docs (folder: Folder) : seq<Doc> = seq { for doc in folder.docs |> Map.values -> doc }
 
-    let rec private loadDocs (root: PathUri) : seq<Doc> =
-        let di = DirectoryInfo(root.LocalPath)
+    let private loadDocs (root: PathUri) : seq<Doc> =
+        let rec collect (cur: PathUri) =
+            let di = DirectoryInfo(cur.LocalPath)
 
-        try
-            let files = di.GetFiles("*.md")
-            let dirs = di.GetDirectories()
+            try
+                let files = di.GetFiles("*.md")
+                let dirs = di.GetDirectories()
 
-            seq {
-                for file in files do
-                    let pathUri = PathUri.fromString file.FullName
+                seq {
+                    for file in files do
+                        let pathUri = PathUri.fromString file.FullName
 
-                    let document = Doc.load root pathUri
+                        let document = Doc.load root pathUri
 
-                    match document with
-                    | Some document -> yield document
-                    | _ -> ()
+                        match document with
+                        | Some document -> yield document
+                        | _ -> ()
 
-                for dir in dirs do
-                    yield! loadDocs (PathUri.fromString dir.FullName)
-            }
-        with
-        | :? UnauthorizedAccessException as exn ->
-            logger.warn (
-                Log.setMessage "Couldn't read the root folder"
-                >> Log.addContext "root" root
-                >> Log.addException exn
-            )
+                    for dir in dirs do
+                        yield! collect (PathUri.fromString dir.FullName)
+                }
+            with
+            | :? UnauthorizedAccessException as exn ->
+                logger.warn (
+                    Log.setMessage "Couldn't read the folder"
+                    >> Log.addContext "dir" cur
+                    >> Log.addException exn
+                )
 
-            Seq.empty
-        | :? DirectoryNotFoundException as exn ->
-            logger.warn (
-                Log.setMessage "The root folder doesn't exist"
-                >> Log.addContext "root" root
-                >> Log.addException exn
-            )
+                Seq.empty
+            | :? DirectoryNotFoundException as exn ->
+                logger.warn (
+                    Log.setMessage "The folder doesn't exist"
+                    >> Log.addContext "dir" cur
+                    >> Log.addException exn
+                )
 
-            Seq.empty
+                Seq.empty
+
+        collect root
 
     let tryLoad (name: string) (root: PathUri) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
@@ -297,7 +300,11 @@ module Folder =
         folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
     let tryFindDocByUrl (url: string) (folder: Folder) : option<Doc> =
-        let isMatchingDoc (doc: Doc) = doc.RelPath.AbsPathUrlEncode() = url.AbsPathUrlEncode()
+        let urlEncoded = url.AbsPathUrlEncode()
+
+        let isMatchingDoc (doc: Doc) =
+            let docUrl = doc.RelPath.AbsPathUrlEncode()
+            docUrl = urlEncoded
 
         folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 

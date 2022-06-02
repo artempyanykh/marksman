@@ -69,7 +69,7 @@ module WikiOfText =
     let emptyHeading () =
         let text = Text.mkText "[[#"
         let comp = compOfText (Position.Mk(0, 3)) text
-        let expected = Helpers.mkWikiHeadingComp (Range.Mk(0, 3, 0, 3))
+        let expected = Helpers.mkWikiHeadingComp (Range.Mk(0, 3, 1, 0))
         Assert.Equal(Some expected, comp)
 
 module LinkOfText =

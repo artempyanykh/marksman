@@ -609,14 +609,25 @@ type MarksmanServer(client: MarksmanClient) =
         let locs =
             monad' {
                 let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDocByPath docUri folder
-                let! atPos = Index.declAtPos par.Position srcDoc.index
+                let! curDoc = Folder.tryFindDocByPath docUri folder
+
+                let! srcDoc, atPos =
+                    match Index.declAtPos par.Position curDoc.index with
+                    | Some decl -> Some(curDoc, decl)
+                    | None ->
+                        monad' {
+                            let! link = Index.linkAtPos par.Position curDoc.index
+                            let! uref = URef.ofElement link
+                            let! ref = Folder.resolveRef uref curDoc folder
+                            let! el = Ref.element ref
+                            Ref.doc ref, el
+                        }
 
                 // This is very inefficient and should be reworked using reference/reverse-reference map.
                 let referencingEls =
                     seq {
-                        for KeyValue (_, doc) in folder.docs do
-                            let links = Doc.index >> Index.links <| doc
+                        for KeyValue (_, targetDoc) in folder.docs do
+                            let links = Doc.index >> Index.links <| targetDoc
 
                             for link in links do
                                 let ref =
@@ -628,28 +639,28 @@ type MarksmanServer(client: MarksmanClient) =
                                 match ref with
                                 | Some ref ->
                                     match ref with
-                                    | Ref.Doc rdoc ->
-                                        if rdoc = srcDoc && Element.isTitle atPos then
-                                            yield doc, link
+                                    | Ref.Doc referencedDoc ->
+                                        if referencedDoc = srcDoc && Element.isTitle atPos then
+                                            yield targetDoc, link
                                         else
                                             ()
-                                    | Ref.Heading (rdoc, heading) ->
-                                        let sameDoc = rdoc = srcDoc
+                                    | Ref.Heading (referencedDoc, heading) ->
+                                        let sameDoc = referencedDoc = srcDoc
 
                                         let sameHeading =
                                             Element.asHeading atPos
                                             |> Option.map (fun x -> x.data = heading.data)
                                             |> Option.defaultValue false
 
-                                        if sameDoc && sameHeading then yield doc, link else ()
-                                    | Ref.LinkDef (rdoc, linkDef) ->
-                                        if rdoc = srcDoc then
+                                        if sameDoc && sameHeading then yield targetDoc, link else ()
+                                    | Ref.LinkDef (referencedDoc, linkDef) ->
+                                        if referencedDoc = srcDoc then
                                             let sameHeading =
                                                 Element.asLinkDef atPos
                                                 |> Option.map (fun x -> x.data = linkDef.data)
                                                 |> Option.defaultValue false
 
-                                            if sameHeading then yield doc, link else ()
+                                            if sameHeading then yield targetDoc, link else ()
                                         else
                                             ()
                                 | None -> ()

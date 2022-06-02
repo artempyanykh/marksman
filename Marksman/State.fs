@@ -78,8 +78,8 @@ module State =
         |> Option.flatten
 
     let updateFoldersFromLsp
-        (added: WorkspaceFolder [])
-        (removed: WorkspaceFolder [])
+        (added: WorkspaceFolder[])
+        (removed: WorkspaceFolder[])
         (state: State)
         : State =
         logger.trace (

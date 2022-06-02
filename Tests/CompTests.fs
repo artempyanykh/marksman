@@ -132,50 +132,56 @@ module DocPathOfText =
     let emptyEol () =
         let text = Text.mkText "("
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 1, 0))
+        Assert.Equal(None, comp)
+        
+    [<Fact>]
+    let emptyLinkEol () =
+        let text = Text.mkText "]("
+        let comp = compOfText (Position.Mk(0, 2)) text
+        let expected = Helpers.mkDocPathComp (Range.Mk(0, 2, 1, 0))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let emptyNonEol () =
-        let text = Text.mkText "( "
-        let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 1))
+        let text = Text.mkText "]( "
+        let comp = compOfText (Position.Mk(0, 2)) text
+        let expected = Helpers.mkDocPathComp (Range.Mk(0, 2, 0, 2))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let emptyNonEolFurther () =
-        let text = Text.mkText "( "
-        let comp = compOfText (Position.Mk(0, 2)) text
+        let text = Text.mkText "]( "
+        let comp = compOfText (Position.Mk(0, 3)) text
         Assert.Equal(None, comp)
 
     [<Fact>]
     let someEol () =
-        let text = Text.mkText "(t"
-        let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 1, 0))
+        let text = Text.mkText "](t"
+        let comp = compOfText (Position.Mk(0, 2)) text
+        let expected = Helpers.mkDocPathComp (Range.Mk(0, 2, 1, 0))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someWs () =
-        let text = Text.mkText "(t "
-        let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2))
+        let text = Text.mkText "](t "
+        let comp = compOfText (Position.Mk(0, 2)) text
+        let expected = Helpers.mkDocPathComp (Range.Mk(0, 2, 0, 3))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someAndTextAfter () =
-        let text = Text.mkText "(t other"
-        let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2))
+        let text = Text.mkText "](t other"
+        let comp = compOfText (Position.Mk(0, 2)) text
+        let expected = Helpers.mkDocPathComp (Range.Mk(0, 2, 0, 3))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let emptyBrackets () =
-        let text = Text.mkText "()"
-        let comp = compOfText (Position.Mk(0, 1)) text
+        let text = Text.mkText "]()"
+        let comp = compOfText (Position.Mk(0, 2)) text
 
         let expected =
-            Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 1), needsClosing = false)
+            Helpers.mkDocPathComp (Range.Mk(0, 2, 0, 2), needsClosing = false)
 
         Assert.Equal(Some expected, comp)
 
@@ -191,33 +197,33 @@ module DocPathOfText =
 module DocAnchorOfText =
     [<Fact>]
     let test1 () =
-        let text = Text.mkText "(t# other"
-        let comp = compOfText (Position.Mk(0, 1)) text
-
-        let expected =
-            Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2), needsClosing = false)
-
-        Assert.Equal(Some expected, comp)
-
+        let text = Text.mkText "](t# other"
         let comp = compOfText (Position.Mk(0, 2)) text
 
         let expected =
-            Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2), needsClosing = false)
+            Helpers.mkDocPathComp (Range.Mk(0, 2, 0, 3), needsClosing = false)
 
         Assert.Equal(Some expected, comp)
 
         let comp = compOfText (Position.Mk(0, 3)) text
-        let expected = Helpers.mkDocAnchorComp (Range.Mk(0, 3, 0, 3), dest = "t")
+
+        let expected =
+            Helpers.mkDocPathComp (Range.Mk(0, 2, 0, 3), needsClosing = false)
+
+        Assert.Equal(Some expected, comp)
+
+        let comp = compOfText (Position.Mk(0, 4)) text
+        let expected = Helpers.mkDocAnchorComp (Range.Mk(0, 4, 0, 4), dest = "t")
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let test2 () =
-        let text = Text.mkText "(#a other"
-        let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = Helpers.mkDocAnchorComp (Range.Mk(0, 2, 0, 3))
+        let text = Text.mkText "](#a other"
+        let comp = compOfText (Position.Mk(0, 3)) text
+        let expected = Helpers.mkDocAnchorComp (Range.Mk(0, 3, 0, 4))
         Assert.Equal(Some expected, comp)
 
-        let comp = compOfText (Position.Mk(0, 4)) text
+        let comp = compOfText (Position.Mk(0, 5)) text
         Assert.Equal(None, comp)
 
     [<Fact>]
@@ -228,21 +234,21 @@ module DocAnchorOfText =
 
     [<Fact>]
     let test4 () =
-        let text = Text.mkText "(#a)"
-        let comp = compOfText (Position.Mk(0, 3)) text
+        let text = Text.mkText "](#a)"
+        let comp = compOfText (Position.Mk(0, 4)) text
 
         let expected =
-            Helpers.mkDocAnchorComp (Range.Mk(0, 2, 0, 3), needsClosing = false)
+            Helpers.mkDocAnchorComp (Range.Mk(0, 3, 0, 4), needsClosing = false)
 
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let test5 () =
         //                      012345678
-        let text = Text.mkText "(doc.md#"
-        let comp = compOfText (Position.Mk(0, 8)) text
+        let text = Text.mkText "](doc.md#"
+        let comp = compOfText (Position.Mk(0, 9)) text
 
         let expected =
-            Helpers.mkDocAnchorComp (Range.Mk(0, 8, 1, 0), dest = "doc.md")
+            Helpers.mkDocAnchorComp (Range.Mk(0, 9, 1, 0), dest = "doc.md")
 
         Assert.Equal(Some expected, comp)

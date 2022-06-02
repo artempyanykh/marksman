@@ -112,24 +112,22 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
 
     match paraElStart with
     | Some start ->
-        match Cursor.backwardChar2 start with
-        | Some ('[', '[') ->
+        if Cursor.backwardChar2 start = Some('[', '[') then
             if Cursor.forwardChar start = Some '#' then
                 let rangeStart = (Cursor.pos start).NextChar(2)
                 Some(Comp.WikiHeading(None, Range.Mk(rangeStart, rangeEnd), true))
             else
                 let rangeStart = (Cursor.pos start).NextChar(1)
                 Some(Comp.WikiTitle(Range.Mk(rangeStart, rangeEnd), true))
-        | _ ->
-            if Cursor.char start = '[' then
-                let rangeStart = (Cursor.pos start).NextChar(1)
+        else if Cursor.char start = '[' then
+            let rangeStart = (Cursor.pos start).NextChar(1)
 
-                let needsClosing =
-                    paraElEnd |> Option.exists (fun c -> Cursor.char c = ']') |> not
+            let needsClosing =
+                paraElEnd |> Option.exists (fun c -> Cursor.char c = ']') |> not
 
-                Some(Comp.LinkReference(Range.Mk(rangeStart, rangeEnd), needsClosing))
-            else
-                None
+            Some(Comp.LinkReference(Range.Mk(rangeStart, rangeEnd), needsClosing))
+        else
+            None
     | _ -> None
 
 let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
@@ -141,12 +139,14 @@ let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
         | None -> if Line.endsAt pos line then Line.endCursor line else None
 
     let findOpenOrWs =
-        Cursor.tryFindCharMatching Cursor.backward (fun c -> Char.IsWhiteSpace(c) || c = '(')
+        Cursor.tryFindCharMatching Cursor.backward (fun c ->
+            Char.IsWhiteSpace(c) || c = '(' || c = '[')
 
     let paraElStart = scanCursor |> Option.bind findOpenOrWs
 
     let findCloseOrWs =
-        Cursor.tryFindCharMatching Cursor.forward (fun c -> Char.IsWhiteSpace(c) || c = ')')
+        Cursor.tryFindCharMatching Cursor.forward (fun c ->
+            Char.IsWhiteSpace(c) || c = ')' || c = ']')
 
     let paraElEnd = scanCursor |> Option.bind findCloseOrWs
 
@@ -157,7 +157,7 @@ let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
 
     match paraElStart with
     | Some start ->
-        if Cursor.char start = '(' then
+        if Cursor.backwardChar2 start = Some(']', '(') then
             let rangeStart = (Cursor.pos start).NextChar(1)
             let range = Range.Mk(rangeStart, rangeEnd)
             let input = line.text.Substring(range)

@@ -202,7 +202,7 @@ type Span =
 type Cursor =
     { span: Span
       pos: int }
-    override this.ToString() = $">{this.pos} @ {this.span}"
+    override this.ToString() = $"{this.span.text.content[this.pos]} @ {this.pos} : {this.span}"
 
 module Cursor =
     let char c = c.span.text.content[c.pos]
@@ -228,7 +228,7 @@ module Cursor =
     let backwardChar2 c =
         let char1 = char c
         let char2 = backward c |> Option.map char
-        char2 |> Option.map (fun x -> char1, x)
+        char2 |> Option.map (fun x -> x, char1)
 
     let forwardCharN n c =
         let rec loop acc n cursor : option<list<char>> =

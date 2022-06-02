@@ -91,8 +91,8 @@ module Doc =
             let text = mkText content
 
             Some(mk path root None text)
-        with
-        | :? FileNotFoundException -> None
+        with :? FileNotFoundException ->
+            None
 
     let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
 

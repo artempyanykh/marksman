@@ -94,7 +94,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         HoverProvider = Some true
         ReferencesProvider = Some true }
 
-let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation [] =
+let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
     let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
@@ -170,7 +170,7 @@ type DiagAgent(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "BackgroundAgent"
 
     let agent: MailboxProcessor<DiagMessage> =
-        MailboxProcessor.Start (fun inbox ->
+        MailboxProcessor.Start(fun inbox ->
             let mutable shouldStart = false
             let mutable shouldStop = false
 
@@ -226,7 +226,7 @@ type StatusAgent(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "StatusAgent"
 
     let agent =
-        MailboxProcessor.Start (fun inbox ->
+        MailboxProcessor.Start(fun inbox ->
             let rec loop cnt =
                 async {
                     let! msg = inbox.Receive()

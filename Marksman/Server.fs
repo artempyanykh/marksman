@@ -518,15 +518,19 @@ type MarksmanServer(client: MarksmanClient) =
         let docUri = par.TextDocument.Uri |> PathUri.fromString
 
         let getSymbols (doc: Doc) =
-            let headings = Index.headings doc.index
 
             if (State.client state).SupportsHierarchy then
-                headings
+                let topLevelHeadings =
+                    doc.cst |> Seq.collect (Element.asHeading >> Option.toList)
+
+                topLevelHeadings
                 |> Seq.map (headingToDocumentSymbol (State.client state).IsEmacs)
                 |> Array.ofSeq
                 |> Second
             else
-                headings
+                let allHeadings = Index.headings doc.index
+
+                allHeadings
                 |> Seq.collect (headingToSymbolInfo docUri)
                 |> Array.ofSeq
                 |> First

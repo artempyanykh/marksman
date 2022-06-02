@@ -11,6 +11,10 @@ let mkLinkRefComp range = Comp.Comp.LinkReference(range, true)
 let mkLinkRefCompClosed range = Comp.Comp.LinkReference(range, false)
 
 type Helpers =
+    static member mkWikiHeadingComp(range: Range, ?destDoc: string, ?needsClosing: bool) =
+        let needsClosing = defaultArg needsClosing true
+        Comp.Comp.WikiHeading(destDoc, range, needsClosing)
+
     static member mkDocPathComp(range: Range, ?needsClosing: bool) =
         let needsClosing = defaultArg needsClosing true
         Comp.Comp.DocPath(range, needsClosing)
@@ -59,6 +63,13 @@ module WikiOfText =
         let text = Text.mkText "[[t other"
         let comp = compOfText (Position.Mk(0, 2)) text
         let expected = mkTitleComp (Range.Mk(0, 2, 0, 3))
+        Assert.Equal(Some expected, comp)
+
+    [<Fact>]
+    let emptyHeading () =
+        let text = Text.mkText "[[#"
+        let comp = compOfText (Position.Mk(0, 3)) text
+        let expected = Helpers.mkWikiHeadingComp (Range.Mk(0, 3, 0, 3))
         Assert.Equal(Some expected, comp)
 
 module LinkOfText =
@@ -182,11 +193,17 @@ module DocAnchorOfText =
     let test1 () =
         let text = Text.mkText "(t# other"
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2), needsClosing = false)
+
+        let expected =
+            Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2), needsClosing = false)
+
         Assert.Equal(Some expected, comp)
 
         let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2), needsClosing = false)
+
+        let expected =
+            Helpers.mkDocPathComp (Range.Mk(0, 1, 0, 2), needsClosing = false)
+
         Assert.Equal(Some expected, comp)
 
         let comp = compOfText (Position.Mk(0, 3)) text
@@ -218,7 +235,7 @@ module DocAnchorOfText =
             Helpers.mkDocAnchorComp (Range.Mk(0, 2, 0, 3), needsClosing = false)
 
         Assert.Equal(Some expected, comp)
-        
+
     [<Fact>]
     let test5 () =
         //                      012345678
@@ -226,6 +243,6 @@ module DocAnchorOfText =
         let comp = compOfText (Position.Mk(0, 8)) text
 
         let expected =
-            Helpers.mkDocAnchorComp (Range.Mk(0, 8, 1, 0), dest="doc.md")
+            Helpers.mkDocAnchorComp (Range.Mk(0, 8, 1, 0), dest = "doc.md")
 
         Assert.Equal(Some expected, comp)

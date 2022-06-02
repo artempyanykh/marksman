@@ -67,6 +67,10 @@ module Index =
 
     let linkDefs index = index.linkDefs
 
+    let tryFindLinkDef label index =
+        index.linkDefs
+        |> Array.tryFind (fun { data = ld } -> ld.label.text = label)
+
     let headingsBySlug index = index.headingsBySlug
 
     let headings index = index.headingsBySlug |> Map.values |> Seq.concat

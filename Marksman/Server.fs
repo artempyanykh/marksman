@@ -568,52 +568,9 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDoc docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
-
-                match atPos with
-                | WL { data = wl } ->
-                    logger.trace (
-                        Log.setMessage "Searching definition of a wiki-link"
-                        >> Log.addContext "wiki" (WikiLink.fmt wl)
-                    )
-
-                    let! linkTarget = Folder.tryFindWikiLinkTarget srcDoc wl folder
-
-                    let destRange = LinkTarget.range linkTarget
-                    let destDoc = LinkTarget.doc linkTarget
-
-                    let location =
-                        GotoResult.Single { Uri = destDoc.path.DocumentUri; Range = destRange }
-
-                    location
-                | ML { data = MdLink.IL (_, url, _) as link } ->
-                    logger.trace (
-                        Log.setMessage "Searching definition of an inline link"
-                        >> Log.addContext "link" (MdLink.fmt link)
-                    )
-
-                    let! docUrl = url |> Option.map DocUrl.ofUrlNode
-
-                    let! linkTarget = Folder.tryFindInlineLinkTarget docUrl srcDoc folder
-                    let targetUri = (LinkTarget.doc linkTarget).path.DocumentUri
-                    let targetRange = LinkTarget.range linkTarget
-
-                    let location = GotoResult.Single { Uri = targetUri; Range = targetRange }
-
-                    location
-                | ML { data = link } ->
-                    logger.trace (
-                        Log.setMessage "Searching definition of a link reference"
-                        >> Log.addContext "ref" (MdLink.fmt link)
-                    )
-
-                    let! label = MdLink.referenceLabel link
-                    let! def = Doc.linkDefByLabel label.text srcDoc
-
-                    let location =
-                        GotoResult.Single { Uri = srcDoc.path.DocumentUri; Range = def.range }
-
-                    location
-                | _ -> return! None
+                let! uref = URef.ofElement atPos
+                let! ref = Folder.resolveRef uref srcDoc folder
+                GotoResult.Single { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
             }
 
         AsyncLspResult.success goto
@@ -628,23 +585,13 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDoc docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
+                let! uref = URef.ofElement atPos
+                let! ref = Folder.resolveRef uref srcDoc folder
 
-                let! linkTarget =
-                    match atPos with
-                    | WL wl -> Folder.tryFindWikiLinkTarget srcDoc wl.data folder
-                    | ML { data = MdLink.IL (_, url, _) } ->
-                        url
-                        |> Option.map DocUrl.ofUrlNode
-                        |> Option.bind (fun docUrl ->
-                            Folder.tryFindInlineLinkTarget docUrl srcDoc folder)
-                    | _ -> None
-
-                let destScope = LinkTarget.scope linkTarget
+                let destScope = Ref.scope ref
 
                 let content =
-                    (LinkTarget.doc linkTarget).text.Substring destScope
-                    |> markdown
-                    |> MarkupContent
+                    (Ref.doc ref).text.Substring destScope |> markdown |> MarkupContent
 
                 let hover = { Contents = content; Range = None }
 

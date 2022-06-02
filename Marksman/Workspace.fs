@@ -13,6 +13,8 @@ open Marksman.Misc
 open Marksman.Cst
 open Marksman.Index
 
+open Microsoft.FSharp.Core
+
 type Doc =
     { path: PathUri
       rootPath: PathUri
@@ -116,6 +118,72 @@ module Doc =
 
     let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.index
 
+[<RequireQualifiedAccess>]
+type DocRef =
+    | Title of title: TextNode
+    | Url of url: TextNode
+
+/// Unresolved reference.
+[<RequireQualifiedAccess>]
+type URef =
+    | Doc of DocRef
+    | Heading of doc: option<DocRef> * heading: TextNode
+    | LinkDef of TextNode
+
+module URef =
+    let ofElement (el: Element) : option<URef> =
+        match el with
+        | WL wl ->
+            match wl.data.doc, wl.data.heading with
+            | Some doc, Some heading -> URef.Heading(Some(DocRef.Title doc), heading) |> Some
+            | Some doc, None -> URef.Doc(DocRef.Title doc) |> Some
+            | None, Some heading -> URef.Heading(None, heading) |> Some
+            | None, None -> None
+        | ML ml ->
+            match ml.data with
+            | MdLink.IL (_, Some url, _) ->
+                let docUrl = DocUrl.ofUrlNode url
+
+                match docUrl.url, docUrl.anchor with
+                | Some url, Some anchor -> URef.Heading(Some(DocRef.Url url), anchor) |> Some
+                | Some url, None -> URef.Doc(DocRef.Url url) |> Some
+                | None, Some anchor -> URef.Heading(None, anchor) |> Some
+                | None, None -> None
+            | MdLink.IL (_, None, _) -> None
+            | MdLink.RS label
+            | MdLink.RC label
+            | MdLink.RF (_, label) -> Some(URef.LinkDef label)
+        | H _
+        | MLD _ -> None
+
+/// Resolved reference.
+[<RequireQualifiedAccess>]
+type Ref =
+    | Doc of Doc
+    | Heading of Doc * Node<Heading>
+    | LinkDef of Doc * Node<MdLinkDef>
+
+module Ref =
+    let doc: Ref -> Doc =
+        function
+        | Ref.Doc doc -> doc
+        | Ref.Heading (doc, _) -> doc
+        | Ref.LinkDef (doc, _) -> doc
+
+    let range: Ref -> Range =
+        function
+        | Ref.Doc doc ->
+            Doc.title doc
+            |> Option.map Node.range
+            |> Option.defaultWith doc.text.FullRange
+        | Ref.Heading (_, heading) -> heading.range
+        | Ref.LinkDef (_, linkDef) -> linkDef.range
+
+    let scope: Ref -> Range =
+        function
+        | Ref.Doc doc -> doc.text.FullRange()
+        | Ref.Heading (_, heading) -> heading.data.scope
+        | Ref.LinkDef (_, linkDef) -> linkDef.range
 
 [<RequireQualifiedAccess>]
 type LinkTarget =
@@ -218,66 +286,38 @@ module Folder =
 
 
     let tryFindDocBySlug (slug: Slug) (folder: Folder) : option<Doc> =
-        let matchingDoc doc = Doc.slug doc = slug
+        let isMatchingDoc doc = Doc.slug doc = slug
 
-        folder.docs |> Map.values |> Seq.tryFind matchingDoc
+        folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
-    let tryFindWikiLinkTarget
-        (sourceDoc: Doc)
-        (wl: WikiLink)
-        (folder: Folder)
-        : option<LinkTarget> =
-        // Discover target doc.
-        let destDocName = WikiLink.destDoc wl
+    let tryFindDocByUrl (url: string) (folder: Folder) : option<Doc> =
+        let isMatchingDoc (doc: Doc) = doc.RelPath.AbsPathUrlEncode() = url.AbsPathUrlEncode()
 
-        let destDoc =
-            match destDocName with
-            | None -> Some sourceDoc
-            | Some destDocName -> tryFindDocBySlug (Slug.ofString destDocName) folder
+        folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
-        match destDoc with
-        | None -> None
-        | Some destDoc ->
-            // Discover target heading.
-            // When target heading is specified but can't be found, the whole thing turns into None.
-            match WikiLink.destHeading wl with
-            | None ->
-                match Doc.title destDoc with
-                | Some title -> LinkTarget.Heading(destDoc, title) |> Some
-                | None -> LinkTarget.Doc(destDoc) |> Some
-            | Some headingName ->
-                match Doc.headingBySlug (Slug.ofString headingName) destDoc with
-                | Some heading -> LinkTarget.Heading(destDoc, heading) |> Some
-                | _ -> None
-
-    let tryFindInlineLinkTarget
-        (docUrl: DocUrl)
-        (srcDoc: Doc)
-        (folder: Folder)
-        : option<LinkTarget> =
-        let targetDocUrl =
-            docUrl.url
-            |> Option.map Node.text
-            |> Option.defaultWith (fun () -> srcDoc.RelPath.AbsPathUrlEncode())
-
-        let isMatchingDoc (doc: Doc) = doc.RelPath.AbsPathUrlEncode() = targetDocUrl
-
-        let matchingDoc = folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
-
-        let tryMatch (doc: Doc) =
-            if doc.RelPath.AbsPathUrlEncode() = targetDocUrl then
-                match docUrl.anchor with
-                | Some anchor ->
-                    match Doc.headingBySlug (Slug.ofString anchor.text) doc with
-                    | Some h -> LinkTarget.Heading(doc, h) |> Some
-                    | None -> None
-                | None -> LinkTarget.Doc doc |> Some
-            else
-                None
-
-        matchingDoc >>= tryMatch
+    let tryFindDocByRef (docRef: DocRef) (folder: Folder) : option<Doc> =
+        match docRef with
+        | DocRef.Title title -> tryFindDocBySlug (Slug.ofString title.text) folder
+        | DocRef.Url url -> tryFindDocByUrl url.text folder
 
     let docCount (folder: Folder) : int = folder.docs.Values.Count
+
+    let resolveRef (uref: URef) (srcDoc: Doc) (folder: Folder) : option<Ref> =
+        match uref with
+        | URef.LinkDef label ->
+            let ld = srcDoc.index |> Index.tryFindLinkDef label.text
+            ld |>> fun x -> Ref.LinkDef(srcDoc, x)
+        | URef.Doc docRef ->
+            let doc = tryFindDocByRef docRef folder
+            doc |>> Ref.Doc
+        | URef.Heading (docRef, heading) ->
+            let doc =
+                docRef >>= (flip tryFindDocByRef) folder |> Option.defaultValue srcDoc
+
+            let heading =
+                doc.index |> Index.tryFindHeadingBySlug (Slug.ofString heading.text)
+
+            heading |>> fun h -> Ref.Heading(doc, h)
 
 type Workspace = { folders: Map<PathUri, Folder> }
 

@@ -11,29 +11,33 @@ Marksman is a _work-in-progress_. For my day-to-day note taking it works fine bu
 
 ---
 
-Marksman is an LSP server for Markdown that provides completion, goto definition, diagnostics,
-etc. In addition to regular Markdown features it also supports **wiki-link**-style references that
-enable [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about
-Marksman's features below.
+Marksman is an LSP server for Markdown that provides **completion**, goto **definition** and **references**,
+**diagnostics**, etc.
 
-In terms of **regular Markdown** features you get:
-1. Document symbols based on headings.
-2. Completion, goto definition, and hover preview for inline links e.g. `[text](/file.md#heading-slug)`.
-3. Completion, and goto definition for reference links e.g.
+In addition to regular Markdown features it also supports **wiki-link**-style references that enable
+[Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about Marksman's features below.
+
+Marksman provides assistance with:
+* Markdown inline links:
+   ```md
+   This is [inline link](/some-file.md#some-heading).
+   This is an internal [anchor link](#heading).
+   ```
+* Markdown reference links:
    ```md
    See [reference].
 
    [reference]: /url "Title"
    ```
+* Wiki-links:
+   ```md
+   Link to [[another-note]].
+   Link to [[another-notes#heading]].
+   Internal link to [[#a-heading]].
+   ```
 
-For **Zettelkasten**-style note-taking you can use.
-
-1. Cross-reference notes using _reference_ links in a _wiki-link_ format:
-    - `[[another-note]]` - a reference to another note.
-    - `[[another-note#section]]` - a reference to a section of a note.
-    - `[[#inner-subsection]]` - a reference to a section of the current note.
-2. **Go To Definition**, **Hover** preview, and **Diagnostics** to simplify navigating and
-   maintaining notes.
+All types of links support completion, hover, goto definition/references. Additionally, Marksman provides diagnostics
+for wiki-links to detect broken references and duplicate/ambiguous heafings.
 
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
@@ -64,39 +68,61 @@ For **Zettelkasten**-style note-taking you can use.
 
 ## Screenshots
 
-**TODO**: _This section is outdated. Update with the new screenshots._
+Below is a mix of VSCode, Neovim, and Emacs screenshots. Although, not all features demonstrated for each editor,
+generally most features should work equaly in all editors.
 
-- Hover preview:
-  ![Hover](assets/readme/hover.png)
-- Completion (note):
-  ![Completion for note](assets/readme/completion-note.png)
-- Completion (heading):
-  ![Completion for heading](assets/readme/completion-heading.png)
-- "Show References" Code Lens:
-  ![Show references code lens](assets/readme/code-lens-show-refs.png)
-- Project-wide diagnostics for broken references:
-  ![Diagnostics](assets/readme/diagnostics.png)
+- **Document symbols**:
+  * Emacs:
+    ![Symbols Emacs](assets/readme/emacs-doc-symbols.png)
+- **Hover preview**:
+  * VSCode, wiki link:
+    ![Hover-VSCode-Wiki](assets/readme/vsc-wiki-hover.png)
+  * Neovim, wiki link:
+    ![Hover-VSCode-Wiki](assets/readme/nvim-wiki-hover.png)
+  * Neovim, reference link:
+    ![Hover-VSCode-Ref](assets/readme/nvim-ref-hover.png)
+- **Completion**:
+  * VSCode, wiki link:
+    ![Completion-VSCode-Wiki](assets/readme/vsc-wiki-compl.png)
+  * VSCode, wiki link heading:
+    ![Completion-VSCode-Wiki-Heading](assets/readme/vsc-wiki-heading-compl.png)
+  * VSCode, reference link:
+    ![Completion-VSCode-Ref](assets/readme/vsc-ref-compl.png)
+  * Neovim, inline link:
+    ![Completion-Neovim-Inline](assets/readme/nvim-inline-link-compl.png)
+  * Neovim, inline anchor link:
+    ![Completion-Neovim-Inline-Heading](assets/readme/nvim-inline-link-heading-compl.png)
+  * Neovim, wiki link heading:
+    ![Completion-Neovim-Wiki-Heading](assets/readme/nvim-wiki-heading-compl.png)
+- **Find references**:
+  * VSCode:
+    ![Show references VSCode](assets/readme/vsc-find-references.png)
+  * Neovim:
+    ![Show references Neovim](assets/readme/nvim-find-references.png)
+- **Project-wide diagnostics**:
+  * VSCode:
+    ![Diagnostics VSCode](assets/readme/vsc-diag.png)
+  * Neovim:
+    ![Diagnostics VSCode](assets/readme/nvim-diag.png)
 
 ## Features and plans
 
 ✅ - done; 🗓 - planned.
 
-- ✅ Completion for references.
-- ✅ Go to Definition for references.
-- ✅ Hover prevew for references.
-- ✅ Diagnostics about broken references.
-- 🗓 Code Lens with "# references" on headings.
-- ✅ Add support for _regular_ links (diagnostics, completion, goto).
-- ✅ Support references in titles.
+- ✅ Completion for links (inline, reference, wiki).
+- ✅ Hover prevew for links.
+- ✅ "Go to definition" for links.
+- ✅ "Find references" for headings and links.
+- ✅ Diagnostics for wiki-links.
 - ✅ Support multi-folder workspaces.
 - ✅ Custom parser for more fine-grained note structure.
+- 🗓 Code Lens with "# references" on headings.
 - 🗓 Rename refactor.
-- ✅ Support heading slugs.
+- 🗓 Add support for images (diagnostics, completion, goto).
 - 🗓 Add "check" command for standalone workspace checking.
 - 🗓 Add "build" command that rewrites all cross-references into proper
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.
-- 🗓 Add support for images (diagnostics, completion, goto).
 - 🗓 Support for Jupyter notebooks.
 
 ## Where's `zeta-note` and where's Rust?

@@ -1,4 +1,4 @@
-﻿module Marksman.Comp
+﻿module Marksman.Compl
 
 open System
 
@@ -13,10 +13,10 @@ open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Text
 
-let private logger = LogProvider.getLoggerByName "Comp"
+let private logger = LogProvider.getLoggerByName "Compl"
 
 [<RequireQualifiedAccess>]
-type Comp =
+type Compl =
     | DocPath of range: Range * needsClosing: bool
     | DocAnchor of destDoc: option<string> * range: Range * needsClosing: bool
     | WikiTitle of range: Range * needsClosing: bool
@@ -25,18 +25,18 @@ type Comp =
 
     override this.ToString() =
         match this with
-        | Comp.DocPath (range, needsClosing) ->
+        | Compl.DocPath (range, needsClosing) ->
             $"DocPath: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.DocAnchor (destDoc, range, needsClosing) ->
+        | Compl.DocAnchor (destDoc, range, needsClosing) ->
             $"DocAnchor: dest={destDoc}; range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.WikiTitle (range, needsClosing) ->
+        | Compl.WikiTitle (range, needsClosing) ->
             $"WikiTitle: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.WikiHeading (destDoc, range, needsClosing) ->
+        | Compl.WikiHeading (destDoc, range, needsClosing) ->
             $"WikiHeading: dest={destDoc}; range={range.DebuggerDisplay}; needsClosing={needsClosing}"
-        | Comp.LinkReference (range, needsClosing) ->
+        | Compl.LinkReference (range, needsClosing) ->
             $"LinkReference: range={range.DebuggerDisplay}; needsClosing={needsClosing}"
 
-let compOfElement (pos: Position) (el: Element) : option<Comp> =
+let compOfElement (pos: Position) (el: Element) : option<Compl> =
     let elementRange = Element.range el
 
     if not (elementRange.ContainsInclusive(pos)) then
@@ -49,44 +49,44 @@ let compOfElement (pos: Position) (el: Element) : option<Comp> =
                 let range =
                     Range.Mk(elementRange.Start.NextChar(2), elementRange.End.PrevChar(2))
 
-                Some(Comp.WikiTitle(range, false))
+                Some(Compl.WikiTitle(range, false))
             | Some doc, None ->
                 if doc.range.ContainsInclusive(pos) then
-                    Some(Comp.WikiTitle(doc.range, false))
+                    Some(Compl.WikiTitle(doc.range, false))
                 else
                     None
             | Some doc, Some hd ->
                 if doc.range.ContainsInclusive(pos) then
-                    Some(Comp.WikiTitle(doc.range, false))
+                    Some(Compl.WikiTitle(doc.range, false))
                 else if hd.range.ContainsInclusive(pos) then
                     let destDoc = doc.text
-                    Some(Comp.WikiHeading(Some(destDoc), hd.range, false))
+                    Some(Compl.WikiHeading(Some(destDoc), hd.range, false))
                 else
                     None
             | None, Some hd ->
                 if hd.range.ContainsInclusive(pos) then
-                    Some(Comp.WikiHeading(None, hd.range, false))
+                    Some(Compl.WikiHeading(None, hd.range, false))
                 else
                     None
         | ML link ->
             match link.data with
             | MdLink.RF (_, label)
             | MdLink.RS label
-            | MdLink.RC label -> Some(Comp.LinkReference(label.range, false))
+            | MdLink.RC label -> Some(Compl.LinkReference(label.range, false))
             | MdLink.IL (_, Some url, _) ->
                 let docUrl = DocUrl.ofUrlNode url
 
                 match docUrl.url, docUrl.anchor with
                 | Some url, _ when url.range.ContainsInclusive pos ->
-                    Some(Comp.DocPath(url.range, false))
+                    Some(Compl.DocPath(url.range, false))
                 | docUrl, Some anchor when anchor.range.ContainsInclusive pos ->
                     let destDoc = docUrl |> Option.map Node.text
-                    Some(Comp.DocAnchor(destDoc, anchor.range, false))
+                    Some(Compl.DocAnchor(destDoc, anchor.range, false))
                 | _ -> None
             | _ -> None
         | _ -> None
 
-let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
+let matchBracketParaElement (pos: Position) (line: Line) : option<Compl> =
     let lineRange = Line.range line
 
     let scanCursor =
@@ -115,22 +115,22 @@ let matchBracketParaElement (pos: Position) (line: Line) : option<Comp> =
         if Cursor.backwardChar2 start = Some('[', '[') then
             if Cursor.forwardChar start = Some '#' then
                 let rangeStart = (Cursor.pos start).NextChar(2)
-                Some(Comp.WikiHeading(None, Range.Mk(rangeStart, rangeEnd), true))
+                Some(Compl.WikiHeading(None, Range.Mk(rangeStart, rangeEnd), true))
             else
                 let rangeStart = (Cursor.pos start).NextChar(1)
-                Some(Comp.WikiTitle(Range.Mk(rangeStart, rangeEnd), true))
+                Some(Compl.WikiTitle(Range.Mk(rangeStart, rangeEnd), true))
         else if Cursor.char start = '[' then
             let rangeStart = (Cursor.pos start).NextChar(1)
 
             let needsClosing =
                 paraElEnd |> Option.exists (fun c -> Cursor.char c = ']') |> not
 
-            Some(Comp.LinkReference(Range.Mk(rangeStart, rangeEnd), needsClosing))
+            Some(Compl.LinkReference(Range.Mk(rangeStart, rangeEnd), needsClosing))
         else
             None
     | _ -> None
 
-let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
+let matchParenParaElement (pos: Position) (line: Line) : option<Compl> =
     let lineRange = Line.range line
 
     let scanCursor =
@@ -168,17 +168,17 @@ let matchParenParaElement (pos: Position) (line: Line) : option<Comp> =
 
             match docUrl.url, docUrl.anchor with
             | Some url, anchor when url.range.ContainsInclusive pos ->
-                Some(Comp.DocPath(url.range, Option.isNone anchor && needsClosing))
+                Some(Compl.DocPath(url.range, Option.isNone anchor && needsClosing))
             | docUrl, Some anchor when anchor.range.ContainsInclusive pos ->
                 let destDoc = docUrl |> Option.map Node.text
-                Some(Comp.DocAnchor(destDoc, anchor.range, needsClosing))
+                Some(Compl.DocAnchor(destDoc, anchor.range, needsClosing))
             | _ -> None
 
         else
             None
     | _ -> None
 
-let compOfText (pos: Position) (text: Text) : option<Comp> =
+let compOfText (pos: Position) (text: Text) : option<Compl> =
     monad {
         let! line = Line.ofPos text pos
 
@@ -189,7 +189,7 @@ let compOfText (pos: Position) (text: Text) : option<Comp> =
         comp
     }
 
-let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
+let findCompAtPoint (pos: Position) (doc: Doc) : option<Compl> =
     let elComp =
         doc
         |> Doc.index
@@ -202,9 +202,9 @@ let findCompAtPoint (pos: Position) (doc: Doc) : option<Comp> =
     | Some _ -> elComp
     | None -> compOfText pos doc.text
 
-let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<CompletionItem> =
+let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<CompletionItem> =
     match comp with
-    | Comp.WikiTitle (range, needsClosing) ->
+    | Compl.WikiTitle (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
         let inputSlug = Slug.ofString input
 
@@ -232,7 +232,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some title }
 
         Seq.map toCompletionItem matchingTitles |> Array.ofSeq
-    | Comp.WikiHeading (destDocTitle, range, needsClosing) ->
+    | Compl.WikiHeading (destDocTitle, range, needsClosing) ->
         let destDoc =
             match destDocTitle with
             | None -> Some srcDoc
@@ -268,7 +268,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                     FilterText = Some hd }
 
             matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
-    | Comp.LinkReference (range, needsClosing) ->
+    | Compl.LinkReference (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
 
         let matchingDefs =
@@ -290,7 +290,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some def.label.text }
 
         matchingDefs |> Seq.map toCompletionItem |> Array.ofSeq
-    | Comp.DocPath (range, needsClosing) ->
+    | Compl.DocPath (range, needsClosing) ->
         let input = srcDoc.text.Substring(range)
 
         let isMatching (doc: Doc) =
@@ -310,7 +310,7 @@ let findCandidatesInDoc (comp: Comp) (srcDoc: Doc) (folder: Folder) : array<Comp
                 FilterText = Some doc.RelPath }
 
         matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
-    | Comp.DocAnchor (destDocUrl, range, needsClosing) ->
+    | Compl.DocAnchor (destDocUrl, range, needsClosing) ->
         let destDoc =
             match destDocUrl with
             | Some url ->

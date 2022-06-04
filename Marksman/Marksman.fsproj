@@ -13,7 +13,7 @@
         <Compile Include="Parser.fs" />
         <Compile Include="Index.fs" />
         <Compile Include="Workspace.fs" />
-        <Compile Include="Comp.fs" />
+        <Compile Include="Compl.fs" />
         <Compile Include="Diag.fs" />
         <Compile Include="State.fs" />
         <Compile Include="Server.fs" />

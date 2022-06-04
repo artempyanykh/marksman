@@ -1,27 +1,27 @@
-module Marksman.CompTests
+module Marksman.ComplTests
 
 open Ionide.LanguageServerProtocol.Types
 open Xunit
 
-open Marksman.Comp
+open Marksman.Compl
 open Marksman.Misc
 
-let mkTitleComp range = Comp.Comp.WikiTitle(range, true)
-let mkLinkRefComp range = Comp.Comp.LinkReference(range, true)
-let mkLinkRefCompClosed range = Comp.Comp.LinkReference(range, false)
+let mkTitleComp range = Compl.Compl.WikiTitle(range, true)
+let mkLinkRefComp range = Compl.Compl.LinkReference(range, true)
+let mkLinkRefCompClosed range = Compl.Compl.LinkReference(range, false)
 
 type Helpers =
     static member mkWikiHeadingComp(range: Range, ?destDoc: string, ?needsClosing: bool) =
         let needsClosing = defaultArg needsClosing true
-        Comp.Comp.WikiHeading(destDoc, range, needsClosing)
+        Compl.Compl.WikiHeading(destDoc, range, needsClosing)
 
     static member mkDocPathComp(range: Range, ?needsClosing: bool) =
         let needsClosing = defaultArg needsClosing true
-        Comp.Comp.DocPath(range, needsClosing)
+        Compl.Compl.DocPath(range, needsClosing)
 
     static member mkDocAnchorComp(range: Range, ?dest: string, ?needsClosing: bool) =
         let needsClosing = defaultArg needsClosing true
-        Comp.Comp.DocAnchor(dest, range, needsClosing)
+        Compl.Compl.DocAnchor(dest, range, needsClosing)
 
 module WikiOfText =
     [<Fact>]

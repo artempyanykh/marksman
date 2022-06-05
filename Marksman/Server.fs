@@ -92,7 +92,12 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                   AllCommitCharacters = None }
         DefinitionProvider = Some true
         HoverProvider = Some true
-        ReferencesProvider = Some true }
+        ReferencesProvider = Some true
+        SemanticTokensProvider =
+            Some
+                { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
+                  Range = true |> U2.First |> Some
+                  Full = { Delta = Some false } |> U2.Second |> Some } }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
     let name = Heading.name h.data
@@ -680,5 +685,34 @@ type MarksmanServer(client: MarksmanClient) =
         let locs = Option.map Array.ofSeq locs
 
         AsyncLspResult.success locs
+
+    override this.TextDocumentSemanticTokensFull(par: SemanticTokensParams) =
+        let state = requireState ()
+        let docPath = par.TextDocument.Uri |> PathUri.fromString
+
+        let tokens =
+            monad' {
+                let! folder = State.tryFindFolderEnclosing docPath state
+                let! doc = Folder.tryFindDocByPath docPath folder
+                let data = Semato.Token.ofIndexEncoded (Doc.index doc)
+                { ResultId = None; Data = data }
+            }
+
+        AsyncLspResult.success tokens
+
+    override this.TextDocumentSemanticTokensRange(par: SemanticTokensRangeParams) =
+        let state = requireState ()
+        let docPath = par.TextDocument.Uri |> PathUri.fromString
+        let range = par.Range
+
+        let tokens =
+            monad' {
+                let! folder = State.tryFindFolderEnclosing docPath state
+                let! doc = Folder.tryFindDocByPath docPath folder
+                let data = Semato.Token.ofIndexEncodedInRange (Doc.index doc) range
+                { ResultId = None; Data = data }
+            }
+
+        AsyncLspResult.success tokens
 
     override this.Dispose() = ()

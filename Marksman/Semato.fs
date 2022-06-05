@@ -1,0 +1,100 @@
+/// SEMAntic TOkens
+module Marksman.Semato
+
+open Ionide.LanguageServerProtocol.Types
+
+open Marksman.Cst
+open Marksman.Index
+
+[<Struct>]
+type TokenType =
+    /// Wiki Link
+    | WL
+    /// Reference Link
+    | RL
+
+module TokenType =
+    let toLspName =
+        function
+        | WL -> "property"
+        | RL -> "variable"
+
+    let toNum =
+        function
+        | WL -> 0u
+        | RL -> 1u
+
+    let mapping = [| WL; RL |] |> Array.map toLspName
+
+type Token = { range: Range; typ: TokenType }
+
+module Token =
+    [<Literal>]
+    let private modifiers = 0u
+
+    let private isSingleLine t = t.range.Start.Line = t.range.End.Line
+    let private lenSingleLine t = t.range.End.Character - t.range.Start.Character
+
+    let private deltaEncode prev t =
+        assert (isSingleLine t)
+
+        match prev with
+        | None ->
+            [| uint32 t.range.Start.Line
+               uint32 t.range.Start.Character
+               uint32 (lenSingleLine t)
+               TokenType.toNum t.typ
+               modifiers |]
+        | Some prev ->
+            let deltaLine = t.range.Start.Line - prev.range.Start.Line
+            assert (deltaLine >= 0)
+
+            let deltaChar =
+                if deltaLine = 0 then
+                    t.range.Start.Character - prev.range.Start.Character
+                else
+                    t.range.Start.Character
+
+            assert (deltaChar > 0)
+
+            [| uint32 deltaLine
+               uint32 deltaChar
+               uint32 (lenSingleLine t)
+               TokenType.toNum t.typ
+               modifiers |]
+
+    let encodeMany (tokens: seq<Token>) : array<uint32> =
+        let tokens =
+            tokens
+            // Multiline tokens are messy to support. Let's filter them out
+            |> Seq.filter isSingleLine
+            // For further processing we need to sort tokens by their start pos
+            |> Seq.sortBy (fun t -> t.range.Start)
+
+        let encoded = ResizeArray()
+        let mutable prevTok = None
+
+        for curTok in tokens do
+            encoded.AddRange(deltaEncode prevTok curTok)
+            prevTok <- Some curTok
+
+        encoded.ToArray()
+
+    let ofIndex (index: Index) : seq<Token> =
+        seq {
+            for link in Index.wikiLinks index -> { range = link.range; typ = WL }
+
+            for link in Index.mdLinks index do
+                match MdLink.referenceLabel link.data with
+                | Some label -> yield { range = label.range; typ = RL }
+                | None -> ()
+        }
+
+    let isInRange (range: Range) token =
+        token.range.Start >= range.Start && token.range.End <= range.End
+
+    let inRange (range: Range) tokens = tokens |> Seq.filter (isInRange range)
+
+    let ofIndexEncoded = ofIndex >> encodeMany
+
+    let ofIndexEncodedInRange index range = ofIndex index |> inRange range |> encodeMany

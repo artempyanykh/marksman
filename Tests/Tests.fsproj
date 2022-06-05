@@ -8,11 +8,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Helpers.fs" />
         <Compile Include="ParserTests.fs" />
         <Compile Include="TextTests.fs" />
         <Compile Include="MiscTests.fs" />
         <Compile Include="DiagTest.fs" />
         <Compile Include="ComplTests.fs" />
+        <Compile Include="SematoTests.fs" />
         <Compile Include="WorkspaceTest.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>

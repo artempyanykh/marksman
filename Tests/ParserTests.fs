@@ -9,6 +9,7 @@ open Xunit
 open Marksman.Cst
 open Marksman.Parser
 open Marksman.Misc
+open Marksman.Helpers
 
 let checkSnapshot (document: array<Element>) =
     let lines =
@@ -16,11 +17,7 @@ let checkSnapshot (document: array<Element>) =
 
     lines.ShouldMatchSnapshot()
 
-let checkInlineSnapshot (document: array<Element>) snapshot =
-    let lines =
-        Array.map (fun x -> (Element.fmt x).Lines()) document |> Array.concat
-
-    lines.ShouldMatchInlineSnapshot(snapshot)
+let checkInlineSnapshot = checkInlineSnapshot Element.fmt
 
 let scrapeString content = parseText (Text.mkText content)
 

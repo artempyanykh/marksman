@@ -8,62 +8,59 @@ open Marksman.Index
 
 [<Struct>]
 type TokenType =
-    /// Wiki Link
-    | WL
-    /// Reference Link
-    | RL
+    | WikiLink
+    | RefLink
 
 module TokenType =
     let toLspName =
         function
-        | WL -> "property"
-        | RL -> "variable"
+        | WikiLink -> "property"
+        | RefLink -> "variable"
 
     let toNum =
         function
-        | WL -> 0u
-        | RL -> 1u
+        | WikiLink -> 0u
+        | RefLink -> 1u
 
-    let mapping = [| WL; RL |] |> Array.map toLspName
+    let mapping = [| WikiLink; RefLink |] |> Array.map toLspName
 
 type Token = { range: Range; typ: TokenType }
 
 module Token =
+    // We don't use modifiers in the encoding currently
     [<Literal>]
     let private modifiers = 0u
 
-    let private isSingleLine t = t.range.Start.Line = t.range.End.Line
-    let private lenSingleLine t = t.range.End.Character - t.range.Start.Character
+    let private isSingleLine tok = tok.range.Start.Line = tok.range.End.Line
+    let private lenSingleLine tok = tok.range.End.Character - tok.range.Start.Character
 
-    let private deltaEncode prev t =
-        assert (isSingleLine t)
+    let private deltaEncode prevTok curTok =
+        assert (isSingleLine curTok)
 
-        match prev with
-        | None ->
-            [| uint32 t.range.Start.Line
-               uint32 t.range.Start.Character
-               uint32 (lenSingleLine t)
-               TokenType.toNum t.typ
-               modifiers |]
-        | Some prev ->
-            let deltaLine = t.range.Start.Line - prev.range.Start.Line
-            assert (deltaLine >= 0)
+        let deltaLine, deltaChar =
+            match prevTok with
+            | None -> curTok.range.Start.Line, curTok.range.Start.Character
+            | Some prevTok ->
+                let deltaLine = curTok.range.Start.Line - prevTok.range.Start.Line
+                assert (deltaLine >= 0)
 
-            let deltaChar =
-                if deltaLine = 0 then
-                    t.range.Start.Character - prev.range.Start.Character
-                else
-                    t.range.Start.Character
+                let deltaChar =
+                    if deltaLine = 0 then
+                        curTok.range.Start.Character - prevTok.range.Start.Character
+                    else
+                        curTok.range.Start.Character
 
-            assert (deltaChar > 0)
+                assert (deltaChar > 0)
 
-            [| uint32 deltaLine
-               uint32 deltaChar
-               uint32 (lenSingleLine t)
-               TokenType.toNum t.typ
-               modifiers |]
+                deltaLine, deltaChar
 
-    let encodeMany (tokens: seq<Token>) : array<uint32> =
+        [| uint32 deltaLine
+           uint32 deltaChar
+           uint32 (lenSingleLine curTok)
+           TokenType.toNum curTok.typ
+           modifiers |]
+
+    let encodeAll (tokens: seq<Token>) : array<uint32> =
         let tokens =
             tokens
             // Multiline tokens are messy to support. Let's filter them out
@@ -82,11 +79,11 @@ module Token =
 
     let ofIndex (index: Index) : seq<Token> =
         seq {
-            for link in Index.wikiLinks index -> { range = link.range; typ = WL }
+            for link in Index.wikiLinks index -> { range = link.range; typ = WikiLink }
 
             for link in Index.mdLinks index do
                 match MdLink.referenceLabel link.data with
-                | Some label -> yield { range = label.range; typ = RL }
+                | Some label -> yield { range = label.range; typ = RefLink }
                 | None -> ()
         }
 
@@ -95,6 +92,6 @@ module Token =
 
     let inRange (range: Range) tokens = tokens |> Seq.filter (isInRange range)
 
-    let ofIndexEncoded = ofIndex >> encodeMany
+    let ofIndexEncoded = ofIndex >> encodeAll
 
-    let ofIndexEncodedInRange index range = ofIndex index |> inRange range |> encodeMany
+    let ofIndexEncodedInRange index range = ofIndex index |> inRange range |> encodeAll

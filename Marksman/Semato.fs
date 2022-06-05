@@ -53,7 +53,7 @@ module Token =
                     else
                         curTok.range.Start.Character
 
-                assert (deltaChar > 0)
+                assert (deltaChar >= 0)
 
                 deltaLine, deltaChar
 

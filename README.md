@@ -6,18 +6,13 @@ _Markdown LSP server for note-taking and more._
 
 [![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
 
-**OBLIGATORY DISCLAIMER:**
-Marksman is a _work-in-progress_. For my day-to-day note taking it works fine but stability in general isn't guaranteed.
-
----
-
-Marksman is an LSP server for Markdown that provides **completion**, goto **definition** and **references**,
-**diagnostics**, etc.
-
-In addition to regular Markdown features it also supports **wiki-link**-style references that enable
+Marksman is an LSP server for Markdown that provides **completion**, goto **definition**, find **references**,
+**diagnostics**, etc. It also supports **wiki-link**-style references that enable
 [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about Marksman's features below.
 
-Marksman provides assistance with:
+Marksman **works on MacOS, Linux, and Windows** and is distributed as a **self-contained binary** for each OS.
+
+The server provides assistance with:
 * Markdown inline links:
    ```md
    This is [inline link](/some-file.md#some-heading).
@@ -37,7 +32,7 @@ Marksman provides assistance with:
    ```
 
 All types of links support completion, hover, goto definition/references. Additionally, Marksman provides diagnostics
-for wiki-links to detect broken references and duplicate/ambiguous heafings.
+for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
@@ -135,22 +130,18 @@ repository in F#.
 
 ---
 
-<span id="fn1">\[1\]</span>: You may have heard about [Roam Research][roam]. This is a commercial
-implementation of the Zettelkasten method and another point of reference for
-what Marksman is about. However, unlike a proprietary Roam Research, Zeta
-Note is free, open-source and integrated into your favourite editor (albeit
-for not not as feature rich as Roam Research).
+<span id="fn1">\[1\]</span>: You may have heard about [Roam Research][roam]. This is a commercial implementation of the
+Zettelkasten method and another point of reference for what Marksman is about. However, unlike a proprietary Roam
+Research, Zeta Note is free, open-source and integrated into your favourite editor (albeit for not not as feature rich
+as Roam Research).
 
-<span id="fn2">\[2\]</span>: There is an excellent VSCode extension called [Markdown
-Memo][md-memo]. You definitely need to check it out if you're primarily using
-VSCode as it has some features that are missing in Marksman and [Marksman
-VSCode extension][mn-vscode]. However, Markdown Memo is VSCode specific while
-Marksman is a generic language server, so can be used with any editor that
-has LSP support: Emacs, Vim, Neovim, etc.
+<span id="fn2">\[2\]</span>: There is an excellent VSCode extension called [Markdown Memo][md-memo]. You definitely need
+to check it out if you're primarily using VSCode as it has some features that are missing in Marksman and [Marksman
+VSCode extension][mn-vscode]. However, Markdown Memo is VSCode specific while Marksman is a generic language server, so
+can be used with any editor that has LSP support: Emacs, Vim, Neovim, etc.
 
-<span id="fn3">\[3\]</span>: Since Marksman is a regular Language Server most of the functionality
-works out of the box with any LSP client. The only thing that requires custom
-handling is "Code Lenses" due to how these are defined in the LSP spec.
+<span id="fn3">\[3\]</span>: Since Marksman is a regular Language Server most of the functionality works out of the box
+with any LSP client.
 
 [zettel-wiki]: https://en.wikipedia.org/wiki/Zettelkasten
 

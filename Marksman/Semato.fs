@@ -24,7 +24,10 @@ module TokenType =
 
     let mapping = [| WikiLink; RefLink |] |> Array.map toLspName
 
-type Token = { range: Range; typ: TokenType }
+type Token =
+    { range: Range
+      typ: TokenType }
+    override this.ToString() = $"{this.typ}@{this.range.DebuggerDisplay}"
 
 module Token =
     // We don't use modifiers in the encoding currently

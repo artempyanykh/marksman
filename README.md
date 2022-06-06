@@ -37,8 +37,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
 - VSCode via [Marksman VSCode][mn-vscode].
-- (**TODO**: _needs updating_) Neovim 0.5+
-  via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#zeta_note).
+- Neovim via [nvim-lspconfig][nvim-marksman].
 - (**TODO**: _needs upstreaming_) Emacs via Emacs LSP.
 
 ## How to install
@@ -152,3 +151,5 @@ with any LSP client.
 [mn-vscode]: https://github.com/artempyanykh/marksman-vscode
 
 [original-zn]: https://github.com/artempyanykh/zeta-note
+
+[nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#marksman

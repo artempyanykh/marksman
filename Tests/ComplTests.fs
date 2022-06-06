@@ -6,11 +6,11 @@ open Xunit
 open Marksman.Compl
 open Marksman.Misc
 
-let mkTitleComp range = Compl.Compl.WikiTitle(range, true)
-let mkLinkRefComp range = Compl.Compl.LinkReference(range, true)
-let mkLinkRefCompClosed range = Compl.Compl.LinkReference(range, false)
-
 type Helpers =
+    static member mkTitleComp(range: Range, ?needsClosing: bool) =
+        let needsClosing = defaultArg needsClosing true
+        Compl.Compl.WikiTitle(range, needsClosing)
+
     static member mkWikiHeadingComp(range: Range, ?destDoc: string, ?needsClosing: bool) =
         let needsClosing = defaultArg needsClosing true
         Compl.Compl.WikiHeading(destDoc, range, needsClosing)
@@ -23,6 +23,10 @@ type Helpers =
         let needsClosing = defaultArg needsClosing true
         Compl.Compl.DocAnchor(dest, range, needsClosing)
 
+    static member mkLinkRefComp(range: Range, ?needsClosing: bool) =
+        let needsClosing = defaultArg needsClosing true
+        Compl.Compl.LinkReference(range, needsClosing)
+
 module WikiOfText =
     [<Fact>]
     let empty () =
@@ -34,35 +38,35 @@ module WikiOfText =
     let emptyEol () =
         let text = Text.mkText "[["
         let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = mkTitleComp (Range.Mk(0, 2, 1, 0))
+        let expected = Helpers.mkTitleComp (Range.Mk(0, 2, 1, 0))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let emptyNonEol () =
         let text = Text.mkText "[[ "
         let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = mkTitleComp (Range.Mk(0, 2, 0, 2))
+        let expected = Helpers.mkTitleComp (Range.Mk(0, 2, 0, 2))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someEol () =
         let text = Text.mkText "[[t"
         let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = mkTitleComp (Range.Mk(0, 2, 1, 0))
+        let expected = Helpers.mkTitleComp (Range.Mk(0, 2, 1, 0))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someWs () =
         let text = Text.mkText "[[t "
         let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = mkTitleComp (Range.Mk(0, 2, 0, 3))
+        let expected = Helpers.mkTitleComp (Range.Mk(0, 2, 0, 3))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someAndTextAfter () =
         let text = Text.mkText "[[t other"
         let comp = compOfText (Position.Mk(0, 2)) text
-        let expected = mkTitleComp (Range.Mk(0, 2, 0, 3))
+        let expected = Helpers.mkTitleComp (Range.Mk(0, 2, 0, 3))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
@@ -83,42 +87,49 @@ module LinkOfText =
     let emptyEol () =
         let text = Text.mkText "["
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = mkLinkRefComp (Range.Mk(0, 1, 1, 0))
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 1, 1, 0))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let emptyNonEol () =
         let text = Text.mkText "[ "
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = mkLinkRefComp (Range.Mk(0, 1, 0, 1))
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 1, 0, 1))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someEol () =
         let text = Text.mkText "[t"
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = mkLinkRefComp (Range.Mk(0, 1, 1, 0))
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 1, 1, 0))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someWs () =
         let text = Text.mkText "[t "
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = mkLinkRefComp (Range.Mk(0, 1, 0, 2))
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 1, 0, 2))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let someAndTextAfter () =
         let text = Text.mkText "[t other"
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = mkLinkRefComp (Range.Mk(0, 1, 0, 2))
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 1, 0, 2))
         Assert.Equal(Some expected, comp)
 
     [<Fact>]
     let emptyBrackets () =
         let text = Text.mkText "[]"
         let comp = compOfText (Position.Mk(0, 1)) text
-        let expected = mkLinkRefCompClosed (Range.Mk(0, 1, 0, 1))
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 1, 0, 1), false)
+        Assert.Equal(Some expected, comp)
+
+    [<Fact>]
+    let partialReference () =
+        let text = Text.mkText "[l]["
+        let comp = compOfText (Position.Mk(0, 4)) text
+        let expected = Helpers.mkLinkRefComp (Range.Mk(0, 4, 1, 0))
         Assert.Equal(Some expected, comp)
 
 module DocPathOfText =
@@ -133,7 +144,7 @@ module DocPathOfText =
         let text = Text.mkText "("
         let comp = compOfText (Position.Mk(0, 1)) text
         Assert.Equal(None, comp)
-        
+
     [<Fact>]
     let emptyLinkEol () =
         let text = Text.mkText "]("

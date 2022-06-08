@@ -6,6 +6,12 @@
         <AssemblyName>marksman</AssemblyName>
     </PropertyGroup>
 
+    <Target Name="FSharpLint" AfterTargets="BeforeBuild">
+        <Exec Command="dotnet fsharplint -f msbuild lint --lint-config $(MSBuildProjectDirectory)/../fsharplint.json $(MSBuildProjectFullPath)"
+              ConsoleToMSBuild="true"
+              IgnoreExitCode="true" />
+    </Target>
+
     <ItemGroup>
         <Compile Include="Misc.fs" />
         <Compile Include="Text.fs" />

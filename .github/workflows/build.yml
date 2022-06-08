@@ -21,5 +21,7 @@ jobs:
         run: dotnet restore
       - name: Build
         run: dotnet build
+      - name: Check format and lints
+        run: make check
       - name: Test with the dotnet CLI
         run: dotnet test

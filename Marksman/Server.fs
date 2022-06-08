@@ -81,6 +81,11 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
 
     let clientDesc = ClientDescription.ofParams par
 
+    let codeActionOptions = {
+        CodeActionKinds = None;
+        ResolveProvider = Some false
+    }
+
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
         TextDocumentSync = Some textSyncCaps
@@ -93,6 +98,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         DefinitionProvider = Some true
         HoverProvider = Some true
         ReferencesProvider = Some true
+        CodeActionProvider = Some codeActionOptions
         SemanticTokensProvider =
             Some
                 { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
@@ -607,6 +613,7 @@ type MarksmanServer(client: MarksmanClient) =
         AsyncLspResult.success hover
 
 
+
     override this.TextDocumentReferences(par: ReferenceParams) =
         let state = requireState ()
         let docUri = par.TextDocument.Uri |> PathUri.fromString
@@ -714,5 +721,54 @@ type MarksmanServer(client: MarksmanClient) =
             }
 
         AsyncLspResult.success tokens
+
+    override this.TextDocumentCodeAction(opts: CodeActionParams) =
+        let state = requireState ()
+        let docPath = opts.TextDocument.Uri |> PathUri.fromString
+        let range = opts.Range
+
+        let p = State.tryFindDocument docPath state
+        
+        let toc = Array.ofSeq (Cst.elementsAll p.Value.cst) |> 
+            Element.pickHeadings |>
+            Array.map(fun t -> 
+                let title = t.data.title.text
+                let offset = String.replicate (t.data.level - 1) " "
+                let slug = Heading.slug t.data |> Slug.toString
+                $"{offset}- [{title}](#{slug})"
+            ) |> 
+            String.concat "\n"
+
+
+        let textEdit = {
+                NewText = $"{toc}\n\n";
+                Range = {
+                    Start = {Line = 0; Character=0;};
+                    End = {Line = 0; Character = 0}
+            }}
+        let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
+
+        let codeAction: CodeAction = {
+            Title = "Generate Table of Contents"; 
+            Kind = Some CodeActionKind.Source;
+            Diagnostics = None;
+            Command = None;
+            Data = None;
+            IsPreferred = Some false;
+            Disabled = None
+            Edit = Some {
+                Changes = Some mp;
+                DocumentChanges = None;
+            }
+        }
+
+        let commands = 
+            TextDocumentCodeActionResult.CodeActions [| codeAction |]
+            
+        async.Return (LspResult.Ok (Some commands))
+
+    override this.CodeActionResolve(action: CodeAction) = 
+        async.Return (LspResult.invalidParams $"Resolving {action}")
+
 
     override this.Dispose() = ()

@@ -60,6 +60,9 @@ run:
 .PHONY: fmt
 fmt: setup
 	dotnet fantomas Marksman
+ifneq ($(OS_ID),win)
+	xmllint Marksman/Marksman.fsproj -o Marksman/Marksman.fsproj
+endif
 
 .PHONY: publish
 publish:

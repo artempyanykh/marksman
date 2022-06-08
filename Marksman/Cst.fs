@@ -8,7 +8,7 @@ open FSharpPlus.Operators
 
 open Marksman.Misc
 
-type Node<'a> = { text: string; range: Range; data: 'a }
+type Node<'A> = { text: string; range: Range; data: 'A }
 
 type TextNode = Node<unit>
 

@@ -5,6 +5,7 @@ open Marksman.Index
 open Marksman.Cst
 open Marksman.Text
 open Ionide.LanguageServerProtocol.Types
+open Ionide.LanguageServerProtocol.Logging
 
 [<Literal>]
 let Marker = """<!--toc-->"""
@@ -27,6 +28,8 @@ module Entry =
 type TableOfContents = { Entries: Entry[] }
 
 module TableOfContents =
+    let logger = LogProvider.getLoggerByName "TocAgent"
+
     let mk (index: Index) : TableOfContents option =
         let headings = index.headings |> Array.map (fun x -> x.data)
 
@@ -39,11 +42,12 @@ module TableOfContents =
         Marker
         + "\n"
         + (Array.map Entry.renderLink toc.Entries |> String.concat "\n")
+        + "\n"
 
 
     type State =
         | BeforeMarker
-        | Collecting of Range
+        | Collecting of Range * int
 
 
     let detect (text: Text) : Range option =
@@ -56,22 +60,31 @@ module TableOfContents =
             else
                 let lineRange = text.LineContentRange(i)
                 let lineContent = text.LineContent(i)
+                let lineIsEmpty = lineContent.Trim().Length.Equals(0)
+                let lineIsMarker = lineContent.Equals(Marker)
+                let expandToThisLine (range: Range) = { End = lineRange.End; Start = range.Start }
+
+                logger.info (Log.setMessage $"State: {st}, line: {lineContent.Trim()}")
 
                 match st with
                 // if we found the marker, start collecting text from here
-                | BeforeMarker when lineContent.Equals(Marker) -> go (i + 1) (Collecting lineRange)
+                | BeforeMarker when lineIsMarker -> go (i + 1) (Collecting(lineRange, 0))
                 // if we are in collecting mode, just expand the selection
-                | Collecting (range) ->
-                    let expandToThisLine =
-                        Collecting { End = lineRange.End; Start = range.Start }
+                | Collecting (range, numEmptyLines) ->
+                    let toThisLine = expandToThisLine range
 
-                    if lineContent.Trim().Length.Equals(0) then
-                        expandToThisLine
+                    if lineIsEmpty then
+                        if numEmptyLines.Equals(0) then
+                            go (i + 1) (Collecting(toThisLine, 1))
+                        else
+                            Collecting(toThisLine, 2)
                     else
-                        go (i + 1) expandToThisLine // in any other case, just move to next line
+                        go (i + 1) (Collecting(expandToThisLine range, 0))
                 | BeforeMarker -> go (i + 1) BeforeMarker
 
         match (go 0 BeforeMarker) with
         // marker was never found
-        | BeforeMarker -> None
-        | Collecting (range) -> Some range
+        | Collecting (range, 2) -> Some range
+        | other ->
+            logger.error (Log.setMessage $"Got {other} instead")
+            None

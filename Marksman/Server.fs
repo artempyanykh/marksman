@@ -17,6 +17,7 @@ open Marksman.Misc
 open Marksman.Workspace
 open Marksman.State
 open Marksman.Index
+open Marksman.Toc
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -81,10 +82,8 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
 
     let clientDesc = ClientDescription.ofParams par
 
-    let codeActionOptions = {
-        CodeActionKinds = None;
-        ResolveProvider = Some false
-    }
+    let codeActionOptions =
+        { CodeActionKinds = None; ResolveProvider = Some false }
 
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
@@ -725,50 +724,44 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentCodeAction(opts: CodeActionParams) =
         let state = requireState ()
         let docPath = opts.TextDocument.Uri |> PathUri.fromString
-        let range = opts.Range
 
         let p = State.tryFindDocument docPath state
-        
-        let toc = Array.ofSeq (Cst.elementsAll p.Value.cst) |> 
-            Element.pickHeadings |>
-            Array.map(fun t -> 
-                let title = t.data.title.text
-                let offset = String.replicate (t.data.level - 1) " "
-                let slug = Heading.slug t.data |> Slug.toString
-                $"{offset}- [{title}](#{slug})"
-            ) |> 
-            String.concat "\n"
 
+        let toc =
+            monad' {
+                let! document = State.tryFindDocument docPath state
+                let! toc = Toc.TableOfContents.mk document.index
 
-        let textEdit = {
-                NewText = $"{toc}\n\n";
-                Range = {
-                    Start = {Line = 0; Character=0;};
-                    End = {Line = 0; Character = 0}
-            }}
-        let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
+                let rendered = TableOfContents.render toc
 
-        let codeAction: CodeAction = {
-            Title = "Generate Table of Contents"; 
-            Kind = Some CodeActionKind.Source;
-            Diagnostics = None;
-            Command = None;
-            Data = None;
-            IsPreferred = Some false;
-            Disabled = None
-            Edit = Some {
-                Changes = Some mp;
-                DocumentChanges = None;
+                $"{rendered}\n\n"
             }
-        }
 
-        let commands = 
-            TextDocumentCodeActionResult.CodeActions [| codeAction |]
-            
-        async.Return (LspResult.Ok (Some commands))
+        let codeActions =
+            match toc with
+            | None -> Array.empty
+            | Some (toc) ->
+                let textEdit =
+                    { NewText = toc
+                      Range =
+                        { Start = { Line = 0; Character = 0 }
+                          End = { Line = 0; Character = 0 } } }
 
-    override this.CodeActionResolve(action: CodeAction) = 
-        async.Return (LspResult.invalidParams $"Resolving {action}")
+                let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
 
+                [| { Title = "Generate Table of Contents"
+                     Kind = Some CodeActionKind.Source
+                     Diagnostics = None
+                     Command = None
+                     Data = None
+                     IsPreferred = Some false
+                     Disabled = None
+                     Edit = Some { Changes = Some mp; DocumentChanges = None } }
+
+                   |]
+
+        let commands = TextDocumentCodeActionResult.CodeActions codeActions
+
+        AsyncLspResult.success (Some commands)
 
     override this.Dispose() = ()

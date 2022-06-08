@@ -15,6 +15,7 @@
     <Compile Include="Semato.fs" />
     <Compile Include="Diag.fs" />
     <Compile Include="State.fs" />
+    <Compile Include="Toc.fs" />
     <Compile Include="Server.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

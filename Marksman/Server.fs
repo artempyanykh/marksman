@@ -725,38 +725,57 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
         let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
+        let documentBeginning =
+            { Start = { Line = 0; Character = 0 }
+              End = { Line = 0; Character = 0 } }
+
+        let editAt rangeOpt text =
+            let textEdit =
+                match rangeOpt with
+                | None -> { NewText = text; Range = documentBeginning }
+                | Some (range) -> { NewText = text; Range = range }
+
+            let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
+
+            { Changes = Some mp; DocumentChanges = None }
+
+        let existing =
+            State.tryFindDocument docPath state
+            |> Option.map (fun x -> x.text)
+            |> Option.bind TableOfContents.detect
+
+
         let toc =
             monad' {
                 let! document = State.tryFindDocument docPath state
                 let! toc = Toc.TableOfContents.mk document.index
 
                 let rendered = TableOfContents.render toc
+                let detected = TableOfContents.detect document.text
 
-                $"{rendered}\n\n"
+                let result = ($"{rendered}\n", detected)
+
+                result
             }
+
+        let codeAction title edit =
+            { Title = title
+              Kind = Some CodeActionKind.Source
+              Diagnostics = None
+              Command = None
+              Data = None
+              IsPreferred = Some false
+              Disabled = None
+              Edit = Some edit }
 
         let codeActions =
             match toc with
             | None -> Array.empty
-            | Some (toc) ->
-                let textEdit =
-                    { NewText = toc
-                      Range =
-                        { Start = { Line = 0; Character = 0 }
-                          End = { Line = 0; Character = 0 } } }
-
-                let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
-
-                [| { Title = "Generate Table of Contents"
-                     Kind = Some CodeActionKind.Source
-                     Diagnostics = None
-                     Command = None
-                     Data = None
-                     IsPreferred = Some false
-                     Disabled = None
-                     Edit = Some { Changes = Some mp; DocumentChanges = None } }
-
-                   |]
+            | Some (render, existing) ->
+                match existing with
+                | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
+                | Some (oldTocRange) ->
+                    [| codeAction "Update Table of Contents" (editAt (Some oldTocRange) render) |]
 
         let commands = TextDocumentCodeActionResult.CodeActions codeActions
 

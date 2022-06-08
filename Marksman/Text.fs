@@ -99,6 +99,8 @@ type Text =
 
         Range.Mk(line, 0, line, end_ - start)
 
+    member this.LineContent(line: int) : string = this.Substring(this.LineContentRange(line))
+
     member this.FullRange() : Range =
         let lineNum = this.lineMap.Map.Length - 1
         let start = { Line = 0; Character = 0 }

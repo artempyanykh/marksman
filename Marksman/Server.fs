@@ -725,8 +725,6 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
         let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
-        let p = State.tryFindDocument docPath state
-
         let toc =
             monad' {
                 let! document = State.tryFindDocument docPath state

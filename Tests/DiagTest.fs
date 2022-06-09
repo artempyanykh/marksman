@@ -7,10 +7,7 @@ open Marksman.Misc
 open Marksman.Parser
 open Marksman.Workspace
 open Marksman.Diag
-
-let makeFakeDocument (content: string) : Doc =
-    let text = Text.mkText content
-    Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text
+open Marksman.Helpers
 
 [<Fact>]
 let documentIndex_1 () =

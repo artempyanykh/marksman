@@ -7,49 +7,62 @@ open Marksman.Text
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
+open type System.Environment
+
 [<Literal>]
-let Marker = """<!--toc-->"""
+let StartMarker = """<!--toc:start-->"""
+
+[<Literal>]
+let EndMarker = """<!--toc:end-->"""
+
+[<Literal>]
+let EmptyLine = ""
 
 type Title = string
 type EntryLevel = int
 
-type Entry = { Level: EntryLevel; Title: Title; Link: Slug }
+type Entry = { level: EntryLevel; title: Title; link: Slug }
 
 module Entry =
+    let Mk (level: EntryLevel, title: Title) =
+        { level = level; title = title; link = Slug.ofString title }
+
     let renderLink entry =
-        let offset = String.replicate (entry.Level - 1) " "
-        let slug = entry.Link |> Slug.toString
-        $"{offset}- [{entry.Title}](#{slug})"
+        let offset = String.replicate (entry.level - 1) " "
+        let slug = entry.link |> Slug.toString
+        $"{offset}- [{entry.title}](#{slug})"
 
     let fromHeading (heading: Heading) : Entry =
         let slug = Heading.slug heading
-        { Level = heading.level; Link = slug; Title = heading.title.text }
+        { level = heading.level; link = slug; title = heading.title.text }
 
-type TableOfContents = { Entries: Entry[] }
+type TableOfContents = { entries: array<Entry> }
 
 module TableOfContents =
+
     let logger = LogProvider.getLoggerByName "TocAgent"
 
-    let mk (index: Index) : TableOfContents option =
+    let mk (index: Marksman.Index.Index) : TableOfContents option =
         let headings = index.headings |> Array.map (fun x -> x.data)
 
         if index.headings.Length.Equals 0 then
             None
         else
-            Some { Entries = Array.map Entry.fromHeading headings }
+            Some { entries = Array.map Entry.fromHeading headings }
 
     let render (toc: TableOfContents) =
-        Marker
-        + "\n"
-        + (Array.map Entry.renderLink toc.Entries |> String.concat "\n")
-        + "\n"
-        + "\n"
-        + "\n"
+        let tocLinks = Array.map Entry.renderLink toc.entries
+        let startMarkerLines = [| StartMarker |]
+        let endMarkerLines = [| EndMarker; EmptyLine |]
+
+        let lines = Array.concat [| startMarkerLines; tocLinks; endMarkerLines |]
+
+        String.concat NewLine lines
 
     type State =
         | BeforeMarker
-        | Collecting of Range * int
-
+        | Collecting of Range
+        | Collected of Range
 
     let detect (text: Text) : Range option =
         let lines = text.lineMap
@@ -62,33 +75,34 @@ module TableOfContents =
                 let lineRange = text.LineContentRange(i)
                 let lineContent = text.LineContent(i)
                 let lineIsEmpty = lineContent.Trim().Length.Equals(0)
-                let lineIsMarker = lineContent.Equals(Marker)
+                let isStartMarker = lineContent.Equals(StartMarker)
+                let isEndMarker = lineContent.Equals(EndMarker)
                 let expandToThisLine (range: Range) = { range with End = lineRange.End }
 
                 match st with
                 // if we found the marker, start collecting text from here
-                | BeforeMarker when lineIsMarker -> go (i + 1) (Collecting(lineRange, 0))
+                | BeforeMarker ->
+                    if isStartMarker then
+                        go (i + 1) (Collecting lineRange)
+                    else
+                        go (i + 1) BeforeMarker
                 // if we are in collecting mode, just expand the selection
-                | Collecting (range, numEmptyLines) ->
+                | Collecting (range) ->
                     let toThisLine = expandToThisLine range
 
-                    if lineIsEmpty then
-                        if numEmptyLines.Equals(0) then
-                            go (i + 1) (Collecting(toThisLine, 1))
-                        else
-                            // extend to next line
-                            let extraLine =
-                                let last = toThisLine.End
-                                { toThisLine with End = { Line = last.Line + 1; Character = 0 } }
+                    if isEndMarker then
+                        let extraLine =
+                            { toThisLine with End = Position.Mk(toThisLine.End.Line + 1, 0) }
 
-                            Collecting(extraLine, 2)
+                        Collected extraLine
                     else
-                        go (i + 1) (Collecting(expandToThisLine range, 0))
-                | BeforeMarker -> go (i + 1) BeforeMarker
+                        go (i + 1) (Collecting toThisLine)
+                | _ -> st
+
 
         match (go 0 BeforeMarker) with
         // marker was never found
-        | Collecting (range, 2) -> Some range
+        | Collected range -> Some range
         | other ->
             logger.error (Log.setMessage $"Got {other} instead")
             None

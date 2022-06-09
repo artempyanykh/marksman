@@ -30,25 +30,25 @@ module DetectToc =
     let detectToc_withMarker () =
         let doc =
             makeFakeDocumentLines
-                [| Toc.Marker
+                [| Toc.StartMarker
                    "- [T1][#t1]"
                    " - [T2][#t2]"
-                   ""
-                   ""
+                   Toc.EndMarker
                    "# T1"
                    "## T2" |]
 
-        let titles = (TableOfContents.detect doc.text).Value
-        let tocText = doc.text.Substring titles
+        let toc = (TableOfContents.detect doc.text).Value
+        let tocText = doc.text.Substring toc
 
         let expectedTocText =
             let line num = doc.text.LineContent(num)
 
-            line (0) + "\n" + line (1) + "\n" + line (2)
+            String.concat System.Environment.NewLine ([| 0..3 |] |> Array.map line)
+
 
         Assert.Equal(tocText.TrimEnd(), expectedTocText.TrimEnd())
-        Assert.Equal(5, titles.End.Line)
-        Assert.Equal(0, titles.End.Character)
+        Assert.Equal(4, toc.End.Line)
+        Assert.Equal(0, toc.End.Character)
 
 module CreateToc =
     [<Fact>]
@@ -58,9 +58,8 @@ module CreateToc =
         let titles = TableOfContents.mk doc.index |> Option.get
 
         let expected =
-            { Entries =
-                [| { Level = 1; Title = "T1"; Link = Slug.ofString "T1" }
-                   { Level = 2; Title = "T2"; Link = Slug.ofString "T2" } |] }
+            { entries =
+                [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
 
         Assert.Equal(expected, titles)
 
@@ -74,16 +73,14 @@ module RenderToc =
             TableOfContents.mk doc.index |> Option.get |> TableOfContents.render
 
         let expectedLines =
-            [| Toc.Marker
+            [| Toc.StartMarker
                "- [T1](#t1)"
                " - [T2](#t2)"
                "  - [T3](#t3)"
                " - [T4](#t4)"
                "  - [T5](#t5)"
-               "" // two new lines are important
-               "" 
-            |]
+               Toc.EndMarker |]
 
-        let expected = String.concat "\n" expectedLines + "\n"
+        let expected = String.concat System.Environment.NewLine expectedLines
 
         Assert.Equal(expected, titles)

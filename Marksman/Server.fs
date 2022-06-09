@@ -725,16 +725,14 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
         let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
-        let documentBeginning =
-            { Start = { Line = 0; Character = 0 }
-              End = { Line = 0; Character = 0 } }
+        let documentBeginning = Range.Mk(0, 0, 0, 0)
 
         let editAt rangeOpt text =
             let textEdit =
                 { NewText = text
                   Range = Option.defaultValue documentBeginning rangeOpt }
 
-            let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
+            let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
 
             { Changes = Some mp; DocumentChanges = None }
 
@@ -768,7 +766,7 @@ type MarksmanServer(client: MarksmanClient) =
                 match existing with
                 | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
                 | Some (oldTocRange) ->
-                    [| codeAction "Update Table of Contents" (editAt (Some oldTocRange) render) |]
+                    [| codeAction "Update the Table of Contents" (editAt (Some oldTocRange) render) |]
 
         let commands = TextDocumentCodeActionResult.CodeActions codeActions
 

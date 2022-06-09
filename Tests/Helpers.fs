@@ -25,5 +25,5 @@ let makeFakeDocument (content: string) : Doc =
     Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text
 
 let makeFakeDocumentLines (lines: array<string>) : Doc =
-    let text = Text.mkText (String.concat "\n" lines)
+    let text = Text.mkText (String.concat System.Environment.NewLine lines)
     Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text

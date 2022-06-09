@@ -731,19 +731,12 @@ type MarksmanServer(client: MarksmanClient) =
 
         let editAt rangeOpt text =
             let textEdit =
-                match rangeOpt with
-                | None -> { NewText = text; Range = documentBeginning }
-                | Some (range) -> { NewText = text; Range = range }
+                { NewText = text
+                  Range = Option.defaultValue documentBeginning rangeOpt }
 
             let mp = Map.empty.Add(opts.TextDocument.Uri, [| textEdit |])
 
             { Changes = Some mp; DocumentChanges = None }
-
-        let existing =
-            State.tryFindDocument docPath state
-            |> Option.map (fun x -> x.text)
-            |> Option.bind TableOfContents.detect
-
 
         let toc =
             monad' {

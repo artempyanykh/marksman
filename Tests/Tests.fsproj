@@ -16,6 +16,7 @@
         <Compile Include="ComplTests.fs" />
         <Compile Include="SematoTests.fs" />
         <Compile Include="WorkspaceTest.fs" />
+        <Compile Include="TocTests.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

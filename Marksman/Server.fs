@@ -17,6 +17,7 @@ open Marksman.Misc
 open Marksman.Workspace
 open Marksman.State
 open Marksman.Index
+open Marksman.Toc
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -81,6 +82,9 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
 
     let clientDesc = ClientDescription.ofParams par
 
+    let codeActionOptions =
+        { CodeActionKinds = None; ResolveProvider = Some false }
+
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
         TextDocumentSync = Some textSyncCaps
@@ -93,6 +97,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         DefinitionProvider = Some true
         HoverProvider = Some true
         ReferencesProvider = Some true
+        CodeActionProvider = Some codeActionOptions
         SemanticTokensProvider =
             Some
                 { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
@@ -607,6 +612,7 @@ type MarksmanServer(client: MarksmanClient) =
         AsyncLspResult.success hover
 
 
+
     override this.TextDocumentReferences(par: ReferenceParams) =
         let state = requireState ()
         let docUri = par.TextDocument.Uri |> PathUri.fromString
@@ -714,5 +720,56 @@ type MarksmanServer(client: MarksmanClient) =
             }
 
         AsyncLspResult.success tokens
+
+    override this.TextDocumentCodeAction(opts: CodeActionParams) =
+        let state = requireState ()
+        let docPath = opts.TextDocument.Uri |> PathUri.fromString
+
+        let documentBeginning = Range.Mk(0, 0, 0, 0)
+
+        let editAt rangeOpt text =
+            let textEdit =
+                { NewText = text
+                  Range = Option.defaultValue documentBeginning rangeOpt }
+
+            let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
+
+            { Changes = Some mp; DocumentChanges = None }
+
+        let toc =
+            monad' {
+                let! document = State.tryFindDocument docPath state
+                let! toc = Toc.TableOfContents.mk document.index
+
+                let rendered = TableOfContents.render toc
+                let detected = TableOfContents.detect document.text
+
+                let result = ($"{rendered}", detected)
+
+                result
+            }
+
+        let codeAction title edit =
+            { Title = title
+              Kind = Some CodeActionKind.Source
+              Diagnostics = None
+              Command = None
+              Data = None
+              IsPreferred = Some false
+              Disabled = None
+              Edit = Some edit }
+
+        let codeActions =
+            match toc with
+            | None -> Array.empty
+            | Some (render, existing) ->
+                match existing with
+                | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
+                | Some (oldTocRange) ->
+                    [| codeAction "Update the Table of Contents" (editAt (Some oldTocRange) render) |]
+
+        let commands = TextDocumentCodeActionResult.CodeActions codeActions
+
+        AsyncLspResult.success (Some commands)
 
     override this.Dispose() = ()

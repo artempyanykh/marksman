@@ -8,6 +8,7 @@ type Dictionary<'K, 'V> = System.Collections.Generic.Dictionary<'K, 'V>
 
 type Index =
     { titles: array<Node<Heading>>
+      headings: array<Node<Heading>>
       headingsBySlug: Map<Slug, list<Node<Heading>>>
       wikiLinks: array<Node<WikiLink>>
       mdLinks: array<Node<MdLink>>
@@ -16,8 +17,9 @@ type Index =
 module Index =
     let ofCst (cst: Cst) : Index =
         let titles = ResizeArray()
-        let headings = Dictionary<Slug, ResizeArray<Node<Heading>>>()
+        let headingsBySlug = Dictionary<Slug, ResizeArray<Node<Heading>>>()
         let wikiLinks = ResizeArray()
+        let headings = ResizeArray()
         let mdLinks = ResizeArray()
         let linkDefs = ResizeArray()
 
@@ -26,19 +28,20 @@ module Index =
             | H hn ->
                 let slug = Heading.slug hn.data
 
-                if not (headings.ContainsKey(slug)) then
-                    headings[slug] <- ResizeArray()
+                if not (headingsBySlug.ContainsKey(slug)) then
+                    headingsBySlug[slug] <- ResizeArray()
 
-                headings[ slug ].Add(hn)
+                headingsBySlug[ slug ].Add(hn)
 
                 if Heading.isTitle hn.data then titles.Add(hn)
+                headings.Add(hn)
             | WL wl -> wikiLinks.Add(wl)
             | ML ml -> mdLinks.Add(ml)
             | MLD linkDef -> linkDefs.Add(linkDef)
 
         let headingsBySlug =
             seq {
-                for KeyValue (slug, headings) in headings do
+                for KeyValue (slug, headings) in headingsBySlug do
                     yield slug, headings |> List.ofSeq
             }
             |> Map.ofSeq
@@ -47,8 +50,10 @@ module Index =
         let wikiLinks = wikiLinks.ToArray()
         let mdLinks = mdLinks.ToArray()
         let linkDefs = linkDefs.ToArray()
+        let headings = headings.ToArray()
 
         { titles = titles
+          headings = headings
           headingsBySlug = headingsBySlug
           wikiLinks = wikiLinks
           mdLinks = mdLinks

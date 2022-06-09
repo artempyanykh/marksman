@@ -358,7 +358,7 @@ module Server =
       "workspace/willDeleteFiles", requestHandling (fun s p -> s.WorkspaceWillDeleteFiles(p))
       "workspace/didDeleteFiles", requestHandling (fun s p -> s.WorkspaceDidDeleteFiles(p) |> notificationSuccess)
       "workspace/symbol", requestHandling (fun s p -> s.WorkspaceSymbol(p))
-      "workspace/executeCommand ", requestHandling (fun s p -> s.WorkspaceExecuteCommand(p))
+      "workspace/executeCommand", requestHandling (fun s p -> s.WorkspaceExecuteCommand(p))
       "shutdown", requestHandling (fun s () -> s.Shutdown() |> notificationSuccess)
       "exit", requestHandling (fun s () -> s.Exit() |> notificationSuccess) ]
     |> Map.ofList

@@ -103,6 +103,11 @@ module TableOfContents =
         match (go 0 BeforeMarker) with
         // marker was never found
         | Collected range -> Some range
+        | BeforeMarker -> None
         | other ->
-            logger.error (Log.setMessage $"Got {other} instead")
+            logger.warn (
+                Log.setMessage $"TOC detection failed - end marker was not found"
+                >> Log.addContext "finalState" other
+            )
+
             None

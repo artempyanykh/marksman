@@ -8,6 +8,8 @@ open Marksman.Parser
 open Marksman.Helpers
 open Marksman.Toc
 
+open type System.Environment
+
 module DetectToc =
     [<Fact>]
     let detectToc_1 () =
@@ -57,9 +59,7 @@ module CreateToc =
 
         let titles = TableOfContents.mk doc.index |> Option.get
 
-        let expected =
-            { entries =
-                [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
+        let expected = { entries = [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
 
         Assert.Equal(expected, titles)
 
@@ -79,8 +79,9 @@ module RenderToc =
                "  - [T3](#t3)"
                " - [T4](#t4)"
                "  - [T5](#t5)"
-               Toc.EndMarker |]
+               Toc.EndMarker
+               "" |]
 
-        let expected = String.concat System.Environment.NewLine expectedLines
+        let expected = String.concat NewLine expectedLines
 
         Assert.Equal(expected, titles)

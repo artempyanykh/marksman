@@ -43,7 +43,8 @@ module TableOfContents =
         + "\n"
         + (Array.map Entry.renderLink toc.Entries |> String.concat "\n")
         + "\n"
-
+        + "\n"
+        + "\n"
 
     type State =
         | BeforeMarker
@@ -62,9 +63,7 @@ module TableOfContents =
                 let lineContent = text.LineContent(i)
                 let lineIsEmpty = lineContent.Trim().Length.Equals(0)
                 let lineIsMarker = lineContent.Equals(Marker)
-                let expandToThisLine (range: Range) = { End = lineRange.End; Start = range.Start }
-
-                logger.info (Log.setMessage $"State: {st}, line: {lineContent.Trim()}")
+                let expandToThisLine (range: Range) = { range with End = lineRange.End }
 
                 match st with
                 // if we found the marker, start collecting text from here
@@ -77,7 +76,12 @@ module TableOfContents =
                         if numEmptyLines.Equals(0) then
                             go (i + 1) (Collecting(toThisLine, 1))
                         else
-                            Collecting(toThisLine, 2)
+                            // extend to next line
+                            let extraLine =
+                                let last = toThisLine.End
+                                { toThisLine with End = { Line = last.Line + 1; Character = 0 } }
+
+                            Collecting(extraLine, 2)
                     else
                         go (i + 1) (Collecting(expandToThisLine range, 0))
                 | BeforeMarker -> go (i + 1) BeforeMarker

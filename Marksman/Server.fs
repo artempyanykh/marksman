@@ -753,7 +753,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let rendered = TableOfContents.render toc
                 let detected = TableOfContents.detect document.text
 
-                let result = ($"{rendered}\n", detected)
+                let result = ($"{rendered}", detected)
 
                 result
             }

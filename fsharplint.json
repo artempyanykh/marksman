@@ -1,0 +1,437 @@
+{
+  "ignoreFiles": [
+    "assemblyinfo.*"
+  ],
+  "global": {
+    "numIndentationSpaces": 4
+  },
+  "typedItemSpacing": {
+    "enabled": false,
+    "config": {
+      "typedItemStyle": "NoSpaces"
+    }
+  },
+  "typePrefixing": { "enabled": false },
+  "unionDefinitionIndentation": { "enabled": false },
+  "moduleDeclSpacing": { "enabled": false },
+  "classMemberSpacing": { "enabled": false },
+  "tupleCommaSpacing": { "enabled": false },
+  "tupleIndentation": { "enabled": false },
+  "tupleParentheses": { "enabled": false },
+  "patternMatchClausesOnNewLine": { "enabled": false },
+  "patternMatchOrClausesOnNewLine": { "enabled": false },
+  "patternMatchClauseIndentation": { "enabled": false },
+  "patternMatchExpressionIndentation": { "enabled": false },
+  "recursiveAsyncFunction": { "enabled": false },
+  "redundantNewKeyword": { "enabled": true },
+  "nestedStatements": {
+    "enabled": false,
+    "config": {
+      "depth": 8
+    }
+  },
+  "cyclomaticComplexity": {
+    "enabled": false,
+    "config": {
+      "maxComplexity": 40
+    }
+  },
+  "reimplementsFunction": { "enabled": true },
+  "canBeReplacedWithComposition": { "enabled": true },
+  "failwithWithSingleArgument": { "enabled": true },
+  "raiseWithSingleArgument": { "enabled": true },
+  "nullArgWithSingleArgument": { "enabled": true },
+  "invalidOpWithSingleArgument": { "enabled": true },
+  "invalidArgWithTwoArguments": { "enabled": true },
+  "failwithfWithArgumentsMatchingFormatString": { "enabled": true },
+  "failwithBadUsage": { "enabled": true },
+  "maxLinesInLambdaFunction": {
+    "enabled": false,
+    "config": {
+      "maxLines": 7
+    }
+  },
+  "maxLinesInMatchLambdaFunction": {
+    "enabled": false,
+    "config": {
+      "maxLines": 100
+    }
+  },
+  "maxLinesInValue": {
+    "enabled": false,
+    "config": {
+      "maxLines": 100
+    }
+  },
+  "maxLinesInFunction": {
+    "enabled": false,
+    "config": {
+      "maxLines": 100
+    }
+  },
+  "maxLinesInMember": {
+    "enabled": false,
+    "config": {
+      "maxLines": 100
+    }
+  },
+  "maxLinesInConstructor": {
+    "enabled": false,
+    "config": {
+      "maxLines": 100
+    }
+  },
+  "maxLinesInProperty": {
+    "enabled": false,
+    "config": {
+      "maxLines": 70
+    }
+  },
+  "maxLinesInModule": {
+    "enabled": false,
+    "config": {
+      "maxLines": 1000
+    }
+  },
+  "maxLinesInRecord": {
+    "enabled": false,
+    "config": {
+      "maxLines": 500
+    }
+  },
+  "maxLinesInEnum": {
+    "enabled": false,
+    "config": {
+      "maxLines": 500
+    }
+  },
+  "maxLinesInUnion": {
+    "enabled": false,
+    "config": {
+      "maxLines": 500
+    }
+  },
+  "maxLinesInClass": {
+    "enabled": false,
+    "config": {
+      "maxLines": 500
+    }
+  },
+  "interfaceNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None",
+      "prefix": "I"
+    }
+  },
+  "exceptionNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None",
+      "suffix": "Exception"
+    }
+  },
+  "typeNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "recordFieldNames": {
+    "enabled": true,
+    "config":  {
+      "naming": "CamelCase",
+      "underscores": "AllowAny"
+    }
+  },
+  "enumCasesNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "unionCasesNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "moduleNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "literalNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "namespaceNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "memberNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "AllowPrefix"
+    }
+  },
+  "parameterNames": {
+    "enabled": true,
+    "config": {
+      "naming": "CamelCase",
+      "underscores": "AllowAny"
+    }
+  },
+  "measureTypeNames": {
+    "enabled": true,
+    "config": {
+      "underscores": "None"
+    }
+  },
+  "activePatternNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "genericTypesNames": {
+    "enabled": true,
+    "config": {
+      "naming": "PascalCase",
+      "underscores": "None"
+    }
+  },
+  "publicValuesNames": {
+    "enabled": true,
+    "config": {
+      "underscores": "AllowPrefix"
+    }
+  },
+  "privateValuesNames": {
+    "enabled": true,
+    "config": {
+      "naming": "CamelCase",
+      "underscores": "AllowPrefix"
+    }
+  },
+  "internalValuesNames": {
+    "enabled": true,
+    "config": {
+      "naming": "CamelCase",
+      "underscores": "AllowPrefix"
+    }
+  },
+  "maxNumberOfItemsInTuple": {
+    "enabled": false,
+    "config": {
+      "maxItems": 4
+    }
+  },
+  "maxNumberOfFunctionParameters": {
+    "enabled": false,
+    "config": {
+      "maxItems": 5
+    }
+  },
+  "maxNumberOfMembers": {
+    "enabled": false,
+    "config": {
+      "maxItems": 32
+    }
+  },
+  "maxNumberOfBooleanOperatorsInCondition": {
+    "enabled": false,
+    "config": {
+      "maxItems": 4
+    }
+  },
+  "favourIgnoreOverLetWild": { "enabled": true },
+  "wildcardNamedWithAsPattern": { "enabled": true },
+  "uselessBinding": { "enabled": true },
+  "tupleOfWildcards": { "enabled": true },
+  "favourTypedIgnore": { "enabled": false },
+  "favourReRaise": { "enabled": true },
+  "favourStaticEmptyFields": { "enabled": false },
+  "favourConsistentThis": {
+    "enabled": false,
+    "config": {
+      "symbol": "this"
+    }
+  },
+  "avoidTooShortNames": { "enabled": false },
+  "indentation": {
+    "enabled": false
+  },
+  "maxCharactersOnLine": {
+    "enabled": false,
+    "config": {
+      "maxCharactersOnLine": 120
+    }
+  },
+  "trailingWhitespaceOnLine": {
+    "enabled": false,
+    "config": {
+      "numberOfSpacesAllowed": 1,
+      "oneSpaceAllowedAfterOperator": true,
+      "ignoreBlankLines": true
+    }
+  },
+  "maxLinesInFile": {
+    "enabled": false,
+    "config": {
+      "maxLinesInFile": 1000
+    }
+  },
+  "trailingNewLineInFile": { "enabled": false },
+  "noTabCharacters": { "enabled": true },
+  "noPartialFunctions": {
+    "enabled": false,
+    "config": {
+      "allowedPartials": [],
+      "additionalPartials": []
+    }
+  },
+  "hints": {
+    "add": [
+      "not (a =  b) ===> a <> b",
+      "not (a <> b) ===> a =  b",
+      "not (a >  b) ===> a <= b",
+      "not (a >= b) ===> a <  b",
+      "not (a <  b) ===> a >= b",
+      "not (a <= b) ===> a >  b",
+      "compare x y <> 1 ===> x <= y",
+      "compare x y = -1 ===> x < y",
+      "compare x y <> -1 ===> x >= y",
+      "compare x y = 1 ===> x > y",
+      "compare x y <= 0 ===> x <= y",
+      "compare x y <  0 ===> x <  y",
+      "compare x y >= 0 ===> x >= y",
+      "compare x y >  0 ===> x >  y",
+      "compare x y =  0 ===> x =  y",
+      "compare x y <> 0 ===> x <> y",
+
+      "List.head (List.sort x) ===> List.min x",
+      "List.head (List.sortBy f x) ===> List.minBy f x",
+
+      "List.map f (List.map g x) ===> List.map (g >> f) x",
+      "Array.map f (Array.map g x) ===> Array.map (g >> f) x",
+      "Seq.map f (Seq.map g x) ===> Seq.map (g >> f) x",
+      "List.nth x 0 ===> List.head x",
+      "List.map f (List.replicate n x) ===> List.replicate n (f x)",
+      "List.rev (List.rev x) ===> x",
+      "Array.rev (Array.rev x) ===> x",
+      "List.fold (@) [] x ===> List.concat x",
+      "List.map id x ===> id x",
+      "Array.map id x ===> id x",
+      "Seq.map id x ===> id x",
+      "(List.length x) = 0 ===> List.isEmpty x",
+      "(Array.length x) = 0 ===> Array.isEmpty x",
+      "(Seq.length x) = 0 ===> Seq.isEmpty x",
+      "x = [] ===> List.isEmpty x",
+      "x = [||] ===> Array.isEmpty x",
+      "(List.length x) <> 0 ===> not (List.isEmpty x)",
+      "(Array.length x) <> 0 ===> not (Array.isEmpty x)",
+      "(Seq.length x) <> 0 ===> not (Seq.isEmpty x)",
+      "(List.length x) > 0 ===> not (List.isEmpty x)",
+      "(Array.length x) <> 0 ===> not (Array.isEmpty x)",
+      "(Seq.length x) <> 0 ===> not (Seq.isEmpty x)",
+
+      "List.concat (List.map f x) ===> List.collect f x",
+      "Array.concat (Array.map f x) ===> Array.collect f x",
+      "Seq.concat (Seq.map f x) ===> Seq.collect f x",
+
+      "List.isEmpty (List.filter f x) ===> not (List.exists f x)",
+      "Array.isEmpty (Array.filter f x) ===> not (Array.exists f x)",
+      "Seq.isEmpty (Seq.filter f x) ===> not (Seq.exists f x)",
+      "not (List.isEmpty (List.filter f x)) ===> List.exists f x",
+      "not (Array.isEmpty (Array.filter f x)) ===> Array.exists f x",
+      "not (Seq.isEmpty (Seq.filter f x)) ===> Seq.exists f x",
+
+      "List.length x >= 0 ===> true",
+      "Array.length x >= 0 ===> true",
+      "Seq.length x >= 0 ===> true",
+
+      "x = true ===> x",
+      "x = false ===> not x",
+      "true = a ===> a",
+      "false = a ===> not a",
+      "a <> true ===> not a",
+      "a <> false ===> a",
+      "true <> a ===> not a",
+      "false <> a ===> a",
+      "if a then true else false ===> a",
+      "if a then false else true ===> not a",
+      "not (not x) ===> x",
+
+      "(fst x, snd x) ===> x",
+
+      "true && x ===> x",
+      "false && x ===> false",
+      "true || x ===> true",
+      "false || x ===> x",
+      "not true ===> false",
+      "not false ===> true",
+      "fst (x, y) ===> x",
+      "snd (x, y) ===> y",
+      "List.fold f x [] ===> x",
+      "Array.fold f x [||] ===> x",
+      "List.foldBack f [] x ===> x",
+      "Array.foldBack f [||] x ===> x",
+      "x - 0 ===> x",
+      "x * 1 ===> x",
+      "x / 1 ===> x",
+
+      "List.fold (+) 0 x ===> List.sum x",
+      "Array.fold (+) 0 x ===> Array.sum x",
+      "Seq.fold (+) 0 x ===> Seq.sum x",
+      "List.sum (List.map x y) ===> List.sumBy x y",
+      "Array.sum (Array.map x y) ===> Array.sumBy x y",
+      "Seq.sum (Seq.map x y) ===> Seq.sumBy x y",
+      "List.average (List.map x y) ===> List.averageBy x y",
+      "Array.average (Array.map x y) ===> Array.averageBy x y",
+      "Seq.average (Seq.map x y) ===> Seq.averageBy x y",
+      "(List.take x y, List.skip x y) ===> List.splitAt x y",
+      "(Array.take x y, Array.skip x y) ===> Array.splitAt x y",
+      "(Seq.take x y, Seq.skip x y) ===> Seq.splitAt x y",
+
+      "List.empty ===> []",
+      "Array.empty ===> [||]",
+
+      "x::[] ===> [x]",
+      "pattern: x::[] ===> [x]",
+
+      "x @ [] ===> x",
+
+      "List.isEmpty [] ===> true",
+      "Array.isEmpty [||] ===> true",
+
+      "fun _ -> () ===> ignore",
+      "fun x -> x ===> id",
+      "id x ===> x",
+      "id >> f ===> f",
+      "f >> id ===> f",
+
+      "x = null ===> isNull x",
+      "null = x ===> isNull x",
+      "x <> null ===> not (isNull x)",
+      "null <> x ===> not (isNull x)",
+
+      "Array.append a (Array.append b c) ===> Array.concat [|a; b; c|]"
+    ]
+  }
+}

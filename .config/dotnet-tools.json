@@ -7,6 +7,12 @@
       "commands": [
         "fantomas"
       ]
+    },
+    "dotnet-fsharplint": {
+      "version": "0.21.2",
+      "commands": [
+        "dotnet-fsharplint"
+      ]
     }
   }
 }

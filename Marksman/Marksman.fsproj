@@ -1,35 +1,49 @@
+<?xml version="1.0"?>
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>marksman</AssemblyName>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="Misc.fs" />
-    <Compile Include="Text.fs" />
-    <Compile Include="Cst.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="Index.fs" />
-    <Compile Include="Workspace.fs" />
-    <Compile Include="Compl.fs" />
-    <Compile Include="Semato.fs" />
-    <Compile Include="Diag.fs" />
-    <Compile Include="State.fs" />
-    <Compile Include="Toc.fs" />
-    <Compile Include="Server.fs" />
-    <Compile Include="Program.fs" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="6.0.4" />
-    <PackageReference Include="FSharp.SystemCommandLine" Version="0.10.0-beta" />
-    <PackageReference Include="FSharpPlus" Version="1.2.3" />
-    <PackageReference Include="Markdig" Version="0.30.2" />
-    <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->
-    <PackageReference Include="Serilog" Version="2.11.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj" />
-    <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj" />
-  </ItemGroup>
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net6.0</TargetFramework>
+        <AssemblyName>marksman</AssemblyName>
+    </PropertyGroup>
+
+    <Target Name="FSharpLint" AfterTargets="BeforeBuild">
+        <PropertyGroup>
+            <LintCommand>dotnet fsharplint -f msbuild lint --lint-config $(MSBuildProjectDirectory)/../fsharplint.json $(MSBuildProjectFullPath)</LintCommand>
+        </PropertyGroup>
+       
+        <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true"/>
+    </Target>
+
+    <ItemGroup>
+        <Compile Include="Misc.fs"/>
+        <Compile Include="Text.fs"/>
+        <Compile Include="Cst.fs"/>
+        <Compile Include="Parser.fs"/>
+        <Compile Include="Index.fs"/>
+        <Compile Include="Workspace.fs"/>
+        <Compile Include="Compl.fs"/>
+        <Compile Include="Semato.fs"/>
+        <Compile Include="Diag.fs"/>
+        <Compile Include="State.fs"/>
+        <Compile Include="Toc.fs"/>
+        <Compile Include="Server.fs"/>
+        <Compile Include="Program.fs"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Update="FSharp.Core" Version="6.0.4"/>
+        <PackageReference Include="FSharp.SystemCommandLine" Version="0.10.0-beta"/>
+        <PackageReference Include="FSharpPlus" Version="1.2.3"/>
+        <PackageReference Include="Markdig" Version="0.30.2"/>
+        <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->
+        <PackageReference Include="Serilog" Version="2.11.0"/>
+        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj"/>
+        <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj"/>
+    </ItemGroup>
+
 </Project>

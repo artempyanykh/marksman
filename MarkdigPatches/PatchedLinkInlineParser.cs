@@ -23,7 +23,7 @@ namespace MarkdigPatches
         /// </summary>
         public PatchedLinkInlineParser()
         {
-            OpeningCharacters = new[] {'[', ']', '!'};
+            OpeningCharacters = new[] { '[', ']', '!' };
         }
 
         public override bool Match(InlineProcessor processor, ref StringSlice slice)

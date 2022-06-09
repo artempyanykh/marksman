@@ -160,7 +160,7 @@ let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSym
       SelectionRange = selectionRange
       Children = children }
 
-type MarksmanStatusParams = { State: string; DocCount: int }
+type MarksmanStatusParams = { state: string; docCount: int }
 
 type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
     inherit LspClient()
@@ -248,7 +248,7 @@ type StatusAgent(client: MarksmanClient) =
                             >> Log.addContext "docCount" (cnt, newCnt)
                         )
 
-                        do! client.MarksmanUpdateStatus({ State = "ok"; DocCount = newCnt })
+                        do! client.MarksmanUpdateStatus({ state = "ok"; docCount = newCnt })
                         return! loop newCnt
                     | _ -> return! loop cnt
                 }

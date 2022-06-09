@@ -32,7 +32,7 @@ type Token =
 module Token =
     // We don't use modifiers in the encoding currently
     [<Literal>]
-    let private modifiers = 0u
+    let private Modifiers = 0u
 
     let private isSingleLine tok = tok.range.Start.Line = tok.range.End.Line
     let private lenSingleLine tok = tok.range.End.Character - tok.range.Start.Character
@@ -61,7 +61,7 @@ module Token =
            uint32 deltaChar
            uint32 (lenSingleLine curTok)
            TokenType.toNum curTok.typ
-           modifiers |]
+           Modifiers |]
 
     let encodeAll (tokens: seq<Token>) : array<uint32> =
         let tokens =

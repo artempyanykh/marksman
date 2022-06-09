@@ -40,6 +40,15 @@ endif
 
 RID := $(OS_ID)-$(ARCH_ID)
 
+.PHONY: setup
+setup:
+	dotnet tool restore
+
+.PHONY: check
+check: setup
+	dotnet fantomas --check Marksman
+	dotnet fsi scripts/silent-lint.fsx
+
 .PHONY: build
 build:
 	dotnet build Marksman/Marksman.fsproj
@@ -49,8 +58,11 @@ run:
 	dotnet run --project Marksman -- $(ARGS)
 
 .PHONY: fmt
-fmt:
+fmt: setup
 	dotnet fantomas Marksman
+ifneq ($(OS_ID),win)
+	xmllint Marksman/Marksman.fsproj -o Marksman/Marksman.fsproj
+endif
 
 .PHONY: publish
 publish:

@@ -12,7 +12,9 @@ type Index =
       headingsBySlug: Map<Slug, list<Node<Heading>>>
       wikiLinks: array<Node<WikiLink>>
       mdLinks: array<Node<MdLink>>
-      linkDefs: array<Node<MdLinkDef>> }
+      linkDefs: array<Node<MdLinkDef>>
+      yamlFrontMatter: Node<YamlContent> option
+    }
 
 module Index =
     let ofCst (cst: Cst) : Index =
@@ -22,6 +24,7 @@ module Index =
         let headings = ResizeArray()
         let mdLinks = ResizeArray()
         let linkDefs = ResizeArray()
+        let mutable yaml = None 
 
         for el in Cst.elementsAll cst do
             match el with
@@ -38,6 +41,8 @@ module Index =
             | WL wl -> wikiLinks.Add(wl)
             | ML ml -> mdLinks.Add(ml)
             | MLD linkDef -> linkDefs.Add(linkDef)
+            | YML yml -> 
+                yaml <- Some yml
 
         let headingsBySlug =
             seq {
@@ -57,7 +62,9 @@ module Index =
           headingsBySlug = headingsBySlug
           wikiLinks = wikiLinks
           mdLinks = mdLinks
-          linkDefs = linkDefs }
+          linkDefs = linkDefs
+          yamlFrontMatter = yaml
+        }
 
     let titles index = index.titles
 

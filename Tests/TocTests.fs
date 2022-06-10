@@ -63,6 +63,27 @@ module CreateToc =
 
         Assert.Equal(expected, titles)
 
+    [<Fact>]
+    let createToc_yamlFrontMatter () =
+        let doc =
+            makeFakeDocumentLines
+                [| "---"
+                   """title: "First" """
+                   """tags: ["1", "2"] """
+                   "---"
+                   ""
+                   "# T1"
+                   "## T2" |]
+
+        let titles = TableOfContents.mk doc.index |> Option.get
+
+        let expected = { entries = [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
+
+        // Test that YAML front matter is not picked up as one of the headings
+        // See https://spec.commonmark.org/0.30/#example-80 for why
+        // it can be interpreted as a heading
+        Assert.Equal(expected, titles)
+
 module RenderToc =
     [<Fact>]
     let createToc () =

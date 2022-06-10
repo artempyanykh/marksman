@@ -84,6 +84,62 @@ module CreateToc =
         // it can be interpreted as a heading
         Assert.Equal(expected, titles)
 
+
+module InsertToc =
+    [<Fact>]
+    let insert_documentBeginning () =
+        let doc = makeFakeDocumentLines [| "## T1"; "## T2" |]
+
+        let insertion = TableOfContents.insertionPoint doc
+
+        Assert.Equal(insertion, Replacing Text.documentBeginning)
+
+    [<Fact>]
+    let insert_firstTitle () =
+        let doc = makeFakeDocumentLines [| "# T1"; "## T2" |]
+
+        let insertion = TableOfContents.insertionPoint doc
+        let firstTitleRange = Array.head(doc.index.titles).range
+
+        Assert.Equal(insertion, After firstTitleRange)
+
+    [<Fact>]
+    let insert_afterYaml () =
+        let doc =
+            makeFakeDocumentLines
+                [| "---"
+                   """title: "First" """
+                   """tags: ["1", "2"] """
+                   "---"
+                   ""
+                   "## T1"
+                   "## T2" |]
+
+
+        let insertion = TableOfContents.insertionPoint doc
+        let yamlRange = Option.get(doc.index.yamlFrontMatter).range
+
+        Assert.Equal(insertion, After yamlRange)
+
+    [<Fact>]
+    let insert_afterfirstTitle_withYaml () =
+        let doc =
+            makeFakeDocumentLines
+                [| "---"
+                   """title: "First" """
+                   """tags: ["1", "2"] """
+                   "---"
+                   ""
+                   "# T1"
+                   "## T2" |]
+
+
+        let insertion = TableOfContents.insertionPoint doc
+        let firstTitleRange = Array.head(doc.index.titles).range
+
+        Assert.Equal(insertion, After firstTitleRange)
+
+
 module RenderToc =
     [<Fact>]
     let createToc () =
@@ -96,10 +152,10 @@ module RenderToc =
         let expectedLines =
             [| Toc.StartMarker
                "- [T1](#t1)"
-               " - [T2](#t2)"
-               "  - [T3](#t3)"
-               " - [T4](#t4)"
-               "  - [T5](#t5)"
+               "  - [T2](#t2)"
+               "    - [T3](#t3)"
+               "  - [T4](#t4)"
+               "    - [T5](#t5)"
                Toc.EndMarker
                "" |]
 

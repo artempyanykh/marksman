@@ -27,14 +27,18 @@ module Entry =
     let Mk (level: EntryLevel, title: Title) =
         { level = level; title = title; link = Slug.ofString title }
 
-    let renderLink entry =
-        let offset = String.replicate (entry.level - 1) "  "
+    let renderLink entry minLevel =
+        let offset = String.replicate (entry.level - minLevel) "  "
         let slug = entry.link |> Slug.toString
         $"{offset}- [{entry.title}](#{slug})"
 
     let fromHeading (heading: Heading) : Entry =
         let slug = Heading.slug heading
         { level = heading.level; link = slug; title = heading.title.text }
+
+type InsertionPoint =
+    | After of Range
+    | Replacing of Range
 
 type TableOfContents = { entries: array<Entry> }
 
@@ -50,8 +54,24 @@ module TableOfContents =
         else
             Some { entries = Array.map Entry.fromHeading headings }
 
+    let insertionPoint (doc: Workspace.Doc) : InsertionPoint =
+        match (Array.toList doc.index.titles) with
+        // if there's only a single title
+        | [ singleTitle ] -> After singleTitle.range
+        | _ ->
+            match doc.index.yamlFrontMatter with
+            | None -> Replacing Text.documentBeginning
+            | Some (yml) -> After yml.range
+
+
     let render (toc: TableOfContents) =
-        let tocLinks = Array.map Entry.renderLink toc.entries
+        let offset =
+            if toc.entries.Length <> 0 then
+                toc.entries |> Array.map (fun x -> x.level) |> Array.min
+            else
+                1
+
+        let tocLinks = Array.map (fun x -> Entry.renderLink x offset) toc.entries
         let startMarkerLines = [| StartMarker |]
         let endMarkerLines = [| EndMarker; EmptyLine |]
 

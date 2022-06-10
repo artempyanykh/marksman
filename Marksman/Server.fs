@@ -19,6 +19,8 @@ open Marksman.State
 open Marksman.Index
 open Marksman.Toc
 
+open type System.Environment
+
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
     | Some folders ->
@@ -727,10 +729,8 @@ type MarksmanServer(client: MarksmanClient) =
 
         let documentBeginning = Range.Mk(0, 0, 0, 0)
 
-        let editAt rangeOpt text =
-            let textEdit =
-                { NewText = text
-                  Range = Option.defaultValue documentBeginning rangeOpt }
+        let editAt range text =
+            let textEdit = { NewText = text; Range = range }
 
             let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
 
@@ -743,8 +743,9 @@ type MarksmanServer(client: MarksmanClient) =
 
                 let rendered = TableOfContents.render toc
                 let detected = TableOfContents.detect document.text
+                let insertion = TableOfContents.insertionPoint document
 
-                let result = ($"{rendered}", detected)
+                let result = (rendered, insertion, detected)
 
                 result
             }
@@ -762,11 +763,30 @@ type MarksmanServer(client: MarksmanClient) =
         let codeActions =
             match toc with
             | None -> Array.empty
-            | Some (render, existing) ->
-                match existing with
-                | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
-                | Some (oldTocRange) ->
-                    [| codeAction "Update the Table of Contents" (editAt (Some oldTocRange) render) |]
+            | Some (render, insertion, existing) ->
+                let name =
+                    match existing with
+                    | None -> "Create a Table of Contents"
+                    | _ -> "Update the Table of Contents"
+
+                let insertionPoint =
+                    match existing with
+                    | Some (range) -> Replacing range
+                    | None -> insertion
+
+                let text =
+                    match insertionPoint with
+                    | Replacing _ -> render
+                    | After _ -> NewLine + render + NewLine
+
+                let editRange =
+                    match insertionPoint with
+                    | Replacing range -> range
+                    | After range ->
+                        let lineAfterLast = range.End.Line + 1
+                        Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
+
+                [| codeAction name (editAt editRange text) |]
 
         let commands = TextDocumentCodeActionResult.CodeActions codeActions
 

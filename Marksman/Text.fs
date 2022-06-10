@@ -156,6 +156,8 @@ let mkLineMap (str: string) : LineMap =
 
     LineMap(lineMap.ToArray())
 
+let documentBeginning = Range.Mk(0, 0, 0, 0)
+
 let mkText (content: string) : Text =
     let lineMap = mkLineMap content
     { content = content; lineMap = lineMap }

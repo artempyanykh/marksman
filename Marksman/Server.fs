@@ -727,29 +727,6 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
         let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
-        let documentBeginning = Range.Mk(0, 0, 0, 0)
-
-        let editAt range text =
-            let textEdit = { NewText = text; Range = range }
-
-            let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
-
-            { Changes = Some mp; DocumentChanges = None }
-
-        let toc =
-            monad' {
-                let! document = State.tryFindDocument docPath state
-                let! toc = Toc.TableOfContents.mk document.index
-
-                let rendered = TableOfContents.render toc
-                let detected = TableOfContents.detect document.text
-                let insertion = TableOfContents.insertionPoint document
-
-                let result = (rendered, insertion, detected)
-
-                result
-            }
-
         let codeAction title edit =
             { Title = title
               Kind = Some CodeActionKind.Source
@@ -760,35 +737,18 @@ type MarksmanServer(client: MarksmanClient) =
               Disabled = None
               Edit = Some edit }
 
-        let codeActions =
-            match toc with
-            | None -> Array.empty
-            | Some (render, insertion, existing) ->
-                let name =
-                    match existing with
-                    | None -> "Create a Table of Contents"
-                    | _ -> "Update the Table of Contents"
 
-                let insertionPoint =
-                    match existing with
-                    | Some (range) -> Replacing range
-                    | None -> insertion
+        let tocAction =
+            State.tryFindDocument docPath state
+            |> Option.bind CodeActions.tableOfContents
+            |> Option.toArray
+            |> Array.map (fun ca ->
+                let wsEdit =
+                    (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
 
-                let text =
-                    match insertionPoint with
-                    | Replacing _ -> render
-                    | After _ -> NewLine + render + NewLine
+                codeAction ca.name wsEdit)
 
-                let editRange =
-                    match insertionPoint with
-                    | Replacing range -> range
-                    | After range ->
-                        let lineAfterLast = range.End.Line + 1
-                        Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
-
-                [| codeAction name (editAt editRange text) |]
-
-        let commands = TextDocumentCodeActionResult.CodeActions codeActions
+        let commands = TextDocumentCodeActionResult.CodeActions tocAction
 
         AsyncLspResult.success (Some commands)
 

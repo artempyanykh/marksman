@@ -27,6 +27,7 @@
         <Compile Include="Diag.fs"/>
         <Compile Include="State.fs"/>
         <Compile Include="Toc.fs"/>
+        <Compile Include="CodeActions.fs"/>
         <Compile Include="Server.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>

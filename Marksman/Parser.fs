@@ -157,18 +157,14 @@ module Markdown =
 
         for b in parsed.Descendants() do
             match b with
-            | :? YamlFrontMatterBlock as y -> 
+            | :? YamlFrontMatterBlock as y ->
                 let fullText = text.content.Substring(y.Span.Start, y.Span.Length)
                 let range = sourceSpanToRange text y.Span
 
-                let node: Node<YamlContent> = 
-                    Node.mk 
-                        fullText 
-                        range 
-                        fullText
+                let node: Node<YamlContent> = Node.mk fullText range fullText
 
                 elements.Add(YML node)
-                        
+
             | :? HeadingBlock as h ->
                 let level = h.Level
 

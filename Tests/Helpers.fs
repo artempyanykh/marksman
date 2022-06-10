@@ -4,6 +4,9 @@ open System.Runtime.InteropServices
 open Snapper
 open Marksman.Misc
 open Marksman.Workspace
+open Marksman.Text
+open Ionide.LanguageServerProtocol.Types
+open Marksman.CodeActions
 
 let dummyRoot =
     if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
@@ -27,3 +30,13 @@ let makeFakeDocument (content: string) : Doc =
 let makeFakeDocumentLines (lines: array<string>) : Doc =
     let text = Text.mkText (String.concat System.Environment.NewLine lines)
     Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text
+
+let applyDocumentAction (doc: Doc) (action: DocumentAction)  = 
+    let (before, after) = doc.text.Cutout(action.edit)
+
+    before + action.newText + after
+
+
+
+    
+    

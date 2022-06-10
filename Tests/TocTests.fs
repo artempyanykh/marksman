@@ -162,3 +162,69 @@ module RenderToc =
         let expected = String.concat NewLine expectedLines
 
         Assert.Equal(expected, titles)
+
+module DocumentEdit =
+    [<Fact>]
+    let insert_afterYaml () =
+        let doc =
+            makeFakeDocumentLines
+                [| "---"
+                   """title: "First" """
+                   """tags: ["1", "2"] """
+                   "---"
+                   ""
+                   "## T1"
+                   "### T2"
+                   "## T3"
+                   "#### T4" |]
+
+        let action = CodeActions.tableOfContents doc |> Option.get
+
+        let modifiedText = applyDocumentAction doc action
+
+        let expected =
+            String.concat
+                NewLine
+                [| "---"
+                   """title: "First" """
+                   """tags: ["1", "2"] """
+                   "---"
+                   ""
+                   Toc.StartMarker
+                   "- [T1](#t1)"
+                   "  - [T2](#t2)"
+                   "- [T3](#t3)"
+                   "    - [T4](#t4)"
+                   Toc.EndMarker
+                   ""
+                   "## T1"
+                   "### T2"
+                   "## T3"
+                   "#### T4" |]
+
+        Assert.Equal(expected, modifiedText)
+
+    [<Fact>]
+    let insert_documentBeginning () =
+        let doc =
+            makeFakeDocumentLines [| "## T1"; "### T2"; "## T3"; "#### T4" |]
+
+        let action = CodeActions.tableOfContents doc |> Option.get
+
+        let modifiedText = applyDocumentAction doc action
+
+        let expected =
+            String.concat
+                NewLine
+                [| Toc.StartMarker
+                   "- [T1](#t1)"
+                   "  - [T2](#t2)"
+                   "- [T3](#t3)"
+                   "    - [T4](#t4)"
+                   Toc.EndMarker
+                   "## T1"
+                   "### T2"
+                   "## T3"
+                   "#### T4" |]
+
+        Assert.Equal(expected, modifiedText)

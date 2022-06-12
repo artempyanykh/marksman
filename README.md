@@ -1,10 +1,13 @@
-<img src="assets/readme/logo.png" width="90" align="right">
+[![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
+![release](https://img.shields.io/github/v/release/artempyanykh/marksman)
 
 # Marksman
 
-_Markdown LSP server for note-taking and more._
+_Markdown LSP server providing completion, goto, references, diagnostics, and more._
 
-[![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
+![](assets/readme/splash.png)
+
+---
 
 Marksman is an LSP server for Markdown that provides **completion**, goto **definition**, find **references**,
 **diagnostics**, etc. It also supports **wiki-link**-style references that enable

@@ -17,3 +17,17 @@ let documentIndex_1 () =
         Index.titles doc.index |> Array.map (fun x -> x.data.title.text)
 
     Assert.Equal<string>([ "T1"; "T2" ], titles)
+
+[<Fact>]
+let nonBreakingWhitespace () =
+    let nbsp = "\u00a0"
+    let doc = makeFakeDocument $"# T1\n##{nbsp}T2"
+
+    match (checkNonBreakingWhitespace doc) with
+    | [] -> failwith "Expected NonBreakingWhitespace diagnostic"
+    | [ NonBreakableWhitespace range ] ->
+        Assert.Equal(1, range.Start.Line)
+        Assert.Equal(1, range.End.Line)
+
+        Assert.Equal(2, range.Start.Character)
+        Assert.Equal(3, range.End.Character)

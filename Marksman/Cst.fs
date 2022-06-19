@@ -272,3 +272,7 @@ module Cst =
             }
 
         collect cst
+
+    let elementAtPos (pos: Position) (cst: Cst) : option<Element> =
+        elementsAll cst
+        |> Seq.tryFind (fun el -> (Element.range el).ContainsInclusive(pos))

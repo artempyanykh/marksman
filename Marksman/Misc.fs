@@ -1,7 +1,6 @@
 module Marksman.Misc
 
 open System
-open System.IO
 open System.Text
 open Ionide.LanguageServerProtocol.Types
 

@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
@@ -11,7 +11,7 @@
         <PropertyGroup>
             <LintCommand>dotnet fsharplint -f msbuild lint --lint-config $(MSBuildProjectDirectory)/../fsharplint.json $(MSBuildProjectFullPath)</LintCommand>
         </PropertyGroup>
-       
+
         <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true"/>
     </Target>
 
@@ -27,12 +27,13 @@
         <Compile Include="Diag.fs"/>
         <Compile Include="State.fs"/>
         <Compile Include="Toc.fs"/>
+        <Compile Include="Refs.fs"/>
         <Compile Include="Server.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.4"/>
+        <PackageReference Update="FSharp.Core" Version="6.0.5"/>
         <PackageReference Include="FSharp.SystemCommandLine" Version="0.10.0-beta"/>
         <PackageReference Include="FSharpPlus" Version="1.2.3"/>
         <PackageReference Include="Markdig" Version="0.30.2"/>

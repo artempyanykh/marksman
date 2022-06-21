@@ -1,10 +1,7 @@
 module Marksman.TocTests
 
-open Marksman.Index
 open Xunit
 
-open Marksman.Misc
-open Marksman.Parser
 open Marksman.Helpers
 open Marksman.Toc
 
@@ -13,7 +10,7 @@ open type System.Environment
 module DetectToc =
     [<Fact>]
     let detectToc_1 () =
-        let doc = makeFakeDocument "# T1\n# T2"
+        let doc = FakeDoc.mk "# T1\n# T2"
 
         let titles = TableOfContents.detect doc.text
 
@@ -22,7 +19,12 @@ module DetectToc =
     [<Fact>]
     let detectToc_noMarker () =
         let doc =
-            makeFakeDocumentLines [| "- [T1][#t1]"; " - [T2][#t2]"; ""; ""; "# T1"; "## T2" |]
+            FakeDoc.mk [| "- [T1][#t1]"
+                          " - [T2][#t2]"
+                          ""
+                          ""
+                          "# T1"
+                          "## T2" |]
 
         let titles = TableOfContents.detect doc.text
 
@@ -31,13 +33,12 @@ module DetectToc =
     [<Fact>]
     let detectToc_withMarker () =
         let doc =
-            makeFakeDocumentLines
-                [| Toc.StartMarker
-                   "- [T1][#t1]"
-                   " - [T2][#t2]"
-                   Toc.EndMarker
-                   "# T1"
-                   "## T2" |]
+            FakeDoc.mk [| StartMarker
+                          "- [T1][#t1]"
+                          " - [T2][#t2]"
+                          EndMarker
+                          "# T1"
+                          "## T2" |]
 
         let toc = (TableOfContents.detect doc.text).Value
         let tocText = doc.text.Substring toc
@@ -55,7 +56,7 @@ module DetectToc =
 module CreateToc =
     [<Fact>]
     let createToc () =
-        let doc = makeFakeDocumentLines [| "# T1"; "## T2" |]
+        let doc = FakeDoc.mk [| "# T1"; "## T2" |]
 
         let titles = TableOfContents.mk doc.index |> Option.get
 
@@ -66,20 +67,19 @@ module CreateToc =
 module RenderToc =
     [<Fact>]
     let createToc () =
-        let doc =
-            makeFakeDocumentLines [| "# T1"; "## T2"; "### T3"; "## T4"; "### T5" |]
+        let doc = FakeDoc.mk [| "# T1"; "## T2"; "### T3"; "## T4"; "### T5" |]
 
         let titles =
             TableOfContents.mk doc.index |> Option.get |> TableOfContents.render
 
         let expectedLines =
-            [| Toc.StartMarker
+            [| StartMarker
                "- [T1](#t1)"
                " - [T2](#t2)"
                "  - [T3](#t3)"
                " - [T4](#t4)"
                "  - [T5](#t5)"
-               Toc.EndMarker
+               EndMarker
                "" |]
 
         let expected = String.concat NewLine expectedLines

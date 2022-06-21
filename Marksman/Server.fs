@@ -18,6 +18,7 @@ open Marksman.Workspace
 open Marksman.State
 open Marksman.Index
 open Marksman.Toc
+open Marksman.Refs
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -579,8 +580,8 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
-                let! uref = URef.ofElement atPos
-                let! ref = Folder.resolveRef uref srcDoc folder
+                let! uref = Uref.ofElement atPos
+                let! ref = Ref.tryResolveUref uref srcDoc folder
                 GotoResult.Single { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
             }
 
@@ -596,8 +597,8 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
-                let! uref = URef.ofElement atPos
-                let! ref = Folder.resolveRef uref srcDoc folder
+                let! uref = Uref.ofElement atPos
+                let! ref = Ref.tryResolveUref uref srcDoc folder
 
                 let destScope = Ref.scope ref
 
@@ -621,65 +622,12 @@ type MarksmanServer(client: MarksmanClient) =
             monad' {
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! curDoc = Folder.tryFindDocByPath docUri folder
-
-                let! srcDoc, atPos =
-                    match Index.declAtPos par.Position curDoc.index with
-                    | Some decl -> Some(curDoc, decl)
-                    | None ->
-                        monad' {
-                            let! link = Index.linkAtPos par.Position curDoc.index
-                            let! uref = URef.ofElement link
-                            let! ref = Folder.resolveRef uref curDoc folder
-                            let! el = Ref.element ref
-                            Ref.doc ref, el
-                        }
-
-                // This is very inefficient and should be reworked using reference/reverse-reference map.
-                let referencingEls =
-                    seq {
-                        for KeyValue (_, targetDoc) in folder.docs do
-                            let links = Doc.index >> Index.links <| targetDoc
-
-                            for link in links do
-                                let ref =
-                                    monad' {
-                                        let! uref = URef.ofElement link
-                                        return! Folder.resolveRef uref srcDoc folder
-                                    }
-
-                                match ref with
-                                | Some ref ->
-                                    match ref with
-                                    | Ref.Doc referencedDoc ->
-                                        if referencedDoc = srcDoc && Element.isTitle atPos then
-                                            yield targetDoc, link
-                                        else
-                                            ()
-                                    | Ref.Heading (referencedDoc, heading) ->
-                                        let sameDoc = referencedDoc = srcDoc
-
-                                        let sameHeading =
-                                            Element.asHeading atPos
-                                            |> Option.map (fun x -> x.data = heading.data)
-                                            |> Option.defaultValue false
-
-                                        if sameDoc && sameHeading then yield targetDoc, link else ()
-                                    | Ref.LinkDef (referencedDoc, linkDef) ->
-                                        if referencedDoc = srcDoc then
-                                            let sameHeading =
-                                                Element.asLinkDef atPos
-                                                |> Option.map (fun x -> x.data = linkDef.data)
-                                                |> Option.defaultValue false
-
-                                            if sameHeading then yield targetDoc, link else ()
-                                        else
-                                            ()
-                                | None -> ()
-                    }
+                let! atPos = Cst.elementAtPos par.Position curDoc.cst
+                let referencingEls = Ref.findElementRefs folder curDoc atPos
 
                 let referencingEls =
                     if par.Context.IncludeDeclaration then
-                        Seq.append referencingEls [ srcDoc, atPos ]
+                        Seq.append referencingEls [ curDoc, atPos ]
                     else
                         referencingEls
 
@@ -739,7 +687,7 @@ type MarksmanServer(client: MarksmanClient) =
         let toc =
             monad' {
                 let! document = State.tryFindDocument docPath state
-                let! toc = Toc.TableOfContents.mk document.index
+                let! toc = TableOfContents.mk document.index
 
                 let rendered = TableOfContents.render toc
                 let detected = TableOfContents.detect document.text
@@ -765,7 +713,7 @@ type MarksmanServer(client: MarksmanClient) =
             | Some (render, existing) ->
                 match existing with
                 | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
-                | Some (oldTocRange) ->
+                | Some oldTocRange ->
                     [| codeAction "Update the Table of Contents" (editAt (Some oldTocRange) render) |]
 
         let commands = TextDocumentCodeActionResult.CodeActions codeActions

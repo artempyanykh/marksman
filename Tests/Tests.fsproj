@@ -17,12 +17,13 @@
         <Compile Include="SematoTests.fs" />
         <Compile Include="WorkspaceTest.fs" />
         <Compile Include="TocTests.fs" />
+        <Compile Include="RefsTests.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
-        <PackageReference Update="FSharp.Core" Version="6.0.4" />
+        <PackageReference Update="FSharp.Core" Version="6.0.5" />
         <PackageReference Include="Snapper" Version="2.3.1" />
         <PackageReference Include="xunit" Version="2.4.1" />
         <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">

@@ -5,25 +5,45 @@ open Snapper
 open Marksman.Misc
 open Marksman.Workspace
 
+let pathToUri path = $"file://{path}"
+
 let dummyRoot =
     if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
         "c:/"
     else
         "/"
 
-let dummyRootPath pathComps = dummyRoot :: pathComps |> String.concat "/"
+let dummyRootUri = pathToUri dummyRoot
 
-let pathToUri path = $"file://{path}"
+let dummyRootPath pathComps = dummyRoot + (pathComps |> String.concat "/")
 
 let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<string>) =
     let lines = Seq.map (fun x -> (fmt x).Lines()) things |> Seq.concat
 
     lines.ShouldMatchInlineSnapshot(snapshot)
 
-let makeFakeDocument (content: string) : Doc =
-    let text = Text.mkText content
-    Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text
+type FakeDoc =
+    class
+        static member mk(content: string, ?path: string) : Doc =
+            let text = Text.mkText content
+            let path = defaultArg path "fake.md"
+            let pathComp = path.TrimStart('/').Split("/") |> List.ofArray
+            let path = dummyRootPath pathComp
+            let pathUri = pathToUri path
+            let rootUri = dummyRoot |> pathToUri
+            Doc.mk (PathUri.fromString pathUri) (PathUri.fromString rootUri) None text
 
-let makeFakeDocumentLines (lines: array<string>) : Doc =
-    let text = Text.mkText (String.concat System.Environment.NewLine lines)
-    Doc.mk (PathUri.fromString "memory://fake.md") (PathUri.fromString "memory://") None text
+        static member mk(contentLines: array<string>, ?path: string) : Doc =
+            let content = String.concat System.Environment.NewLine contentLines
+            FakeDoc.mk (content, ?path = path)
+    end
+
+type FakeFolder =
+    class
+        static member mk(docs: seq<Doc>) : Folder =
+            let docsMap = docs |> Seq.map (fun d -> d.path, d) |> Map.ofSeq
+
+            { name = "dummy"
+              root = PathUri.fromString dummyRootUri
+              docs = docsMap }
+    end

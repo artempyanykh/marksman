@@ -18,6 +18,7 @@ open Marksman.Workspace
 open Marksman.State
 open Marksman.Index
 open Marksman.Toc
+open Marksman.Refs
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
@@ -579,8 +580,8 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
-                let! uref = URef.ofElement atPos
-                let! ref = Folder.resolveRef uref srcDoc folder
+                let! uref = Uref.ofElement atPos
+                let! ref = Ref.tryResolveUref uref srcDoc folder
                 GotoResult.Single { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
             }
 
@@ -596,8 +597,8 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! srcDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Doc.linkAtPos par.Position srcDoc
-                let! uref = URef.ofElement atPos
-                let! ref = Folder.resolveRef uref srcDoc folder
+                let! uref = Uref.ofElement atPos
+                let! ref = Ref.tryResolveUref uref srcDoc folder
 
                 let destScope = Ref.scope ref
 
@@ -622,7 +623,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let! folder = State.tryFindFolderEnclosing docUri state
                 let! curDoc = Folder.tryFindDocByPath docUri folder
                 let! atPos = Cst.elementAtPos par.Position curDoc.cst
-                let referencingEls = Refs.findElementRefs folder curDoc atPos
+                let referencingEls = Ref.findElementRefs folder curDoc atPos
 
                 let referencingEls =
                     if par.Context.IncludeDeclaration then

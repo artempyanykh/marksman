@@ -1,12 +1,14 @@
 module Marksman.RefsTests
 
-open System.IO
 open Ionide.LanguageServerProtocol.Types
+open System.IO
+open Xunit
+
 open Marksman.Misc
 open Marksman.Helpers
 open Marksman.Cst
 open Marksman.Workspace
-open Xunit
+open Marksman.Refs
 
 let doc1 =
     FakeDoc.mk (
@@ -59,43 +61,43 @@ let stripRefs (refs: seq<Doc * Element>) =
 let refToLinkDef_atDef () =
     let def = Cst.elementAtPos (Position.Mk(15, 3)) doc2.cst
     let def = def |> Option.defaultWith (fun _ -> failwith "No def")
-    let refs = Refs.findElementRefs folder doc2 def
+    let refs = Ref.findElementRefs folder doc2 def
     let refs = stripRefs refs
 
     checkInlineSnapshot
         (fun x -> x.ToString())
         refs
         [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
-        
+
 [<Fact>]
 let refToLinkDef_atLink () =
     let def = Cst.elementAtPos (Position.Mk(8, 4)) doc2.cst
     let def = def |> Option.defaultWith (fun _ -> failwith "No def")
-    let refs = Refs.findElementRefs folder doc2 def
+    let refs = Ref.findElementRefs folder doc2 def
     let refs = stripRefs refs
 
     checkInlineSnapshot
         (fun x -> x.ToString())
         refs
         [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
-        
+
 [<Fact>]
 let refToDoc_atTitle () =
     let title = Cst.elementAtPos (Position.Mk(0, 2)) doc1.cst
     let title = title |> Option.defaultWith (fun _ -> failwith "No title")
-    let refs = Refs.findElementRefs folder doc1 title
+    let refs = Ref.findElementRefs folder doc1 title
     let refs = stripRefs refs
 
     checkInlineSnapshot
         (fun x -> x.ToString())
         refs
         [ "(doc2.md, (12,0)-(12,9))"; "(doc2.md, (13,0)-(13,16))" ]
-        
+
 [<Fact>]
 let refToDoc_atLink () =
     let wl = Cst.elementAtPos (Position.Mk(4, 4)) doc1.cst
     let wl = wl |> Option.defaultWith (fun _ -> failwith "No title")
-    let refs = Refs.findElementRefs folder doc1 wl
+    let refs = Ref.findElementRefs folder doc1 wl
     let refs = stripRefs refs
 
     checkInlineSnapshot

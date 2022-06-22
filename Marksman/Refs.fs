@@ -17,19 +17,34 @@ type DocRef =
     | Url of url: TextNode
 
 module DocRef =
-    let tryResolveToRootPath (folderPath: string) (srcPath: string) (url: string) : option<string> =
+    let tryResolveToRootPath
+        (folderPath: string)
+        (srcDocPath: string)
+        (url: string)
+        : option<string> =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
             None
         else if url.StartsWith('/') then
             Some(url.TrimStart('/'))
         else
-            let srcDir = Path.GetDirectoryName(srcPath)
-            let targetPath = Path.Combine(srcDir, url)
-            let normalized = Uri(targetPath).LocalPath
+            let srcDirComponents =
+                Path.GetDirectoryName(srcDocPath).Split(Path.DirectorySeparatorChar)
+
+            let urlComponents = url.Split('\\', '/')
+            let allComponents = Array.append srcDirComponents urlComponents
+            let targetPath = Path.Combine(allComponents)
+            let targetPathNormalized = (PathUri.fromString targetPath).LocalPath
+            let folderPathNormalized = (PathUri.fromString folderPath).LocalPath
 
             let rooted =
-                if normalized.StartsWith(folderPath) then
-                    Path.GetRelativePath(folderPath, normalized) |> Some
+                if targetPathNormalized.StartsWith(folderPathNormalized) then
+                    let relPath =
+                        Path.GetRelativePath(folderPathNormalized, targetPathNormalized)
+
+                    let relPathNormalized =
+                        String.concat "/" (relPath.Split(Path.DirectorySeparatorChar))
+
+                    Some relPathNormalized
                 else
                     None
 

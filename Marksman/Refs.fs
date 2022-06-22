@@ -1,11 +1,15 @@
 ﻿module Marksman.Refs
 
+open System
+open System.IO
+
+open FSharpPlus.Operators
 open Ionide.LanguageServerProtocol.Types
+
 open Marksman.Cst
+open Marksman.Index
 open Marksman.Misc
 open Marksman.Workspace
-open Marksman.Index
-open FSharpPlus.Operators
 
 [<RequireQualifiedAccess>]
 type DocRef =
@@ -13,10 +17,32 @@ type DocRef =
     | Url of url: TextNode
 
 module DocRef =
-    let tryFindDoc (folder: Folder) (docRef: DocRef) : option<Doc> =
+    let tryResolveToRootPath (folderPath: string) (srcPath: string) (url: string) : option<string> =
+        if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
+            None
+        else if url.StartsWith('/') then
+            Some(url.TrimStart('/'))
+        else
+            let srcDir = Path.GetDirectoryName(srcPath)
+            let targetPath = Path.Combine(srcDir, url)
+            let normalized = Uri(targetPath).LocalPath
+
+            let rooted =
+                if normalized.StartsWith(folderPath) then
+                    Path.GetRelativePath(folderPath, normalized) |> Some
+                else
+                    None
+
+            rooted
+
+    let tryFindDoc (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : option<Doc> =
         match docRef with
         | DocRef.Title title -> Folder.tryFindDocBySlug (Slug.ofString title.text) folder
-        | DocRef.Url url -> Folder.tryFindDocByUrl url.text folder
+        | DocRef.Url url ->
+            let url =
+                tryResolveToRootPath srcDoc.rootPath.LocalPath srcDoc.path.LocalPath url.text
+
+            url >>= flip Folder.tryFindDocByUrl folder
 
 /// Unresolved reference.
 [<RequireQualifiedAccess>]
@@ -92,11 +118,13 @@ module Ref =
             let ld = srcDoc.index |> Index.tryFindLinkDef label.text
             ld |>> fun x -> Ref.LinkDef(srcDoc, x)
         | Uref.Doc docRef ->
-            let doc = DocRef.tryFindDoc folder docRef
+            let doc = DocRef.tryFindDoc folder srcDoc docRef
             doc |>> Ref.Doc
         | Uref.Heading (docRef, heading) ->
             let doc =
-                docRef >>= DocRef.tryFindDoc folder |> Option.defaultValue srcDoc
+                docRef
+                >>= DocRef.tryFindDoc folder srcDoc
+                |> Option.defaultValue srcDoc
 
             let heading =
                 doc.index |> Index.tryFindHeadingBySlug (Slug.ofString heading.text)

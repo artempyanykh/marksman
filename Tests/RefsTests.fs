@@ -10,6 +10,66 @@ open Marksman.Cst
 open Marksman.Workspace
 open Marksman.Refs
 
+module DocRefTests =
+    [<Fact>]
+    let relPath_1 () =
+        let folder = dummyRootPath [ "rootFolder" ]
+        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+
+        let actual =
+            DocRef.tryResolveToRootPath folder docPath "../doc.md" |> Option.get
+
+        Assert.Equal("doc.md", actual)
+
+    [<Fact>]
+    let relPath_2 () =
+        let folder = dummyRootPath [ "rootFolder" ]
+        let docPath = dummyRootPath [ "rootFolder"; "doc1.md" ]
+
+        let actual =
+            DocRef.tryResolveToRootPath folder docPath "./doc2.md" |> Option.get
+
+        Assert.Equal("doc2.md", actual)
+
+    [<Fact>]
+    let relPath_non_exist () =
+        let folder = dummyRootPath [ "rootFolder" ]
+        let docPath = dummyRootPath [ "rootFolder"; "doc1.md" ]
+
+        let actual = DocRef.tryResolveToRootPath folder docPath "../doc2.md"
+        Assert.Equal(None, actual)
+
+    [<Fact>]
+    let rootPath () =
+        let folder = dummyRootPath [ "rootFolder" ]
+        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+
+        let actual =
+            DocRef.tryResolveToRootPath folder docPath "/doc.md" |> Option.get
+
+        Assert.Equal("doc.md", actual)
+
+    [<Fact>]
+    let url_no_schema_FP () =
+        let folder = dummyRootPath [ "rootFolder" ]
+        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+
+        let actual =
+            DocRef.tryResolveToRootPath folder docPath "www.google.com"
+            |> Option.get
+
+        Assert.Equal("subfolder/www.google.com", actual)
+
+    [<Fact>]
+    let url_schema () =
+        let folder = dummyRootPath [ "rootFolder" ]
+        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+
+        let actual =
+            DocRef.tryResolveToRootPath folder docPath "http://www.google.com"
+
+        Assert.Equal(None, actual)
+
 let doc1 =
     FakeDoc.mk (
         path = "doc1.md",

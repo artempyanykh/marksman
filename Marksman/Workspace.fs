@@ -201,8 +201,8 @@ module Folder =
 
         folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
-    let tryFindDocByUrl (url: string) (folder: Folder) : option<Doc> =
-        let urlEncoded = url.AbsPathUrlEncode()
+    let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
+        let urlEncoded = folderRelUrl.AbsPathUrlEncode()
 
         let isMatchingDoc (doc: Doc) =
             let docUrl = doc.RelPath.AbsPathUrlEncode()

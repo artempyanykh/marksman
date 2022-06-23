@@ -9,6 +9,7 @@ open FSharpPlus.GenericBuilders
 
 open Marksman.Cst
 open Marksman.Index
+open Marksman.Refs
 open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Text
@@ -314,8 +315,8 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
         let destDoc =
             match destDocUrl with
             | Some url ->
-                let isMatching (doc: Doc) = doc.RelPath.AbsPathUrlEncode() = url
-                folder.docs |> Map.values |> Seq.tryFind isMatching
+                let docRef = DocRef.Url url
+                DocRef.tryFindDoc folder srcDoc docRef
             | None -> Some srcDoc
 
         match destDoc with

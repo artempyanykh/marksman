@@ -22,12 +22,12 @@
         <Compile Include="Parser.fs"/>
         <Compile Include="Index.fs"/>
         <Compile Include="Workspace.fs"/>
-        <Compile Include="Compl.fs"/>
         <Compile Include="Semato.fs"/>
         <Compile Include="Diag.fs"/>
         <Compile Include="State.fs"/>
         <Compile Include="Toc.fs"/>
         <Compile Include="Refs.fs"/>
+        <Compile Include="Compl.fs"/>
         <Compile Include="Server.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>

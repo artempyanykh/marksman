@@ -13,8 +13,8 @@ open Marksman.Workspace
 
 [<RequireQualifiedAccess>]
 type DocRef =
-    | Title of title: TextNode
-    | Url of url: TextNode
+    | Title of title: string
+    | Url of url: string
 
 module DocRef =
     let tryResolveToRootPath
@@ -60,10 +60,10 @@ module DocRef =
 
     let tryFindDoc (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : option<Doc> =
         match docRef with
-        | DocRef.Title title -> Folder.tryFindDocBySlug (Slug.ofString title.text) folder
+        | DocRef.Title title -> Folder.tryFindDocBySlug (Slug.ofString title) folder
         | DocRef.Url url ->
             let url =
-                tryResolveToRootPath srcDoc.rootPath.LocalPath srcDoc.path.LocalPath url.text
+                tryResolveToRootPath srcDoc.rootPath.LocalPath srcDoc.path.LocalPath url
 
             url >>= flip Folder.tryFindDocByUrl folder
 
@@ -79,8 +79,8 @@ module Uref =
         match el with
         | WL wl ->
             match wl.data.doc, wl.data.heading with
-            | Some doc, Some heading -> Uref.Heading(Some(DocRef.Title doc), heading) |> Some
-            | Some doc, None -> Uref.Doc(DocRef.Title doc) |> Some
+            | Some doc, Some heading -> Uref.Heading(Some(DocRef.Title doc.text), heading) |> Some
+            | Some doc, None -> Uref.Doc(DocRef.Title doc.text) |> Some
             | None, Some heading -> Uref.Heading(None, heading) |> Some
             | None, None -> None
         | ML ml ->
@@ -89,8 +89,8 @@ module Uref =
                 let docUrl = DocUrl.ofUrlNode url
 
                 match docUrl.url, docUrl.anchor with
-                | Some url, Some anchor -> Uref.Heading(Some(DocRef.Url url), anchor) |> Some
-                | Some url, None -> Uref.Doc(DocRef.Url url) |> Some
+                | Some url, Some anchor -> Uref.Heading(Some(DocRef.Url url.text), anchor) |> Some
+                | Some url, None -> Uref.Doc(DocRef.Url url.text) |> Some
                 | None, Some anchor -> Uref.Heading(None, anchor) |> Some
                 | None, None -> None
             | MdLink.IL (_, None, _) -> None

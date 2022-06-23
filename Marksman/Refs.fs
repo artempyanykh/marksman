@@ -27,28 +27,36 @@ module DocRef =
         else if url.StartsWith('/') then
             Some(url.TrimStart('/'))
         else
-            let srcDirComponents =
-                Path.GetDirectoryName(srcDocPath).Split(Path.DirectorySeparatorChar)
+            try
+                let srcDirComponents =
+                    Path.GetDirectoryName(srcDocPath).Split(Path.DirectorySeparatorChar)
 
-            let urlComponents = url.Split('\\', '/')
-            let allComponents = Array.append srcDirComponents urlComponents
-            let targetPath = Path.Combine(allComponents)
-            let targetPathNormalized = (PathUri.fromString targetPath).LocalPath
-            let folderPathNormalized = (PathUri.fromString folderPath).LocalPath
+                // Make sure to retain the root component of the path
+                if srcDocPath.StartsWith('/') && srcDirComponents[0] = "" then
+                    srcDirComponents[0] <- "/"
 
-            let rooted =
-                if targetPathNormalized.StartsWith(folderPathNormalized) then
-                    let relPath =
-                        Path.GetRelativePath(folderPathNormalized, targetPathNormalized)
+                let urlComponents = url.Split('\\', '/')
+                let allComponents = Array.append srcDirComponents urlComponents
+                let targetPath = Path.Combine(allComponents)
+                let targetPathNormalized = (PathUri.fromString targetPath).LocalPath
+                let folderPathNormalized = (PathUri.fromString folderPath).LocalPath
 
-                    let relPathNormalized =
-                        String.concat "/" (relPath.Split(Path.DirectorySeparatorChar))
+                let rooted =
+                    if targetPathNormalized.StartsWith(folderPathNormalized) then
+                        let relPath =
+                            Path.GetRelativePath(folderPathNormalized, targetPathNormalized)
 
-                    Some relPathNormalized
-                else
-                    None
+                        let relPathNormalized =
+                            String.concat "/" (relPath.Split(Path.DirectorySeparatorChar))
 
-            rooted
+                        Some relPathNormalized
+                    else
+                        None
+
+                rooted
+            with
+            | :? UriFormatException
+            | :? InvalidOperationException -> None
 
     let tryFindDoc (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : option<Doc> =
         match docRef with

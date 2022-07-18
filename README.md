@@ -136,8 +136,8 @@ repository in F#.
 
 <span id="fn1">\[1\]</span>: You may have heard about [Roam Research][roam]. This is a commercial implementation of the
 Zettelkasten method and another point of reference for what Marksman is about. However, unlike a proprietary Roam
-Research, Zeta Note is free, open-source and integrated into your favourite editor (albeit for not not as feature rich
-as Roam Research).
+Research, Marksman is free, open-source and integrated into your favourite editor (albeit for not not as feature rich as
+Roam Research).
 
 <span id="fn2">\[2\]</span>: There is an excellent VSCode extension called [Markdown Memo][md-memo]. You definitely need
 to check it out if you're primarily using VSCode as it has some features that are missing in Marksman and [Marksman

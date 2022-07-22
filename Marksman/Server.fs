@@ -105,7 +105,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                   Range = true |> U2.First |> Some
                   Full = { Delta = Some false } |> U2.Second |> Some } }
 
-let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
+let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation [] =
     let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
@@ -181,7 +181,7 @@ type DiagAgent(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "BackgroundAgent"
 
     let agent: MailboxProcessor<DiagMessage> =
-        MailboxProcessor.Start(fun inbox ->
+        MailboxProcessor.Start (fun inbox ->
             let mutable shouldStart = false
             let mutable shouldStop = false
 
@@ -237,7 +237,7 @@ type StatusAgent(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "StatusAgent"
 
     let agent =
-        MailboxProcessor.Start(fun inbox ->
+        MailboxProcessor.Start (fun inbox ->
             let rec loop cnt =
                 async {
                     let! msg = inbox.Receive()
@@ -582,6 +582,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let! atPos = Doc.linkAtPos par.Position srcDoc
                 let! uref = Uref.ofElement atPos
                 let! ref = Ref.tryResolveUref uref srcDoc folder
+
                 GotoResult.Single { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
             }
 
@@ -719,5 +720,22 @@ type MarksmanServer(client: MarksmanClient) =
         let commands = TextDocumentCodeActionResult.CodeActions codeActions
 
         AsyncLspResult.success (Some commands)
+
+
+    override this.TextDocumentRename(pars) =
+        let state = requireState ()
+        let docPath = pars.TextDocument.Uri |> PathUri.fromString
+
+        let edit: option<Result<option<WorkspaceEdit>, string>> =
+            monad' {
+                let! doc = State.tryFindDocument docPath state
+                let! atPos = Cst.elementAtPos pars.Position doc.cst
+                return! failwith "Not implemented"
+            }
+
+        match edit with
+        | None -> AsyncLspResult.success None
+        | Some (Ok edit) -> AsyncLspResult.success edit
+        | Some (Error validationError) -> AsyncLspResult.invalidParams validationError
 
     override this.Dispose() = ()

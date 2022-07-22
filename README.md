@@ -39,11 +39,20 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
-- VSCode via [Marksman VSCode][mn-vscode].
-- Neovim:
-  - via [nvim-lsp-installer][nvim-marksman-lsp-installer] (automatic server installation),
-  - via [nvim-lspconfig][nvim-marksman].
-- (**TODO**: _needs upstreaming_) Emacs via Emacs LSP.
+* VSCode via [Marksman VSCode][mn-vscode].
+* Neovim:
+    * via [nvim-lsp-installer][nvim-marksman-lsp-installer] (automatic server installation),
+    * via [nvim-lspconfig][nvim-marksman].
+* Emacs via [LSP Mode](https://emacs-lsp.github.io/lsp-mode/page/lsp-marksman/) (automatic server installation).
+
+  Example config for `use-package` users:
+
+  ```lisp
+  (use-package markdown-mode
+    :hook (markdown-mode . lsp)
+    :config
+    (require 'lsp-marksman))
+  ```
 
 ## How to install
 

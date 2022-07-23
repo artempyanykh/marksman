@@ -13,6 +13,7 @@ type Entry =
     | DupHeading of orig: Node<Heading> * dup: Node<Heading>
     | BrokenDocWL of Node<WikiLink>
     | BrokenHeadingWL of Node<WikiLink>
+    | NonBreakableWhitespace of Lsp.Range
 
 let code: Entry -> string =
     function
@@ -20,6 +21,7 @@ let code: Entry -> string =
     | DupHeading _ -> "2"
     | BrokenDocWL _ -> "3"
     | BrokenHeadingWL _ -> "4"
+    | NonBreakableWhitespace _ -> "5"
 
 let checkTitles (index: Index) : seq<Entry> =
     match Index.titles index |> List.ofArray with
@@ -29,6 +31,28 @@ let checkTitles (index: Index) : seq<Entry> =
         rest
         |> List.map (fun dup -> DupTitle(orig = first, dup = dup))
         |> Seq.ofList
+
+let checkNonBreakingWhitespace (doc: Doc) =
+    let nonBreakingWhitespace = "\u00a0"
+
+    let headings = [ 1..7 ] |> List.map (fun n -> (String.replicate n "#"))
+
+    [ 0 .. doc.text.lineMap.NumLines ]
+    |> List.collect (fun x ->
+        let line = doc.text.LineContent x
+
+        let headingLike =
+            List.tryFind (fun (h: string) -> line.StartsWith(h + nonBreakingWhitespace)) headings
+
+        match headingLike with
+        | None -> []
+        | Some (heading) ->
+            let whitespaceRange: Lsp.Range =
+                { Start = { Line = x; Character = heading.Length }
+                  End = { Line = x; Character = heading.Length + 1 } }
+
+            [ NonBreakableWhitespace(whitespaceRange) ])
+
 
 let checkHeadings (db: Index) : seq<Entry> =
     seq {
@@ -74,11 +98,28 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
                     yield! checkTitles doc.index
                     yield! checkHeadings doc.index
                     yield! checkWikiLinks doc folder
+                    yield! checkNonBreakingWhitespace doc
                 }
                 |> List.ofSeq
 
             doc.path, docDiag
     }
+
+let clippy msg =
+    $"""
+{msg}
+
+/  \
+|  |
+@  @
+|  |
+|| |/
+|| ||
+|\_/|
+\___/
+"""
+
+
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
     match diag with
@@ -99,6 +140,18 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           CodeDescription = None
           Source = "Marksman"
           Message = "Heading with the same slug already exists"
+          RelatedInformation = None
+          Tags = None
+          Data = None }
+    | NonBreakableWhitespace (dup) ->
+        { Range = dup
+          Severity = Some Lsp.DiagnosticSeverity.Warning
+          Code = Some(code diag)
+          CodeDescription = None
+          Source = "Marksman"
+          Message =
+            clippy
+                "Non-breaking whitespace used instead of regular whitespace - this line won't be interpreted as a heading"
           RelatedInformation = None
           Tags = None
           Data = None }

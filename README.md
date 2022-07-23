@@ -1,10 +1,13 @@
-<img src="assets/readme/logo.png" width="90" align="right">
+[![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
+![release](https://img.shields.io/github/v/release/artempyanykh/marksman)
 
 # Marksman
 
-_Markdown LSP server for note-taking and more._
+_Markdown LSP server providing completion, goto, references, diagnostics, and more._
 
-[![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
+![](assets/readme/splash.png)
+
+---
 
 Marksman is an LSP server for Markdown that provides **completion**, goto **definition**, find **references**,
 **diagnostics**, etc. It also supports **wiki-link**-style references that enable
@@ -36,9 +39,20 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 ## Existing editor integrations<sup>[3](#fn3)</sup>:
 
-- VSCode via [Marksman VSCode][mn-vscode].
-- Neovim via [nvim-lspconfig][nvim-marksman].
-- (**TODO**: _needs upstreaming_) Emacs via Emacs LSP.
+* VSCode via [Marksman VSCode][mn-vscode].
+* Neovim:
+    * via [nvim-lsp-installer][nvim-marksman-lsp-installer] (automatic server installation),
+    * via [nvim-lspconfig][nvim-marksman].
+* Emacs via [LSP Mode](https://emacs-lsp.github.io/lsp-mode/page/lsp-marksman/) (automatic server installation).
+
+  Example config for `use-package` users:
+
+  ```lisp
+  (use-package markdown-mode
+    :hook (markdown-mode . lsp)
+    :config
+    (require 'lsp-marksman))
+  ```
 
 ## How to install
 
@@ -131,8 +145,8 @@ repository in F#.
 
 <span id="fn1">\[1\]</span>: You may have heard about [Roam Research][roam]. This is a commercial implementation of the
 Zettelkasten method and another point of reference for what Marksman is about. However, unlike a proprietary Roam
-Research, Zeta Note is free, open-source and integrated into your favourite editor (albeit for not not as feature rich
-as Roam Research).
+Research, Marksman is free, open-source and integrated into your favourite editor (albeit for not not as feature rich as
+Roam Research).
 
 <span id="fn2">\[2\]</span>: There is an excellent VSCode extension called [Markdown Memo][md-memo]. You definitely need
 to check it out if you're primarily using VSCode as it has some features that are missing in Marksman and [Marksman
@@ -153,3 +167,4 @@ with any LSP client.
 [original-zn]: https://github.com/artempyanykh/zeta-note
 
 [nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#marksman
+[nvim-marksman-lsp-installer]: https://github.com/williamboman/nvim-lsp-installer

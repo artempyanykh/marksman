@@ -118,104 +118,6 @@ module Doc =
 
     let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.index
 
-[<RequireQualifiedAccess>]
-type DocRef =
-    | Title of title: TextNode
-    | Url of url: TextNode
-
-/// Unresolved reference.
-[<RequireQualifiedAccess>]
-type URef =
-    | Doc of DocRef
-    | Heading of doc: option<DocRef> * heading: TextNode
-    | LinkDef of TextNode
-
-module URef =
-    let ofElement (el: Element) : option<URef> =
-        match el with
-        | WL wl ->
-            match wl.data.doc, wl.data.heading with
-            | Some doc, Some heading -> URef.Heading(Some(DocRef.Title doc), heading) |> Some
-            | Some doc, None -> URef.Doc(DocRef.Title doc) |> Some
-            | None, Some heading -> URef.Heading(None, heading) |> Some
-            | None, None -> None
-        | ML ml ->
-            match ml.data with
-            | MdLink.IL (_, Some url, _) ->
-                let docUrl = DocUrl.ofUrlNode url
-
-                match docUrl.url, docUrl.anchor with
-                | Some url, Some anchor -> URef.Heading(Some(DocRef.Url url), anchor) |> Some
-                | Some url, None -> URef.Doc(DocRef.Url url) |> Some
-                | None, Some anchor -> URef.Heading(None, anchor) |> Some
-                | None, None -> None
-            | MdLink.IL (_, None, _) -> None
-            | MdLink.RS label
-            | MdLink.RC label
-            | MdLink.RF (_, label) -> Some(URef.LinkDef label)
-        | H _
-        | MLD _ -> None
-
-/// Resolved reference.
-[<RequireQualifiedAccess>]
-type Ref =
-    | Doc of Doc
-    | Heading of Doc * Node<Heading>
-    | LinkDef of Doc * Node<MdLinkDef>
-
-module Ref =
-    let doc: Ref -> Doc =
-        function
-        | Ref.Doc doc -> doc
-        | Ref.Heading (doc, _) -> doc
-        | Ref.LinkDef (doc, _) -> doc
-
-    let element: Ref -> Element option =
-        function
-        | Ref.Doc d -> Doc.title d |>> H
-        | Ref.Heading (_, h) -> Some(H h)
-        | Ref.LinkDef (_, ld) -> Some(MLD ld)
-
-    let range: Ref -> Range =
-        function
-        | Ref.Doc doc ->
-            Doc.title doc
-            |> Option.map Node.range
-            |> Option.defaultWith doc.text.FullRange
-        | Ref.Heading (_, heading) -> heading.range
-        | Ref.LinkDef (_, linkDef) -> linkDef.range
-
-    let scope: Ref -> Range =
-        function
-        | Ref.Doc doc -> doc.text.FullRange()
-        | Ref.Heading (_, heading) -> heading.data.scope
-        | Ref.LinkDef (_, linkDef) -> linkDef.range
-
-[<RequireQualifiedAccess>]
-type LinkTarget =
-    | Doc of Doc
-    | Heading of Doc * Node<Heading>
-
-module LinkTarget =
-    let doc: LinkTarget -> Doc =
-        function
-        | LinkTarget.Doc doc -> doc
-        | LinkTarget.Heading (doc, _) -> doc
-
-    let range: LinkTarget -> Range =
-        function
-        | LinkTarget.Doc doc ->
-            Doc.title doc
-            |> Option.map Node.range
-            |> Option.defaultWith doc.text.FullRange
-        | LinkTarget.Heading (_, heading) -> heading.range
-
-    let scope: LinkTarget -> Range =
-        function
-        | LinkTarget.Doc doc -> doc.text.FullRange()
-        | LinkTarget.Heading (_, heading) -> heading.data.scope
-
-
 type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 
 module Folder =
@@ -299,8 +201,8 @@ module Folder =
 
         folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
-    let tryFindDocByUrl (url: string) (folder: Folder) : option<Doc> =
-        let urlEncoded = url.AbsPathUrlEncode()
+    let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
+        let urlEncoded = folderRelUrl.AbsPathUrlEncode()
 
         let isMatchingDoc (doc: Doc) =
             let docUrl = doc.RelPath.AbsPathUrlEncode()
@@ -308,29 +210,7 @@ module Folder =
 
         folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
 
-    let tryFindDocByRef (docRef: DocRef) (folder: Folder) : option<Doc> =
-        match docRef with
-        | DocRef.Title title -> tryFindDocBySlug (Slug.ofString title.text) folder
-        | DocRef.Url url -> tryFindDocByUrl url.text folder
-
     let docCount (folder: Folder) : int = folder.docs.Values.Count
-
-    let resolveRef (uref: URef) (srcDoc: Doc) (folder: Folder) : option<Ref> =
-        match uref with
-        | URef.LinkDef label ->
-            let ld = srcDoc.index |> Index.tryFindLinkDef label.text
-            ld |>> fun x -> Ref.LinkDef(srcDoc, x)
-        | URef.Doc docRef ->
-            let doc = tryFindDocByRef docRef folder
-            doc |>> Ref.Doc
-        | URef.Heading (docRef, heading) ->
-            let doc =
-                docRef >>= (flip tryFindDocByRef) folder |> Option.defaultValue srcDoc
-
-            let heading =
-                doc.index |> Index.tryFindHeadingBySlug (Slug.ofString heading.text)
-
-            heading |>> fun h -> Ref.Heading(doc, h)
 
 type Workspace = { folders: Map<PathUri, Folder> }
 

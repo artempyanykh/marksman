@@ -243,6 +243,13 @@ module Element =
     let pickHeadings (elements: array<Element>) : array<Node<Heading>> =
         elements |> Array.map asHeading |> Array.collect Option.toArray
 
+    let isDecl =
+        function
+        | WL _
+        | ML _ -> false
+        | H _
+        | MLD _ -> true
+
     let isLink =
         function
         | WL _
@@ -273,3 +280,7 @@ module Cst =
             }
 
         collect cst
+
+    let elementAtPos (pos: Position) (cst: Cst) : option<Element> =
+        elementsAll cst
+        |> Seq.tryFind (fun el -> (Element.range el).ContainsInclusive(pos))

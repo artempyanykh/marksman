@@ -20,6 +20,8 @@ open Marksman.Index
 open Marksman.Toc
 open Marksman.Refs
 
+open type System.Environment
+
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
     | Some folders ->
@@ -673,30 +675,6 @@ type MarksmanServer(client: MarksmanClient) =
         let state = requireState ()
         let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
-        let documentBeginning = Range.Mk(0, 0, 0, 0)
-
-        let editAt rangeOpt text =
-            let textEdit =
-                { NewText = text
-                  Range = Option.defaultValue documentBeginning rangeOpt }
-
-            let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
-
-            { Changes = Some mp; DocumentChanges = None }
-
-        let toc =
-            monad' {
-                let! document = State.tryFindDocument docPath state
-                let! toc = TableOfContents.mk document.index
-
-                let rendered = TableOfContents.render toc
-                let detected = TableOfContents.detect document.text
-
-                let result = ($"{rendered}", detected)
-
-                result
-            }
-
         let codeAction title edit =
             { Title = title
               Kind = Some CodeActionKind.Source
@@ -707,16 +685,17 @@ type MarksmanServer(client: MarksmanClient) =
               Disabled = None
               Edit = Some edit }
 
-        let codeActions =
-            match toc with
-            | None -> Array.empty
-            | Some (render, existing) ->
-                match existing with
-                | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
-                | Some oldTocRange ->
-                    [| codeAction "Update the Table of Contents" (editAt (Some oldTocRange) render) |]
+        let tocAction =
+            State.tryFindDocument docPath state
+            |> Option.bind CodeActions.tableOfContents
+            |> Option.toArray
+            |> Array.map (fun ca ->
+                let wsEdit =
+                    (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
 
-        let commands = TextDocumentCodeActionResult.CodeActions codeActions
+                codeAction ca.name wsEdit)
+
+        let commands = TextDocumentCodeActionResult.CodeActions tocAction
 
         AsyncLspResult.success (Some commands)
 

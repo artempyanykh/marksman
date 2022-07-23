@@ -8,6 +8,7 @@ open Ionide.LanguageServerProtocol.Types
 open Misc
 
 type LineRange = int * int
+type CharacterRange = int * int
 
 type LineMap =
     | LineMap of array<LineRange>
@@ -60,7 +61,7 @@ type LineMap =
         let end_ = this.TryFindOffset range.End
         start, end_
 
-    member this.FindRange(range: Range) : LineRange =
+    member this.FindRange(range: Range) : CharacterRange =
         match this.TryFindRange range with
         | Some s, Some e -> s, e
         | None, _ -> failwith $"Range start outside of line map: {range}"
@@ -72,6 +73,14 @@ type Text =
     member this.Substring(range: Range) : string =
         let s, e = this.lineMap.FindRange range
         this.content.Substring(s, e - s)
+
+    member this.Cutout(range: Range) : string * string =
+        let s, e = this.lineMap.FindRange range
+
+        let before = this.content.Substring(0, s)
+        let after = this.content.Substring(e, this.content.Length - e)
+
+        (before, after)
 
     member this.CharAt(p: Position) : char =
         let off = this.lineMap.FindOffset(p)
@@ -154,6 +163,8 @@ let mkLineMap (str: string) : LineMap =
     lineMap.Add(start, start)
 
     LineMap(lineMap.ToArray())
+
+let documentBeginning = Range.Mk(0, 0, 0, 0)
 
 let mkText (content: string) : Text =
     let lineMap = mkLineMap content

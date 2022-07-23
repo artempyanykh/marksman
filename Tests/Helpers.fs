@@ -4,6 +4,9 @@ open System.Runtime.InteropServices
 open Snapper
 open Marksman.Misc
 open Marksman.Workspace
+open Marksman.Text
+open Ionide.LanguageServerProtocol.Types
+open Marksman.CodeActions
 
 let pathToUri path = $"file://{path}"
 
@@ -21,6 +24,11 @@ let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<str
     let lines = Seq.map (fun x -> (fmt x).Lines()) things |> Seq.concat
 
     lines.ShouldMatchInlineSnapshot(snapshot)
+
+let applyDocumentAction (doc: Doc) (action: DocumentAction) =
+    let (before, after) = doc.text.Cutout(action.edit)
+
+    before + action.newText + after
 
 type FakeDoc =
     class

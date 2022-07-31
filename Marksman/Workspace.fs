@@ -49,33 +49,33 @@ module Doc =
         { doc with text = newText; cst = newCst; index = newIndex }
 
 
-    let applyLspChange (change: DidChangeTextDocumentParams) (document: Doc) : Doc =
+    let applyLspChange (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =
         let newVersion = change.TextDocument.Version
 
         logger.trace (
             Log.setMessage "Processing text change"
-            >> Log.addContext "uri" document.path
-            >> Log.addContext "currentVersion" document.version
+            >> Log.addContext "uri" doc.path
+            >> Log.addContext "currentVersion" doc.version
             >> Log.addContext "newVersion" newVersion
         )
 
         // Sanity checking
-        match newVersion, document.version with
-        | Some newVersion, Some curVersion ->
+        match newVersion, doc.version with
+        | Some newVersion, Some curVersion when curVersion > 0 ->
             let expectedVersion = curVersion + change.ContentChanges.Length
 
             if expectedVersion <> newVersion then
                 logger.warn (
                     Log.setMessage "Unexpected document version"
-                    >> Log.addContext "uri" document.path
+                    >> Log.addContext "uri" doc.path
                     >> Log.addContext "currentVersion" curVersion
                     >> Log.addContext "newVersion" newVersion
                 )
         | _ -> ()
 
-        let newText = applyTextChange change.ContentChanges document.text
+        let newText = applyTextChange change.ContentChanges doc.text
 
-        { withText newText document with version = newVersion }
+        { withText newText doc with version = newVersion }
 
     let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Doc =
         let path = PathUri.fromString item.Uri
@@ -91,8 +91,8 @@ module Doc =
             let text = mkText content
 
             Some(mk path root None text)
-        with :? FileNotFoundException ->
-            None
+        with
+        | :? FileNotFoundException -> None
 
     let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
 

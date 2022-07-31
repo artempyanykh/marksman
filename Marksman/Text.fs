@@ -163,27 +163,24 @@ let mkPosition (line, char) = { Line = line; Character = char }
 
 let mkRange (start, end_) = { Start = mkPosition start; End = mkPosition end_ }
 
-let private applyChangeRaw
-    (lineMap: LineMap)
-    (content: string)
-    (change: TextDocumentContentChangeEvent)
-    : string =
+let private applyChangeOne (text: Text) (change: TextDocumentContentChangeEvent) : Text =
     match change.Range, change.RangeLength with
     | Some range, Some length ->
+        let lineMap = text.lineMap
         let start = range.Start |> lineMap.FindOffset
 
-        StringBuilder(content)
-            .Remove(start, length)
-            .Insert(start, change.Text)
-            .ToString()
-    | None, None -> change.Text
+        let newContent =
+            StringBuilder(text.content)
+                .Remove(start, length)
+                .Insert(start, change.Text)
+                .ToString()
+
+        mkText newContent
+    | None, None -> mkText change.Text
     | _, _ -> failwith $"Unexpected change event structure: {change}"
 
 let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text: Text) : Text =
-    let newContent =
-        Array.fold (applyChangeRaw text.lineMap) text.content changeEvents
-
-    mkText newContent
+    Array.fold applyChangeOne text changeEvents
 
 type Span =
     { text: Text

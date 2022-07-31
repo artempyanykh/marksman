@@ -43,6 +43,23 @@ let applyTextChange_insert_single () =
     Assert.Equal(expected, actual.content)
 
 [<Fact>]
+let applyTextChange_insert_multiple () =
+    let text = Text.mkText "!"
+
+    let actual =
+        Text.applyTextChange
+            [| { Range = Some(Text.mkRange ((0, 1), (0, 1)))
+                 RangeLength = Some 0
+                 Text = " H" }
+               { Range = Some(Text.mkRange ((0, 3), (0, 3)))
+                 RangeLength = Some 0
+                 Text = "i" } |]
+            text
+
+    let expected = "! Hi"
+    Assert.Equal(expected, actual.content)
+
+[<Fact>]
 let applyTextChange_insert_on_empty () =
     let text = Text.mkText ""
 

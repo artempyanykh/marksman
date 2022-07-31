@@ -4,6 +4,8 @@ open System.Diagnostics
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open System
+open System.Collections.Generic
+open System.Runtime.Serialization
 
 type ErasedUnionAttribute() =
   inherit Attribute()
@@ -318,6 +320,17 @@ type SemanticTokensWorkspaceClientCapabilities =
     /// wide change that requires such a calculation.
     RefreshSupport: bool option }
 
+/// Client workspace capabilities specific to inlay hints.
+type InlayHintWorkspaceClientCapabilities =
+  { /// Whether the client implementation supports a refresh request sent from
+    /// the server to the client.
+    ///
+    /// Note that this event is global and will force the client to refresh all
+    /// inlay hints currently shown. It should be used with absolute care and
+    /// is useful for situation where a server for example detects a project wide
+    /// change that requires such a calculation.
+    RefreshSupport: bool option }
+
 /// Workspace specific client capabilities.
 type WorkspaceClientCapabilities =
   { /// The client supports applying batch edits to the workspace by supporting
@@ -336,7 +349,16 @@ type WorkspaceClientCapabilities =
     /// Capabilities specific to the `workspace/symbol` request.
     Symbol: SymbolCapabilities option
 
-    SemanticTokens: SemanticTokensWorkspaceClientCapabilities option }
+    /// Capabilities specific to the semantic token requests scoped to the
+    /// workspace.
+    ///
+    /// @since 3.16.0
+    SemanticTokens: SemanticTokensWorkspaceClientCapabilities option
+
+    /// Client workspace capabilities specific to inlay hints.
+    ///
+    /// @since 3.17.0
+    InlayHint: InlayHintWorkspaceClientCapabilities option }
 
 type SynchronizationCapabilities =
   { /// Whether text document synchronization supports dynamic registration.
@@ -606,7 +628,7 @@ type DiagnosticTagSupport =
     ValueSet: DiagnosticTag [] }
 
 /// Capabilities specific to `textDocument/publishDiagnostics`.
-type PublishDiagnosticsCapabilites =
+type PublishDiagnosticsCapabilities =
   {
 
     /// Whether the clients accepts diagnostics with related information.
@@ -635,7 +657,7 @@ type SemanticTokenFullRequestType =
 type SemanticTokensRequests =
   { /// The client will send the `textDocument/semanticTokens/range` request
     /// if the server provides a corresponding handler.
-    Range: U2<bool, obj> option
+    Range: bool option
 
     /// The client will send the `textDocument/semanticTokens/full` request
     /// if the server provides a corresponding handler.
@@ -687,23 +709,12 @@ type InlayHintClientCapabilities =
     /// hint.
     ResolveSupport: InlayHintClientCapabilitiesResolveSupport option }
 
-/// Client workspace capabilities specific to inlay hints.
-type InlayHintWorkspaceClientCapabilities =
-  { /// Whether the client implementation supports a refresh request sent from
-    /// the server to the client.
-    ///
-    /// Note that this event is global and will force the client to refresh all
-    /// inlay hints currently shown. It should be used with absolute care and
-    /// is useful for situation where a server for example detects a project wide
-    /// change that requires such a calculation.
-    RefreshSupport: bool option }
-
 /// Text document specific client capabilities.
 type TextDocumentClientCapabilities =
   { Synchronization: SynchronizationCapabilities option
 
     /// Capabilities specific to `textDocument/publishDiagnostics`.
-    PublishDiagnostics: PublishDiagnosticsCapabilites
+    PublishDiagnostics: PublishDiagnosticsCapabilities
 
     /// Capabilities specific to the `textDocument/completion`
     Completion: CompletionCapabilities option
@@ -769,11 +780,6 @@ type ClientCapabilities =
     /// Text document specific client capabilities.
     TextDocument: TextDocumentClientCapabilities option
 
-    /// Client workspace capabilities specific to inlay hints.
-    ///
-    /// @since 3.17.0
-    InlayHint: InlayHintWorkspaceClientCapabilities option
-
     /// Experimental client capabilities.
     Experimental: JToken option }
 
@@ -804,8 +810,10 @@ type InitializeParams =
     WorkspaceFolders: WorkspaceFolder [] option }
 
 type InitializedParams() =
-  class
-  end
+  override _.Equals(o) = o :? InitializedParams
+  override _.GetHashCode() = 0
+  override _.ToString() = "{}"
+
 
 /// Completion options.
 type CompletionOptions =
@@ -913,7 +921,7 @@ type SemanticTokensOptions =
     Legend: SemanticTokensLegend
 
     /// Server supports providing semantic tokens for a specific range of a document.
-    Range: U2<bool, obj> option
+    Range: bool option
 
     /// Server supports providing semantic tokens for a full document.
     Full: U2<bool, SemanticTokenFullOptions> option }
@@ -1093,7 +1101,7 @@ type InitializeResult =
 /// edits and if `documentChanges` are present, the latter are preferred over `changes`.
 type WorkspaceEdit =
   { /// Holds changes to existing resources.
-    Changes: Map<string, TextEdit []> option
+    Changes: Map<DocumentUri, TextEdit []> option
 
     /// An array of `TextDocumentEdit`s to express changes to n different text documents
     /// where each text document edit addresses a specific version of a text document.
@@ -1270,17 +1278,30 @@ type DidCloseTextDocumentParams =
     TextDocument: TextDocumentIdentifier }
 
 /// Value-object describing what options formatting should use.
-type FormattingOptions() =
-  /// Size of a tab in spaces.
-  member val TabSize: int = 0 with get, set
-
-  /// Prefer spaces over tabs.
-  member val InsertSpaces: bool = false with get, set
-
-  /// Further properties.
-  [<JsonExtensionData>]
-  member val AdditionalData: System.Collections.Generic.IDictionary<string, JToken> =
-    new System.Collections.Generic.Dictionary<_, _>() :> _ with get, set
+type FormattingOptions =
+  { /// Size of a tab in spaces.
+    TabSize: int
+    /// Prefer spaces over tabs.
+    InsertSpaces: bool
+    /// Trim trailing whitespace on a line.
+    ///
+    /// @since 3.15.0
+    TrimTrailingWhitespace: bool option
+    /// Insert a newline character at the end of the file if one does not exist.
+    ///
+    /// @since 3.15.0
+    InsertFinalNewline: bool option
+    /// Trim all newlines after the final newline at the end of the file.
+    ///
+    /// @since 3.15.0
+    TrimFinalNewlines: bool option
+    /// Signature for further properties.
+    [<JsonExtensionData>]
+    mutable AdditionalData: IDictionary<string, JToken> }
+  [<OnDeserialized>]
+  member o.OnDeserialized(context: StreamingContext) =
+    if isNull o.AdditionalData then
+      o.AdditionalData <- Map.empty
 
 type DocumentFormattingParams =
   { /// The document to format.
@@ -1671,9 +1692,7 @@ type Diagnostic =
     /// A data entry field that is preserved between a
     /// `textDocument/publishDiagnostics` notification and
     /// `textDocument/codeAction` request.
-    Data: obj option
-
-   }
+    Data: JToken option }
   [<DebuggerBrowsable(DebuggerBrowsableState.Never); JsonIgnore>]
   member x.DebuggerDisplay =
     $"[{defaultArg x.Severity DiagnosticSeverity.Error}] ({x.Range.DebuggerDisplay}) {x.Message} ({defaultArg x.Code String.Empty})"
@@ -1748,13 +1767,9 @@ type CodeAction =
 
     /// A data entry field that is preserved on a code action between
     /// a `textDocument/codeAction` and a `codeAction/resolve` request.
-    Data: obj option }
+    Data: JToken option }
 
-[<ErasedUnion>]
-[<RequireQualifiedAccess>]
-type TextDocumentCodeActionResult =
-  | Commands of Command []
-  | CodeActions of CodeAction []
+type TextDocumentCodeActionResult = U2<Command, CodeAction> []
 
 type RenameParams =
   { /// The document to rename.

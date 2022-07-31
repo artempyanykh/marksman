@@ -35,11 +35,7 @@ module ClientDescription =
     let ofParams (par: InitializeParams) : ClientDescription =
         let caps =
             par.Capabilities
-            |> Option.defaultValue
-                { Workspace = None
-                  TextDocument = None
-                  Experimental = None
-                  InlayHint = None }
+            |> Option.defaultValue { Workspace = None; TextDocument = None; Experimental = None }
 
         { info = par.ClientInfo; caps = caps }
 

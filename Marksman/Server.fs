@@ -102,7 +102,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         SemanticTokensProvider =
             Some
                 { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
-                  Range = true |> U2.First |> Some
+                  Range = Some true
                   Full = { Delta = Some false } |> U2.Second |> Some } }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
@@ -712,12 +712,15 @@ type MarksmanServer(client: MarksmanClient) =
             | None -> Array.empty
             | Some (render, existing) ->
                 match existing with
-                | None -> [| codeAction "Create a Table of Contents" (editAt None render) |]
+                | None ->
+                    [| U2.Second(codeAction "Create a Table of Contents" (editAt None render)) |]
                 | Some oldTocRange ->
-                    [| codeAction "Update the Table of Contents" (editAt (Some oldTocRange) render) |]
+                    [| U2.Second(
+                           codeAction
+                               "Update the Table of Contents"
+                               (editAt (Some oldTocRange) render)
+                       ) |]
 
-        let commands = TextDocumentCodeActionResult.CodeActions codeActions
-
-        AsyncLspResult.success (Some commands)
+        AsyncLspResult.success (Some codeActions)
 
     override this.Dispose() = ()

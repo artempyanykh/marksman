@@ -4,7 +4,6 @@ open System
 open Ionide.LanguageServerProtocol.Types
 
 open Markdig.Syntax
-open MarkdigPatches
 open Text
 open Marksman.Cst
 
@@ -131,7 +130,7 @@ module Markdown =
     let markdigPipeline =
         let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation()
 
-        pipelineBuilder.InlineParsers.Insert(0, PatchedLinkInlineParser())
+        pipelineBuilder.InlineParsers.Insert(0, MarkdigPatches.PatchedLinkInlineParser())
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
         pipelineBuilder.Build()
 

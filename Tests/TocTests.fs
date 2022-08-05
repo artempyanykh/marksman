@@ -10,7 +10,7 @@ open type System.Environment
 module DetectToc =
     [<Fact>]
     let detectToc_1 () =
-        let doc = FakeDoc.mk "# T1\n# T2"
+        let doc = FakeDoc.Mk "# T1\n# T2"
 
         let titles = TableOfContents.detect doc.text
 
@@ -19,7 +19,7 @@ module DetectToc =
     [<Fact>]
     let detectToc_noMarker () =
         let doc =
-            FakeDoc.mk [| "- [T1][#t1]"
+            FakeDoc.Mk [| "- [T1][#t1]"
                           " - [T2][#t2]"
                           ""
                           ""
@@ -33,7 +33,7 @@ module DetectToc =
     [<Fact>]
     let detectToc_withMarker () =
         let doc =
-            FakeDoc.mk [| StartMarker
+            FakeDoc.Mk [| StartMarker
                           "- [T1][#t1]"
                           " - [T2][#t2]"
                           EndMarker
@@ -56,7 +56,7 @@ module DetectToc =
 module CreateToc =
     [<Fact>]
     let createToc () =
-        let doc = FakeDoc.mk [| "# T1"; "## T2" |]
+        let doc = FakeDoc.Mk [| "# T1"; "## T2" |]
 
         let titles = TableOfContents.mk doc.index |> Option.get
 
@@ -67,7 +67,7 @@ module CreateToc =
 module RenderToc =
     [<Fact>]
     let createToc () =
-        let doc = FakeDoc.mk [| "# T1"; "## T2"; "### T3"; "## T4"; "### T5" |]
+        let doc = FakeDoc.Mk [| "# T1"; "## T2"; "### T3"; "## T4"; "### T5" |]
 
         let titles =
             TableOfContents.mk doc.index |> Option.get |> TableOfContents.render

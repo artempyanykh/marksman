@@ -9,7 +9,7 @@ open Marksman.Helpers
 
 [<Fact>]
 let documentIndex_1 () =
-    let doc = FakeDoc.mk "# T1\n# T2"
+    let doc = FakeDoc.Mk "# T1\n# T2"
 
     let titles =
         Index.titles doc.index |> Array.map (fun x -> x.data.title.text)
@@ -19,7 +19,7 @@ let documentIndex_1 () =
 [<Fact>]
 let nonBreakingWhitespace () =
     let nbsp = "\u00a0"
-    let doc = FakeDoc.mk $"# T1\n##{nbsp}T2"
+    let doc = FakeDoc.Mk $"# T1\n##{nbsp}T2"
 
     match (checkNonBreakingWhitespace doc) with
     | [ NonBreakableWhitespace range ] ->

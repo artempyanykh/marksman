@@ -19,6 +19,16 @@ type ClientDescription =
     member this.IsEmacs: bool =
         this.info |> Option.exists (fun x -> x.Name = "emacs")
 
+    member this.SupportsDocumentEdit: bool =
+        let docChange =
+            monad' {
+                let! ws = this.caps.Workspace
+                let! edit = ws.WorkspaceEdit
+                return! edit.DocumentChanges
+            }
+
+        docChange = Some true
+
     member this.SupportsStatus: bool =
         match this.caps.Experimental with
         | None -> false
@@ -56,6 +66,8 @@ module State =
         { client = client; workspace = ws; revision = 0 }
 
     let client s = s.client
+
+    let clientCaps s = s.client.caps
 
     let workspace s = s.workspace
 

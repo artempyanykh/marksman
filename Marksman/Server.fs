@@ -103,7 +103,8 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
             Some
                 { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
                   Range = Some true
-                  Full = { Delta = Some false } |> U2.Second |> Some } }
+                  Full = { Delta = Some false } |> U2.Second |> Some }
+        RenameProvider = Some true }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
     let name = Heading.name h.data
@@ -706,13 +707,9 @@ type MarksmanServer(client: MarksmanClient) =
                     let! folder = State.tryFindFolderEnclosing docUri state
                     let! curDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Cst.elementAtPos par.Position curDoc.cst
-                    let referencingEls = Ref.findElementRefs folder curDoc atPos
 
                     let referencingEls =
-                        if par.Context.IncludeDeclaration then
-                            Seq.append referencingEls [ curDoc, atPos ]
-                        else
-                            referencingEls
+                        Ref.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
 
                     let toLoc (doc, el) = { Uri = doc.path.DocumentUri; Range = Element.range el }
 
@@ -808,6 +805,46 @@ type MarksmanServer(client: MarksmanClient) =
                            ) |]
 
             Mutation.output (LspResult.success (Some codeActions))
+
+
+    override this.TextDocumentRename(pars) =
+        withStateExclusive
+        <| fun state ->
+            let docPath = pars.TextDocument.Uri |> PathUri.fromString
+
+            let edit: option<LspResult<option<WorkspaceEdit>>> =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docPath state
+                    let! srcDoc = Folder.tryFindDocByPath docPath folder
+
+                    let renameResult =
+                        Refactor.rename
+                            (State.client state).SupportsDocumentEdit
+                            folder
+                            srcDoc
+                            pars.Position
+                            pars.NewName
+
+                    return (Refactor.RenameResult.toLsp renameResult)
+                }
+
+            match edit with
+            | None -> Mutation.output (Ok None)
+            | Some result -> Mutation.output result
+
+    override this.TextDocumentPrepareRename(pars) =
+        withStateExclusive
+        <| fun state ->
+            let docPath = pars.TextDocument.Uri |> PathUri.fromString
+
+            let renameRange =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docPath state
+                    let! srcDoc = Folder.tryFindDocByPath docPath folder
+                    return! Refactor.renameRange srcDoc pars.Position
+                }
+
+            Mutation.output (renameRange |> Option.map PrepareRenameResult.Range |> Ok)
 
     override this.Dispose() =
         (statusManager :> IDisposable).Dispose()

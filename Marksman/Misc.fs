@@ -11,6 +11,7 @@ let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 let lineEndings = [| "\r\n"; "\n" |]
 
 type String with
+
     member this.Lines() : array<string> = this.Split(lineEndings, StringSplitOptions.None)
 
     member this.EndsWithNewline() : bool = Array.exists<string> this.EndsWith lineEndings
@@ -41,7 +42,8 @@ type String with
 
             let isToOut = (not isPunct && not isSep)
 
-            if isSep then sepSeen <- true
+            if isSep then
+                sepSeen <- true
 
             if isToOut then
                 if sepSeen && chunkState = 2 then
@@ -118,16 +120,18 @@ let localPathToUriString (filePath: string) : string =
     let uri = StringBuilder(filePath.Length)
 
     for c in filePath do
-        if (c >= 'a' && c <= 'z')
-           || (c >= 'A' && c <= 'Z')
-           || (c >= '0' && c <= '9')
-           || c = '+'
-           || c = '/'
-           || c = '.'
-           || c = '-'
-           || c = '_'
-           || c = '~'
-           || c > '\xFF' then
+        if
+            (c >= 'a' && c <= 'z')
+            || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9')
+            || c = '+'
+            || c = '/'
+            || c = '.'
+            || c = '-'
+            || c = '_'
+            || c = '~'
+            || c > '\xFF'
+        then
             uri.Append(c) |> ignore
         // handle windows path separator chars.
         // we _would_ use Path.DirectorySeparator/AltDirectorySeparator, but those vary per-platform and we want this
@@ -170,6 +174,7 @@ module PathUri =
 
 
 type Position with
+
     static member Mk(line: int, char: int) : Position = { Line = line; Character = char }
     static member MkLine(line: int) : Position = Position.Mk(line, 0)
     // TODO: use text for precise loc
@@ -183,6 +188,7 @@ type Position with
             { Line = this.Line; Character = this.Character - n }
 
 type Range with
+
     static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range =
         { Start = Position.Mk(startLine, startChar)
           End = Position.Mk(endLine, endChar) }

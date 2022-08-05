@@ -11,6 +11,7 @@ type LineRange = int * int
 
 type LineMap =
     | LineMap of array<LineRange>
+
     member this.Map =
         let (LineMap arr) = this
         arr
@@ -69,6 +70,7 @@ type LineMap =
 type Text =
     { content: string
       lineMap: LineMap }
+
     member this.Substring(range: Range) : string =
         let s, e = this.lineMap.FindRange range
         this.content.Substring(s, e - s)
@@ -124,7 +126,8 @@ type internal TrackingTextReader(baseReader: TextReader) =
     override this.Read() : int =
         let char = baseReader.Read()
 
-        if char <> -1 then this.Position <- this.Position + 1
+        if char <> -1 then
+            this.Position <- this.Position + 1
 
         char
 
@@ -186,11 +189,14 @@ type Span =
     { text: Text
       start: int
       end_: int }
+
     override this.ToString() =
         let substr =
-            if this.start < this.end_
-               && this.start < this.text.content.Length
-               && this.end_ <= this.text.content.Length then
+            if
+                this.start < this.end_
+                && this.start < this.text.content.Length
+                && this.end_ <= this.text.content.Length
+            then
                 this.text.content.Substring(this.start, this.end_ - this.start)
             else
                 "<malformed>"
@@ -200,6 +206,7 @@ type Span =
 type Cursor =
     { span: Span
       pos: int }
+
     override this.ToString() = $"{this.span.text.content[this.pos]} @ {this.pos} : {this.span}"
 
 module Cursor =
@@ -304,6 +311,7 @@ module Span =
 type Line =
     { text: Text
       line: int }
+
     override this.ToString() = $"Line {this.line}: {this.text}"
 
 module Line =

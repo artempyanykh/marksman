@@ -54,6 +54,7 @@ type MdLink =
 type DocUrl =
     { url: Option<TextNode>
       anchor: Option<TextNode> }
+
     override this.ToString() : string =
         let parts =
             [ this.url

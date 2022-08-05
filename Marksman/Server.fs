@@ -204,7 +204,7 @@ type DiagnosticsManager(client: MarksmanClient) =
         agent.Post(PublishDiagnostics par)
 
     interface IDisposable with
-        member __.Dispose() = (agent :> IDisposable).Dispose()
+        member _.Dispose() = (agent :> IDisposable).Dispose()
 
 let queueDiagnosticsUpdate
     (manager: DiagnosticsManager)
@@ -291,7 +291,7 @@ type StatusManager(client: MarksmanClient) =
     member this.UpdateDocCount(cnt: int) : unit = agent.Post(DocCount cnt)
 
     interface IDisposable with
-        member __.Dispose() = (agent :> IDisposable).Dispose()
+        member _.Dispose() = (agent :> IDisposable).Dispose()
 
 let queueStatusUpdate (manager: StatusManager) (_: Option<State>) (newState: State) : unit =
     let docCount = State.workspace newState |> Workspace.docCount
@@ -404,7 +404,7 @@ type StateManager(initState: State) =
         agent.PostAndAsyncReply(mkMsg, timeout = asyncResponseTimeout)
 
     interface IDisposable with
-        member __.Dispose() = (agent :> IDisposable).Dispose()
+        member _.Dispose() = (agent :> IDisposable).Dispose()
 
 type MarksmanServer(client: MarksmanClient) =
     inherit LspServer()
@@ -480,7 +480,7 @@ type MarksmanServer(client: MarksmanClient) =
                         "Client doesn't support status notifications. Agent won't be initialized."
                 )
 
-            Mutation.hooks (newHooks)
+            Mutation.hooks newHooks
 
     override this.Shutdown() =
         logger.trace (Log.setMessage "Preparing for shutdown")

@@ -12,6 +12,7 @@ open Marksman.Misc
 type ClientDescription =
     { info: ClientInfo option
       caps: ClientCapabilities }
+
     member this.IsVSCode: bool =
         this.info |> Option.exists (fun x -> x.Name = "Visual Studio Code")
 
@@ -45,6 +46,7 @@ type State =
         { client: ClientDescription
           workspace: Workspace
           revision: int }
+
     member this.Diag: WorkspaceDiag = WorkspaceDiag.mk this.workspace
 
 module State =

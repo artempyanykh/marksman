@@ -51,9 +51,11 @@ module Markdown =
                 let shouldStop (c: char) = c.IsNewLineOrLineFeed() || c.IsZero() || found
 
                 while not (shouldStop current) do
-                    if current = '#'
-                       && slice.PeekCharExtra(-1) <> '\\'
-                       && offsetHashDelim.IsNone then
+                    if
+                        current = '#'
+                        && slice.PeekCharExtra(-1) <> '\\'
+                        && offsetHashDelim.IsNone
+                    then
                         offsetHashDelim <- Some(processor.GetSourcePosition(slice.Start))
 
                     if current = ']' then

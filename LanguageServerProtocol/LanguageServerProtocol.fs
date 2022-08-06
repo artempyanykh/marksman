@@ -193,6 +193,7 @@ module Server =
       "textDocument/completion", requestHandling (fun s p -> s.TextDocumentCompletion(p))
       "completionItem/resolve", requestHandling (fun s p -> s.CompletionItemResolve(p))
       "textDocument/rename", requestHandling (fun s p -> s.TextDocumentRename(p))
+      "textDocument/prepareRename", requestHandling (fun s p -> s.TextDocumentPrepareRename(p))
       "textDocument/definition", requestHandling (fun s p -> s.TextDocumentDefinition(p))
       "textDocument/typeDefinition", requestHandling (fun s p -> s.TextDocumentTypeDefinition(p))
       "textDocument/implementation", requestHandling (fun s p -> s.TextDocumentImplementation(p))

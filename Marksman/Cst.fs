@@ -170,9 +170,12 @@ and private fmtHeading node =
 
     let l2 = $"  text=`{node.text}`"
 
+    let l3 =
+        $"  title=`{inner.title.text}` @ {inner.title.range.DebuggerDisplay}"
+
     let rest = Array.map (indentFmt fmtElement) inner.children
 
-    String.Join(Environment.NewLine, Array.concat [ [| l1; l2 |]; rest ])
+    String.Join(Environment.NewLine, Array.concat [ [| l1; l2; l3 |]; rest ])
 
 and private fmtWikiLink node =
     let first = $"WL: {node.text}; {node.range.DebuggerDisplay}"
@@ -192,8 +195,7 @@ and private fmtMdLinkDef node =
 module Heading =
     let fmt = fmtHeading
 
-    let name (heading: Heading) : string =
-        (Node.text heading.title).TrimStart(' ', '#').TrimEnd(' ')
+    let name (heading: Heading) : string = Node.text heading.title
 
     let slug (heading: Heading) : Slug = name heading |> Slug.ofString
 

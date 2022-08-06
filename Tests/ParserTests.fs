@@ -60,6 +60,7 @@ module HeadingTests =
 module WikiLinkTests =
     [<Fact>]
     let parser_xref_note () =
+        //          01234567890123456
         let text = "[[note]]"
         let document = scrapeString text
         checkInlineSnapshot document [ "WL: [[note]]; (0,0)-(0,8)"; "  doc=note; (0,2)-(0,6)" ]

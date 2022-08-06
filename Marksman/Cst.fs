@@ -70,6 +70,8 @@ type DocUrl =
         String.Join(';', parts)
 
 module DocUrl =
+    let anchor (x: DocUrl) = x.anchor
+
     let ofUrlNode (url: TextNode) : DocUrl =
         let offsetHash = url.text.IndexOf('#')
 

@@ -101,6 +101,13 @@ module Uref =
         | H _
         | MLD _ -> None
 
+    let hasExplicitDoc =
+        function
+        | Uref.Doc _ -> true
+        | Uref.Heading(doc = Some _) -> true
+        | Uref.Heading(doc = None) -> false
+        | Uref.LinkDef _ -> false
+
 /// Resolved reference.
 [<RequireQualifiedAccess>]
 type Ref =
@@ -171,7 +178,15 @@ module Ref =
     let private findReferencingElements (refMap: Map<Element, Ref>) (target: Ref) : seq<Element> =
         seq {
             for KeyValue (el, ref) in refMap do
-                if ref = target then yield el else ()
+                match target with
+                | Ref.Doc targetDoc ->
+                    let curUref = Uref.ofElement el
+
+                    let explicitDoc =
+                        curUref |> Option.map Uref.hasExplicitDoc |> Option.defaultValue false
+
+                    if doc ref = targetDoc && explicitDoc then yield el else ()
+                | _ -> if target = ref then yield el else ()
         }
 
     /// Finds elements referencing `el`.

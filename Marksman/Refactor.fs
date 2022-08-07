@@ -31,11 +31,20 @@ let groupByFirst pairs =
     Seq.groupBy fst pairs
     |> Seq.map (fun (key, value) -> key, Set.ofSeq (Seq.map snd value) |> Set.toSeq)
 
-let mkWorkspaceEdit (supportsDocumentEdit: bool) (edits: array<TextDocumentEdit>) : WorkspaceEdit =
+let mkWorkspaceEdit
+    (supportsDocumentEdit: bool)
+    (docEdits: array<TextDocumentEdit>)
+    : WorkspaceEdit =
+
+    // A little harmless mutation never hurt nobody
+    // Sort edits: those that affect the end of the document go first.
+    for docEdit in docEdits do
+        docEdit.Edits |> Array.sortInPlaceWith (fun x y -> -(compare x y))
+
     if supportsDocumentEdit then
-        { Changes = None; DocumentChanges = Some edits }
+        { Changes = None; DocumentChanges = Some docEdits }
     else
-        { Changes = Some(WorkspaceEdit.DocumentChangesToChanges edits)
+        { Changes = Some(WorkspaceEdit.DocumentChangesToChanges docEdits)
           DocumentChanges = None }
 
 let renameMarkdownLabel (newLabel: string) (element: Element) : option<TextEdit> =
@@ -85,6 +94,27 @@ let renameHeadingLinksInDoc heading newTitle (doc: Doc, els) =
     let lspDoc = { Uri = doc.path.DocumentUri; Version = doc.version }
     { TextDocument = lspDoc; Edits = edits }
 
+let combineDocumentEdits (e1s: array<TextDocumentEdit>) (e2s: array<TextDocumentEdit>) =
+    let deconstruct (x: TextDocumentEdit) = x.TextDocument, x.Edits
+
+    let byDoc1 = e1s |> Seq.map deconstruct |> Map.ofSeq
+    let byDoc2 = e2s |> Seq.map deconstruct |> Map.ofSeq
+
+    let larger, smaller =
+        if byDoc1.Count > byDoc1.Count then byDoc1, byDoc2 else byDoc2, byDoc1
+
+    let mutable larger = larger
+
+    for KeyValue (doc, additionalEdits) in smaller do
+        let existing = larger |> Map.tryFind doc |> Option.defaultValue [||]
+        let combined = Array.append existing additionalEdits
+        larger <- Map.add doc combined larger
+
+    larger
+    |> Map.toSeq
+    |> Seq.map (fun (doc, edits) -> { TextDocument = doc; Edits = edits })
+    |> Array.ofSeq
+
 let rename
     (supportsDocumentEdit: bool)
     (folder: Folder)
@@ -129,21 +159,20 @@ let rename
         if not (isValidLabel newName) then
             Error $"Not a valid title: {newName}"
         else if heading.title.range.ContainsInclusive pos then
-            let headingEdit = { Range = heading.title.range; NewText = newName }
+            let headingEdit =
+                let lspDoc = { Uri = srcDoc.path.DocumentUri; Version = srcDoc.version }
+                let edit = { Range = heading.title.range; NewText = newName }
+                { TextDocument = lspDoc; Edits = [| edit |] }
 
             let refs = Ref.findElementRefs false folder srcDoc el
             let byDoc = refs |> groupByFirst
 
-            let docEdits =
+            let linkEdits =
                 byDoc
-                |> Seq.map (fun (doc, els) ->
-                    let linkEdits = renameHeadingLinksInDoc heading newName (doc, els)
-
-                    if doc = srcDoc then
-                        { linkEdits with Edits = Array.append [| headingEdit |] linkEdits.Edits }
-                    else
-                        linkEdits)
+                |> Seq.map (fun (doc, els) -> renameHeadingLinksInDoc heading newName (doc, els))
                 |> Array.ofSeq
+
+            let docEdits = combineDocumentEdits linkEdits [| headingEdit |]
 
             let workspaceEdit = mkWorkspaceEdit supportsDocumentEdit docEdits
 

@@ -42,6 +42,14 @@ type ClientDescription =
         }
         |> Option.defaultValue false
 
+    member this.SupportsPrepareRename: bool =
+        monad' {
+            let! textDoc = this.caps.TextDocument
+            let! rename = textDoc.Rename
+            return! rename.PrepareSupport
+        }
+        |> Option.defaultValue false
+
 module ClientDescription =
     let ofParams (par: InitializeParams) : ClientDescription =
         let caps =

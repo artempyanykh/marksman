@@ -86,6 +86,12 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
     let codeActionOptions =
         { CodeActionKinds = None; ResolveProvider = Some false }
 
+    let renameOptions =
+        if clientDesc.SupportsPrepareRename then
+            { PrepareProvider = Some true } |> U2.Second |> Some
+        else
+            Some(U2.First true)
+
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
         TextDocumentSync = Some textSyncCaps
@@ -104,7 +110,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                 { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
                   Range = Some true
                   Full = { Delta = Some false } |> U2.Second |> Some }
-        RenameProvider = Some true }
+        RenameProvider = renameOptions }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
     let name = Heading.name h.data

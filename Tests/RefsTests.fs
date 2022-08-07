@@ -229,3 +229,5 @@ module RefsTests =
             [ "(doc2.md, (10,0)-(10,9))"
               "(doc1.md, (4,0)-(4,16))"
               "(doc2.md, (6,0)-(6,11))" ]
+
+    // TODO: add tests for title refs

@@ -57,9 +57,9 @@ module RenameTests =
             let expectedRanges =
                 Map.ofSeq
                     [ "doc1.md",
-                      [| Range.Mk(1, 7, 1, 11)
+                      [| Range.Mk(5, 1, 5, 5)
                          Range.Mk(2, 6, 2, 10)
-                         Range.Mk(5, 1, 5, 5) |] ]
+                         Range.Mk(1, 7, 1, 11) |] ]
 
             let actualRanges = editRanges res
 
@@ -74,9 +74,9 @@ module RenameTests =
             let expectedRanges =
                 Map.ofSeq
                     [ "doc1.md",
-                      [| Range.Mk(1, 7, 1, 11)
+                      [| Range.Mk(5, 1, 5, 5)
                          Range.Mk(2, 6, 2, 10)
-                         Range.Mk(5, 1, 5, 5) |] ]
+                         Range.Mk(1, 7, 1, 11) |] ]
 
             let actualRanges = editRanges res
 
@@ -136,10 +136,10 @@ module RenameTests =
             let expectedRanges =
                 Map.ofSeq
                     [ "doc1.md",
-                      [| Range.Mk(1, 3, 1, 10)
+                      [| Range.Mk(4, 9, 4, 15)
                          Range.Mk(3, 7, 3, 13)
-                         Range.Mk(4, 9, 4, 15) |]
-                      "doc2.md", [| Range.Mk(2, 8, 2, 14); Range.Mk(3, 12, 3, 18) |] ]
+                         Range.Mk(1, 3, 1, 10) |]
+                      "doc2.md", [| Range.Mk(3, 12, 3, 18); Range.Mk(2, 8, 2, 14) |] ]
 
             let actualRanges = editRanges res
 

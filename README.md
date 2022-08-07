@@ -82,38 +82,18 @@ Below is a mix of VSCode, Neovim, and Emacs screenshots. Although, not all featu
 generally most features should work equaly in all editors.
 
 - **Document symbols**:
-  * Emacs:
-    ![Symbols Emacs](assets/readme/emacs-doc-symbols.png)
+  ![Document Symbols](assets/readme/gifs/document-symbols.gif)
 - **Hover preview**:
-  * VSCode, wiki link:
-    ![Hover-VSCode-Wiki](assets/readme/vsc-wiki-hover.png)
-  * Neovim, wiki link:
-    ![Hover-VSCode-Wiki](assets/readme/nvim-wiki-hover.png)
-  * Neovim, reference link:
-    ![Hover-VSCode-Ref](assets/readme/nvim-ref-hover.png)
+  ![Hover](assets/readme/gifs/hover.gif)
 - **Completion**:
-  * VSCode, wiki link:
-    ![Completion-VSCode-Wiki](assets/readme/vsc-wiki-compl.png)
-  * VSCode, wiki link heading:
-    ![Completion-VSCode-Wiki-Heading](assets/readme/vsc-wiki-heading-compl.png)
-  * VSCode, reference link:
-    ![Completion-VSCode-Ref](assets/readme/vsc-ref-compl.png)
-  * Neovim, inline link:
-    ![Completion-Neovim-Inline](assets/readme/nvim-inline-link-compl.png)
-  * Neovim, inline anchor link:
-    ![Completion-Neovim-Inline-Heading](assets/readme/nvim-inline-link-heading-compl.png)
-  * Neovim, wiki link heading:
-    ![Completion-Neovim-Wiki-Heading](assets/readme/nvim-wiki-heading-compl.png)
+  * ![Completion Markdown](assets/readme/gifs/completion-markdown.gif)
+  * ![Completion Wiki](assets/readme/gifs/completion-wiki.gif)
 - **Find references**:
-  * VSCode:
-    ![Show references VSCode](assets/readme/vsc-find-references.png)
-  * Neovim:
-    ![Show references Neovim](assets/readme/nvim-find-references.png)
+  ![Find references](assets/readme/gifs/find-references.gif)
 - **Project-wide diagnostics**:
-  * VSCode:
-    ![Diagnostics VSCode](assets/readme/vsc-diag.png)
-  * Neovim:
-    ![Diagnostics VSCode](assets/readme/nvim-diag.png)
+  ![Diagnostics](assets/readme/gifs/diagnostics.gif)
+- **Rename refactor for headings and reference links**:
+  ![Rename Refactor](assets/readme/gifs/rename.gif)
 
 ## Features and plans
 

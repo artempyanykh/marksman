@@ -3,15 +3,17 @@
 
 # Marksman
 
-_Markdown LSP server providing completion, goto, references, diagnostics, and more._
+_Write Markdown with code assist and intelligence in the comfort of your favourite editor._
 
 ![](assets/readme/splash.png)
 
 ---
 
-Marksman is an LSP server for Markdown that provides **completion**, goto **definition**, find **references**,
-**diagnostics**, etc. It also supports **wiki-link**-style references that enable
-[Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about Marksman's features below.
+Marksman is a program that integrates with your editor to assist you in writing and maintaining your Markdown documents.
+Using [LSP protocol][lsp-main] it provides **completion**, goto **definition**, find **references**, **rename**
+refactoring, **diagnostics**, and more. In addition to regular Markdown, it also supports **wiki-link**-style references
+that enable [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about Marksman's
+features below.
 
 Marksman **works on MacOS, Linux, and Windows** and is distributed as a **self-contained binary** for each OS.
 
@@ -124,14 +126,14 @@ generally most features should work equaly in all editors.
 - ✅ Diagnostics for wiki-links.
 - ✅ Support multi-folder workspaces.
 - ✅ Custom parser for more fine-grained note structure.
-- 🗓 Code Lens with "# references" on headings.
-- 🗓 Rename refactor.
-- 🗓 Add support for images (diagnostics, completion, goto).
-- 🗓 Add "check" command for standalone workspace checking.
-- 🗓 Add "build" command that rewrites all cross-references into proper
+- 🗓  Code Lens with "# references" on headings.
+- ✅ Rename refactor.
+- 🗓  Add support for images (diagnostics, completion, goto).
+- 🗓  Add "check" command for standalone workspace checking.
+- 🗓  Add "build" command that rewrites all cross-references into proper
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.
-- 🗓 Support for Jupyter notebooks.
+- 🗓  Support for Jupyter notebooks.
 
 ## Where's `zeta-note` and where's Rust?
 
@@ -168,3 +170,5 @@ with any LSP client.
 
 [nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#marksman
 [nvim-marksman-lsp-installer]: https://github.com/williamboman/nvim-lsp-installer
+
+[lsp-main]: https://microsoft.github.io/language-server-protocol/

@@ -65,9 +65,20 @@ type String with
         let encodedParts = parts |> Seq.map (fun s -> s.UrlEncode())
         "/" + String.Join('/', encodedParts)
 
+    member this.AsUnixAbsPath() : string =
+        let parts = this.TrimStart('/').Split([| '\\'; '/' |])
+        let joined = String.Join('/', parts)
+        if joined.StartsWith('/') then joined else "/" + joined
+
     member this.UrlDecode() : string = Uri.UnescapeDataString(this)
 
     member this.AbsPathUrlEncodedToRelPath() : string = this.TrimStart('/').UrlDecode()
+
+    member this.TrimPrefix(prefix: string) : string =
+        if this.StartsWith(prefix) then
+            this.Substring(prefix.Length)
+        else
+            this
 
 type Slug = Slug of string
 

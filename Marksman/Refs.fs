@@ -4,6 +4,7 @@ open System
 open System.IO
 
 open FSharpPlus.Operators
+open FSharpPlus.GenericBuilders
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Cst
@@ -100,6 +101,13 @@ module Uref =
         | H _
         | MLD _ -> None
 
+    let hasExplicitDoc =
+        function
+        | Uref.Doc _ -> true
+        | Uref.Heading(doc = Some _) -> true
+        | Uref.Heading(doc = None) -> false
+        | Uref.LinkDef _ -> false
+
 /// Resolved reference.
 [<RequireQualifiedAccess>]
 type Ref =
@@ -170,33 +178,64 @@ module Ref =
     let private findReferencingElements (refMap: Map<Element, Ref>) (target: Ref) : seq<Element> =
         seq {
             for KeyValue (el, ref) in refMap do
-                if ref = target then yield el else ()
+                match target with
+                | Ref.Doc targetDoc ->
+                    let curUref = Uref.ofElement el
+
+                    let explicitDoc =
+                        curUref |> Option.map Uref.hasExplicitDoc |> Option.defaultValue false
+
+                    if doc ref = targetDoc && explicitDoc then yield el else ()
+                | _ -> if target = ref then yield el else ()
         }
 
-    let findElementRefs (folder: Folder) (doc: Doc) (el: Element) : seq<Doc * Element> =
-        let refToFind =
+    /// Finds elements referencing `el`.
+    /// When `el` is a link, it's resolved to its destination first and then references to the
+    /// destination are found.
+    let findElementRefs
+        (includeDecl: bool)
+        (folder: Folder)
+        (srcDoc: Doc)
+        (el: Element)
+        : seq<Doc * Element> =
+        let declToFind =
             match el with
-            | MLD ld -> Ref.LinkDef(doc, ld) |> Some
-            | H h when Heading.isTitle h.data -> Ref.Doc(doc) |> Some
-            | H h -> Ref.Heading(doc, h) |> Some
-            | other when Element.isLink other ->
-                let docRefs = resolveLinks folder doc
-                Map.tryFind other docRefs
+            | MLD ld -> Ref.LinkDef(srcDoc, ld) |> Some
+            | H h when Heading.isTitle h.data -> Ref.Doc(srcDoc) |> Some
+            | H h -> Ref.Heading(srcDoc, h) |> Some
+            | link when Element.isLink link ->
+                let linkToDecl = resolveLinks folder srcDoc
+                Map.tryFind link linkToDecl
             | _ -> None
 
-        match refToFind with
-        | None -> []
-        | Some (Ref.LinkDef _ as ld) ->
-            let docRefs = resolveLinks folder doc
-            findReferencingElements docRefs ld |> Seq.map (fun el -> doc, el)
-        | Some refToFind ->
-            seq {
-                for KeyValue (_, targetDoc) in folder.docs do
-                    let targetDocRefs = resolveLinks folder targetDoc
+        let referencingEls: seq<Doc * Element> =
+            match declToFind with
+            | None -> []
+            | Some (Ref.LinkDef _ as ld) ->
+                let docRefs = resolveLinks folder srcDoc
+                findReferencingElements docRefs ld |> Seq.map (fun el -> srcDoc, el)
+            | Some refToFind ->
+                seq {
+                    for KeyValue (_, targetDoc) in folder.docs do
+                        let targetDocRefs = resolveLinks folder targetDoc
 
-                    let backRefs =
-                        findReferencingElements targetDocRefs refToFind
-                        |> Seq.map (fun el -> targetDoc, el)
+                        let backRefs =
+                            findReferencingElements targetDocRefs refToFind
+                            |> Seq.map (fun el -> targetDoc, el)
 
-                    yield! backRefs
-            }
+                        yield! backRefs
+                }
+
+        if includeDecl then
+            let decl =
+                monad' {
+                    let! el = declToFind >>= element
+                    let! doc = declToFind |>> doc
+                    doc, el
+                }
+
+            match decl with
+            | Some (declDoc, declEl) -> Seq.append [ (declDoc, declEl) ] referencingEls
+            | _ -> referencingEls
+        else
+            referencingEls

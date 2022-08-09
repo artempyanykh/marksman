@@ -12,11 +12,22 @@ open Marksman.Misc
 type ClientDescription =
     { info: ClientInfo option
       caps: ClientCapabilities }
+
     member this.IsVSCode: bool =
         this.info |> Option.exists (fun x -> x.Name = "Visual Studio Code")
 
     member this.IsEmacs: bool =
         this.info |> Option.exists (fun x -> x.Name = "emacs")
+
+    member this.SupportsDocumentEdit: bool =
+        let docChange =
+            monad' {
+                let! ws = this.caps.Workspace
+                let! edit = ws.WorkspaceEdit
+                return! edit.DocumentChanges
+            }
+
+        docChange = Some true
 
     member this.SupportsStatus: bool =
         match this.caps.Experimental with
@@ -31,15 +42,19 @@ type ClientDescription =
         }
         |> Option.defaultValue false
 
+    member this.SupportsPrepareRename: bool =
+        monad' {
+            let! textDoc = this.caps.TextDocument
+            let! rename = textDoc.Rename
+            return! rename.PrepareSupport
+        }
+        |> Option.defaultValue false
+
 module ClientDescription =
     let ofParams (par: InitializeParams) : ClientDescription =
         let caps =
             par.Capabilities
-            |> Option.defaultValue
-                { Workspace = None
-                  TextDocument = None
-                  Experimental = None
-                  InlayHint = None }
+            |> Option.defaultValue { Workspace = None; TextDocument = None; Experimental = None }
 
         { info = par.ClientInfo; caps = caps }
 
@@ -49,6 +64,7 @@ type State =
         { client: ClientDescription
           workspace: Workspace
           revision: int }
+
     member this.Diag: WorkspaceDiag = WorkspaceDiag.mk this.workspace
 
 module State =
@@ -58,6 +74,8 @@ module State =
         { client = client; workspace = ws; revision = 0 }
 
     let client s = s.client
+
+    let clientCaps s = s.client.caps
 
     let workspace s = s.workspace
 

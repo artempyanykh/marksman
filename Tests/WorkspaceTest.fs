@@ -1,5 +1,6 @@
 module Marksman.WorkspaceTest
 
+open GlobExpressions
 open Ionide.LanguageServerProtocol.Types
 
 open Xunit
@@ -8,6 +9,29 @@ open Marksman.Misc
 open Marksman.Workspace
 
 open Marksman.Helpers
+
+module FolderTests =
+    module ShouldBeIgnoredTests =
+        [<Fact>]
+        let absGlob_Unix () =
+            let glob = Glob("/node_modules")
+            let root = "/Users/john/notes"
+            let ignored = "/Users/john/notes/node_modules"
+            Folder.shouldBeIgnored [|glob|] root ignored |> Assert.True
+            
+            let notIgnored = "/Users/john/notes/real.md"
+            Folder.shouldBeIgnored [|glob|] root notIgnored |> Assert.False
+            
+        [<Fact>]
+        let absGlob_Win () =
+            let glob = Glob("/node_modules")
+            let root = "C:\\notes"
+            let ignored = "C:\\notes\\node_modules"
+            Folder.shouldBeIgnored [|glob|] root ignored |> Assert.True
+            
+            let notIgnored = "C:\\notes\\real.md"
+            Folder.shouldBeIgnored [|glob|] root notIgnored |> Assert.False
+        
 
 module DocTest =
     [<Fact>]

@@ -1,6 +1,6 @@
 module Marksman.Server
 
-open System.Collections.Generic
+open System
 open System.IO
 
 open Microsoft.FSharp.Control
@@ -88,6 +88,12 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
     let codeActionOptions =
         { CodeActionKinds = None; ResolveProvider = Some false }
 
+    let renameOptions =
+        if clientDesc.SupportsPrepareRename then
+            { PrepareProvider = Some true } |> U2.Second |> Some
+        else
+            Some(U2.First true)
+
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
         TextDocumentSync = Some textSyncCaps
@@ -104,8 +110,9 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
         SemanticTokensProvider =
             Some
                 { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
-                  Range = true |> U2.First |> Some
-                  Full = { Delta = Some false } |> U2.Second |> Some } }
+                  Range = Some true
+                  Full = { Delta = Some false } |> U2.Second |> Some }
+        RenameProvider = renameOptions }
 
 let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
     let name = Heading.name h.data
@@ -165,77 +172,108 @@ let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSym
 
 type MarksmanStatusParams = { state: string; docCount: int }
 
-type MarksmanClient(notSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
+type MarksmanClient(notiSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
     inherit LspClient()
 
     override this.TextDocumentPublishDiagnostics(par: PublishDiagnosticsParams) =
-        notSender "textDocument/publishDiagnostics" (box par) |> Async.Ignore
+        notiSender "textDocument/publishDiagnostics" (box par) |> Async.Ignore
 
     member this.MarksmanUpdateStatus(par: MarksmanStatusParams) =
-        notSender "marksman/status" (box par) |> Async.Ignore
+        notiSender "marksman/status" (box par) |> Async.Ignore
 
-type DiagMessage =
-    | Start
-    | Stop
-    | EnqueueDiagnostic of PublishDiagnosticsParams
+type DiagnosticsMessage = PublishDiagnostics of PublishDiagnosticsParams
 
-type DiagAgent(client: MarksmanClient) =
+type DiagnosticsManager(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "BackgroundAgent"
 
-    let agent: MailboxProcessor<DiagMessage> =
+    let agent: MailboxProcessor<DiagnosticsMessage> =
         MailboxProcessor.Start(fun inbox ->
-            let mutable shouldStart = false
-            let mutable shouldStop = false
-
-            let diagQueue: Queue<PublishDiagnosticsParams> = Queue()
-
-            let processDiagQueue () =
-                async {
-                    if shouldStart && not shouldStop then
-                        match diagQueue.TryDequeue() with
-                        | false, _ -> () // do nothing, continue processing messages
-                        | true, first ->
-                            logger.trace (
-                                Log.setMessage "Updating document diagnostic"
-                                >> Log.addContext "uri" first.Uri
-                                >> Log.addContext "numEntries" first.Diagnostics.Length
-                            )
-
-                            do! client.TextDocumentPublishDiagnostics(first)
-                }
-
             let rec processMessages () =
                 async {
-                    do! processDiagQueue ()
                     let! msg = inbox.Receive()
 
                     match msg with
-                    | Start ->
-                        logger.trace (Log.setMessage "Starting background agent")
-                        shouldStart <- true
-                    | Stop ->
-                        logger.trace (Log.setMessage "Stopping background agent")
-                        shouldStop <- true
-                    | EnqueueDiagnostic pars -> diagQueue.Enqueue(pars)
+                    | PublishDiagnostics pars ->
+                        logger.trace (
+                            Log.setMessage "Updating document diagnostic"
+                            >> Log.addContext "uri" pars.Uri
+                            >> Log.addContext "numEntries" pars.Diagnostics.Length
+                        )
 
-                    do! processDiagQueue ()
+                        do! client.TextDocumentPublishDiagnostics(pars)
 
-                    if not shouldStop then return! processMessages () else ()
+                    return! processMessages ()
                 }
 
             logger.trace (Log.setMessage "Preparing to start background agent")
 
             processMessages ())
 
-    member this.EnqueueDiagnostic(par: PublishDiagnosticsParams) : unit =
-        agent.Post(EnqueueDiagnostic par)
+    member this.UpdateDiagnostics(par: PublishDiagnosticsParams) : unit =
+        agent.Post(PublishDiagnostics par)
 
-    member this.Start() : unit = agent.Post(Start)
-    member this.Stop() : unit = agent.Post(Stop)
+    interface IDisposable with
+        member _.Dispose() = (agent :> IDisposable).Dispose()
+
+let queueDiagnosticsUpdate
+    (manager: DiagnosticsManager)
+    (prevState: Option<State>)
+    (newState: State)
+    : unit =
+    let existingDiag =
+        prevState
+        |> Option.map (fun x -> x.Diag)
+        |> Option.defaultValue WorkspaceDiag.empty
+
+    let newDiag = newState.Diag
+
+    let allFolders =
+        Set.union (Map.keys existingDiag |> Set.ofSeq) (Map.keys newDiag |> Set.ofSeq)
+
+    for folderPath in allFolders do
+        let existingFolderDiag =
+            Map.tryFind folderPath existingDiag |> Option.defaultValue [||]
+
+        let newFolderDiag =
+            Map.tryFind folderPath newDiag |> Option.defaultValue [||]
+
+        let allDocs =
+            Set.union
+                (Array.map fst newFolderDiag |> Set.ofArray)
+                (Array.map fst existingFolderDiag |> Set.ofArray)
+
+        logger.trace (
+            Log.setMessage "Updating folder diag"
+            >> Log.addContext "folder" folderPath
+            >> Log.addContext "num_docs" allDocs.Count
+        )
+
+        for docUri in allDocs do
+            let existingDocDiag =
+                existingFolderDiag
+                |> Array.tryFind (fun (uri, _) -> uri = docUri)
+                |> Option.map snd
+                |> Option.defaultValue [||]
+
+            let newDocDiag =
+                newFolderDiag
+                |> Array.tryFind (fun (uri, _) -> uri = docUri)
+                |> Option.map snd
+                |> Option.defaultValue [||]
+
+            if newDocDiag <> existingDocDiag then
+                logger.trace (
+                    Log.setMessage "Diagnostic changed, queueing the update"
+                    >> Log.addContext "doc" docUri
+                )
+
+                let publishParams = { Uri = docUri.DocumentUri; Diagnostics = newDocDiag }
+
+                manager.UpdateDiagnostics(publishParams)
 
 type StatusMessage = DocCount of int
 
-type StatusAgent(client: MarksmanClient) =
+type StatusManager(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "StatusAgent"
 
     let agent =
@@ -261,90 +299,144 @@ type StatusAgent(client: MarksmanClient) =
 
     member this.UpdateDocCount(cnt: int) : unit = agent.Post(DocCount cnt)
 
+    interface IDisposable with
+        member _.Dispose() = (agent :> IDisposable).Dispose()
+
+let queueStatusUpdate (manager: StatusManager) (_: Option<State>) (newState: State) : unit =
+    let docCount = State.workspace newState |> Workspace.docCount
+    manager.UpdateDocCount docCount
+
+type Hook = { name: string; fn: Option<State> -> State -> unit }
+
+type Mutation<'R> = { output: 'R; state: option<State>; hooks: list<Hook> }
+
+module Mutation =
+    let empty: Mutation<unit> = { output = (); state = None; hooks = [] }
+    let output<'R> (output: 'R) : Mutation<'R> = { output = output; state = None; hooks = [] }
+    let state (state: State) : Mutation<unit> = { output = (); state = Some state; hooks = [] }
+
+    let stateOpt (stateOpt: option<State>) : Mutation<unit> =
+        match stateOpt with
+        | Some state -> { output = (); state = Some state; hooks = [] }
+        | None -> empty
+
+    let hooks (hooks: list<Hook>) : Mutation<unit> = { output = (); state = None; hooks = hooks }
+
+type StateMessage =
+    | ReadState of AsyncReplyChannel<State>
+    | MutateState of (State -> Option<State> * list<Hook>)
+
+    member this.Name =
+        match this with
+        | ReadState _ -> "ReadState"
+        | MutateState _ -> "MutateState"
+
+type StateManager(initState: State) =
+    let logger = LogProvider.getLoggerByName "StateManager"
+    let asyncResponseTimeout = 5000
+
+    let processHook hook prevState state =
+        logger.trace (
+            Log.setMessage "Processing a hook"
+            >> Log.addContext "name" hook.name
+            >> Log.addContext "prevRev" (prevState |> Option.map State.revision)
+            >> Log.addContext "curRev" (State.revision state)
+        )
+
+        hook.fn prevState state
+
+    let agent: MailboxProcessor<StateMessage> =
+        MailboxProcessor.Start
+        <| fun inbox ->
+            let rec go (prevState: Option<State>) (state: State) (hooks: list<Hook>) =
+                async {
+                    let! msg = inbox.Receive()
+
+                    logger.trace (
+                        Log.setMessage "Received a message" >> Log.addContext "type" msg.Name
+                    )
+
+                    match msg with
+                    | ReadState chan ->
+                        chan.Reply state
+                        return! go prevState state hooks
+                    | MutateState mutator ->
+                        let newState, addedHooks = mutator state
+
+                        // Step 1: run _added_ hooks on the existing state
+
+                        let mutable newHooks = hooks
+
+                        for hook in addedHooks do
+                            processHook hook prevState state
+
+                            logger.trace (
+                                Log.setMessage "Adding a hook" >> Log.addContext "name" hook.name
+                            )
+
+                            newHooks <- hook :: newHooks
+
+                        // Step 2: update the state and run _all_ hooks on the updated state
+
+                        match newState with
+                        | Some newState ->
+                            logger.trace (
+                                Log.setMessage "Updating state"
+                                >> Log.addContext "curRev" (State.revision state)
+                                >> Log.addContext "nextRev" (State.revision newState)
+                            )
+
+                            for hook in newHooks do
+                                processHook hook (Some state) newState
+
+                            return! go (Some state) newState newHooks
+                        | None -> return! go prevState state newHooks
+                }
+
+            go None initState []
+
+    member this.AccessToRead<'R>(f: State -> 'R) : Async<'R> =
+        async {
+            let! state = agent.PostAndAsyncReply(ReadState, timeout = asyncResponseTimeout)
+            return f state
+        }
+
+    member this.AccessExclusively<'R>(f: State -> Mutation<'R>) : Async<'R> =
+        let mkMsg (chan: AsyncReplyChannel<'R>) =
+            let mutator state =
+                let mutation = f state
+                chan.Reply(mutation.output)
+                mutation.state, mutation.hooks
+
+            MutateState mutator
+
+        agent.PostAndAsyncReply(mkMsg, timeout = asyncResponseTimeout)
+
+    interface IDisposable with
+        member _.Dispose() = (agent :> IDisposable).Dispose()
 
 type MarksmanServer(client: MarksmanClient) =
     inherit LspServer()
-    let mutable state: option<State> = None
 
-    let diagAgent = DiagAgent(client)
+    let diagnosticsManager = new DiagnosticsManager(client)
 
-    let mutable statusAgent: option<StatusAgent> = None
+    let statusManager = new StatusManager(client)
+
+    let mutable stateManager: option<StateManager> = None
+
+    let requireStateManager () =
+        stateManager
+        |> Option.defaultWith (fun () -> failwith "State is not initialized")
+
+    let withState (f: State -> 'R) =
+        let sm = requireStateManager ()
+        sm.AccessToRead f
+
+    let withStateExclusive (f: State -> Mutation<'R>) =
+        let sm = requireStateManager ()
+        sm.AccessExclusively f
 
     let logger = LogProvider.getLoggerByName "MarksmanServer"
-
-    let requireState () : State =
-        Option.defaultWith (fun _ -> failwith "State was not initialized") state
-
-    let queueDiagUpdate (existingDiag: WorkspaceDiag) (newDiag: WorkspaceDiag) : unit =
-        let allFolders =
-            Set.union (Map.keys existingDiag |> Set.ofSeq) (Map.keys newDiag |> Set.ofSeq)
-
-        for folderPath in allFolders do
-            let existingFolderDiag =
-                Map.tryFind folderPath existingDiag |> Option.defaultValue [||]
-
-            let newFolderDiag =
-                Map.tryFind folderPath newDiag |> Option.defaultValue [||]
-
-            let allDocs =
-                Set.union
-                    (Array.map fst newFolderDiag |> Set.ofArray)
-                    (Array.map fst existingFolderDiag |> Set.ofArray)
-
-            logger.trace (
-                Log.setMessage "Updating folder diag"
-                >> Log.addContext "folder" folderPath
-                >> Log.addContext "num_docs" allDocs.Count
-            )
-
-            for docUri in allDocs do
-                let existingDocDiag =
-                    existingFolderDiag
-                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
-                    |> Option.map snd
-                    |> Option.defaultValue [||]
-
-                let newDocDiag =
-                    newFolderDiag
-                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
-                    |> Option.map snd
-                    |> Option.defaultValue [||]
-
-                if newDocDiag <> existingDocDiag then
-                    logger.trace (
-                        Log.setMessage "Diagnostic changed, queueing the update"
-                        >> Log.addContext "doc" docUri
-                    )
-
-                    let publishParams = { Uri = docUri.DocumentUri; Diagnostics = newDocDiag }
-
-                    diagAgent.EnqueueDiagnostic(publishParams)
-
-    let updateState (newState: State) : unit =
-        let curState = state
-
-        logger.trace (
-            Log.setMessage "Updating state"
-            >> Log.addContext "curRev" (curState |> Option.map State.revision)
-        )
-
-        let existingWorkspaceDiag =
-            curState |> Option.map State.diag |> Option.defaultValue Map.empty
-
-        let newWorkspaceDiag = State.diag newState
-
-        let docCount = State.workspace newState |> Workspace.docCount
-
-        statusAgent |> Option.iter (fun x -> x.UpdateDocCount(docCount))
-
-        state <- Some newState
-
-        logger.trace (
-            Log.setMessage "Updated state"
-            >> Log.addContext "newRev" (State.revision newState)
-        )
-
-        queueDiagUpdate existingWorkspaceDiag newWorkspaceDiag
 
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
         let workspaceFolders = extractWorkspaceFolders par
@@ -366,9 +458,9 @@ type MarksmanServer(client: MarksmanClient) =
 
         let clientDesc = ClientDescription.ofParams par
 
-        let newState = State.mk clientDesc (Workspace.ofFolders folders)
+        let initState = State.mk clientDesc (Workspace.ofFolders folders)
 
-        updateState newState
+        stateManager <- Some(new StateManager(initState))
 
         let serverCaps = mkServerCaps par
 
@@ -379,30 +471,28 @@ type MarksmanServer(client: MarksmanClient) =
 
 
     override this.Initialized(_: InitializedParams) =
-        let state = requireState ()
+        withStateExclusive
+        <| fun state ->
+            let diagHook = queueDiagnosticsUpdate diagnosticsManager
+            let mutable newHooks = [ { name = "diag"; fn = diagHook } ]
 
-        if (State.client state).SupportsStatus then
-            logger.debug (
-                Log.setMessage "Client supports status notifications. Initializing agent."
-            )
+            if (State.client state).SupportsStatus then
+                logger.debug (
+                    Log.setMessage "Client supports status notifications. Initializing agent."
+                )
 
-            statusAgent <- StatusAgent(client) |> Some
+                let statusHook = queueStatusUpdate statusManager
+                newHooks <- { name = "status"; fn = statusHook } :: newHooks
+            else
+                logger.debug (
+                    Log.setMessage
+                        "Client doesn't support status notifications. Agent won't be initialized."
+                )
 
-            statusAgent
-            |> Option.iter (fun x -> x.UpdateDocCount(State.workspace state |> Workspace.docCount))
-        else
-            logger.debug (
-                Log.setMessage
-                    "Client doesn't support status notifications. Agent won't be initialized."
-            )
-
-        diagAgent.Start()
-
-        async.Return()
+            Mutation.hooks newHooks
 
     override this.Shutdown() =
         logger.trace (Log.setMessage "Preparing for shutdown")
-        diagAgent.Stop()
         async.Return()
 
     override this.Exit() =
@@ -410,293 +500,388 @@ type MarksmanServer(client: MarksmanClient) =
         async.Return()
 
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =
-        let state = requireState ()
+        withStateExclusive
+        <| fun state ->
+            let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let docUri = par.TextDocument.Uri |> PathUri.fromString
-
-        let doc = State.tryFindDocument docUri state
-
-        match doc with
-        | Some doc ->
-            let newDoc = Doc.applyLspChange par doc
-
-            let newState = State.updateDocument newDoc state
-
-            updateState newState
-        | _ ->
-            logger.warn (
-                Log.setMessage "Document not found"
-                >> Log.addContext "method" "textDocumentDidChange"
-                >> Log.addContext "uri" docUri
-            )
-
-        async.Return()
-
-    override this.TextDocumentDidClose(par: DidCloseTextDocumentParams) =
-        let path = par.TextDocument.Uri |> PathUri.fromString
-
-        let state = requireState ()
-        let folder = State.tryFindFolderEnclosing path state
-
-        match folder with
-        | None -> ()
-        | Some folder ->
-            let docFromDisk = Doc.load folder.root path
+            let doc = State.tryFindDocument docUri state
 
             let newState =
-                match docFromDisk with
-                | Some doc -> State.updateDocument doc state
-                | _ -> State.removeDocument path state
+                match doc with
+                | Some doc ->
+                    let newDoc = Doc.applyLspChange par doc
 
-            updateState newState
-
-        async.Return()
-
-    override this.TextDocumentDidOpen(par: DidOpenTextDocumentParams) =
-        let state = requireState ()
-
-        let path = par.TextDocument.Uri |> PathUri.fromString
-
-        let folder = State.tryFindFolderEnclosing path state
-
-        match folder with
-        | None -> ()
-        | Some folder ->
-            let document = Doc.fromLspDocument folder.root par.TextDocument
-
-            let newState = State.updateDocument document state
-
-            updateState newState
-
-        async.Return()
-
-    override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
-        let state = requireState ()
-
-        let newState =
-            State.updateFoldersFromLsp par.Event.Added par.Event.Removed state
-
-        updateState newState
-        async.Return()
-
-
-    override this.WorkspaceDidCreateFiles(par: CreateFilesParams) =
-        let docUris = par.Files |> Array.map (fun fc -> PathUri.fromString fc.Uri)
-
-        let mutable newState = requireState ()
-
-        for docUri in docUris do
-            logger.trace (
-                Log.setMessage "Processing file create not"
-                >> Log.addContext "uri" docUri
-            )
-
-            let folder = State.tryFindFolderEnclosing docUri newState
-
-            match folder with
-            | None -> ()
-            | Some folder ->
-                match Doc.load folder.root docUri with
-                | Some doc -> newState <- State.updateDocument doc newState
+                    State.updateDocument newDoc state |> Some
                 | _ ->
                     logger.warn (
-                        Log.setMessage "Couldn't load created document"
+                        Log.setMessage "Document not found"
+                        >> Log.addContext "method" "textDocumentDidChange"
                         >> Log.addContext "uri" docUri
                     )
 
-                    ()
+                    None
 
-        updateState newState
-        async.Return()
+            Mutation.stateOpt newState
+
+    override this.TextDocumentDidClose(par: DidCloseTextDocumentParams) =
+        withStateExclusive
+        <| fun state ->
+            let path = par.TextDocument.Uri |> PathUri.fromString
+            let folder = State.tryFindFolderEnclosing path state
+
+            match folder with
+            | None -> Mutation.empty
+            | Some folder ->
+                let docFromDisk = Doc.load folder.root path
+
+                let newState =
+                    match docFromDisk with
+                    | Some doc -> State.updateDocument doc state
+                    | _ -> State.removeDocument path state
+
+                Mutation.state newState
+
+
+    override this.TextDocumentDidOpen(par: DidOpenTextDocumentParams) =
+        withStateExclusive
+        <| fun state ->
+            let path = par.TextDocument.Uri |> PathUri.fromString
+
+            let folder = State.tryFindFolderEnclosing path state
+
+            match folder with
+            | None -> Mutation.empty
+            | Some folder ->
+                let document = Doc.fromLspDocument folder.root par.TextDocument
+                let newState = State.updateDocument document state
+                Mutation.state newState
+
+    override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
+        withStateExclusive
+        <| fun state ->
+            let newState =
+                State.updateFoldersFromLsp par.Event.Added par.Event.Removed state
+
+            Mutation.state newState
+
+
+    override this.WorkspaceDidCreateFiles(par: CreateFilesParams) =
+        withStateExclusive
+        <| fun state ->
+            let docUris = par.Files |> Array.map (fun fc -> PathUri.fromString fc.Uri)
+
+            let mutable newState = state
+
+            for docUri in docUris do
+                logger.trace (
+                    Log.setMessage "Processing file create not"
+                    >> Log.addContext "uri" docUri
+                )
+
+                let folder = State.tryFindFolderEnclosing docUri newState
+
+                match folder with
+                | None -> ()
+                | Some folder ->
+                    match Doc.load folder.root docUri with
+                    | Some doc -> newState <- State.updateDocument doc newState
+                    | _ ->
+                        logger.warn (
+                            Log.setMessage "Couldn't load created document"
+                            >> Log.addContext "uri" docUri
+                        )
+
+                        ()
+
+            Mutation.state newState
 
     override this.WorkspaceDidDeleteFiles(par: DeleteFilesParams) =
-        let mutable newState = requireState ()
+        withStateExclusive
+        <| fun state ->
+            let mutable newState = state
 
-        let deletedUris =
-            par.Files |> Array.map (fun x -> PathUri.fromString x.Uri)
+            let deletedUris =
+                par.Files |> Array.map (fun x -> PathUri.fromString x.Uri)
 
-        for uri in deletedUris do
-            logger.trace (
-                Log.setMessage "Processing file delete not"
-                >> Log.addContext "uri" uri
-            )
+            for uri in deletedUris do
+                logger.trace (
+                    Log.setMessage "Processing file delete not"
+                    >> Log.addContext "uri" uri
+                )
 
-            newState <- State.removeDocument uri newState
+                newState <- State.removeDocument uri newState
 
-        updateState newState
-        async.Return()
+            Mutation.state newState
 
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
-        let state = requireState ()
+        withState
+        <| fun state ->
+            let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let getSymbols (doc: Doc) =
 
-        let getSymbols (doc: Doc) =
+                if (State.client state).SupportsHierarchy then
+                    let topLevelHeadings =
+                        doc.cst |> Seq.collect (Element.asHeading >> Option.toList)
 
-            if (State.client state).SupportsHierarchy then
-                let topLevelHeadings =
-                    doc.cst |> Seq.collect (Element.asHeading >> Option.toList)
+                    topLevelHeadings
+                    |> Seq.map (headingToDocumentSymbol (State.client state).IsEmacs)
+                    |> Array.ofSeq
+                    |> Second
+                else
+                    let allHeadings = Index.headings doc.index
 
-                topLevelHeadings
-                |> Seq.map (headingToDocumentSymbol (State.client state).IsEmacs)
-                |> Array.ofSeq
-                |> Second
-            else
-                let allHeadings = Index.headings doc.index
+                    allHeadings
+                    |> Seq.collect (headingToSymbolInfo docUri)
+                    |> Array.ofSeq
+                    |> First
 
-                allHeadings
-                |> Seq.collect (headingToSymbolInfo docUri)
-                |> Array.ofSeq
-                |> First
+            let response = State.tryFindDocument docUri state |> Option.map getSymbols
 
-        let response = State.tryFindDocument docUri state |> Option.map getSymbols
-
-        AsyncLspResult.success response
+            LspResult.success response
 
     override this.TextDocumentCompletion(par: CompletionParams) =
-        logger.trace (Log.setMessage "Completion request start")
+        withState
+        <| fun state ->
+            logger.trace (Log.setMessage "Completion request start")
 
-        let state = requireState ()
+            let pos = par.Position
+            let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let pos = par.Position
-        let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let candidates =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docUri state
 
-        let candidates =
-            monad' {
-                let! folder = State.tryFindFolderEnclosing docUri state
+                    match Compl.findCandidates pos docUri folder with
+                    | [||] -> return! None
+                    | candidates -> { IsIncomplete = true; Items = candidates }
+                }
 
-                match Compl.findCandidates pos docUri folder with
-                | [||] -> return! None
-                | candidates -> { IsIncomplete = true; Items = candidates }
-            }
-
-        AsyncLspResult.success candidates
+            LspResult.success candidates
 
     override this.TextDocumentDefinition(par: TextDocumentPositionParams) =
-        let state = requireState ()
+        withState
+        <| fun state ->
+            let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let goto =
+                monad {
+                    let! folder = State.tryFindFolderEnclosing docUri state
+                    let! srcDoc = Folder.tryFindDocByPath docUri folder
+                    let! atPos = Doc.linkAtPos par.Position srcDoc
+                    let! uref = Uref.ofElement atPos
+                    let! ref = Ref.tryResolveUref uref srcDoc folder
 
-        let goto =
-            monad {
-                let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDocByPath docUri folder
-                let! atPos = Doc.linkAtPos par.Position srcDoc
-                let! uref = Uref.ofElement atPos
-                let! ref = Ref.tryResolveUref uref srcDoc folder
-                GotoResult.Single { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
-            }
+                    GotoResult.Single
+                        { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
+                }
 
-        AsyncLspResult.success goto
+            LspResult.success goto
 
     override this.TextDocumentHover(par: TextDocumentPositionParams) =
-        let state = requireState ()
+        withState
+        <| fun state ->
+            let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let hover =
+                monad {
+                    let! folder = State.tryFindFolderEnclosing docUri state
+                    let! srcDoc = Folder.tryFindDocByPath docUri folder
+                    let! atPos = Doc.linkAtPos par.Position srcDoc
+                    let! uref = Uref.ofElement atPos
+                    let! ref = Ref.tryResolveUref uref srcDoc folder
 
-        let hover =
-            monad {
-                let! folder = State.tryFindFolderEnclosing docUri state
-                let! srcDoc = Folder.tryFindDocByPath docUri folder
-                let! atPos = Doc.linkAtPos par.Position srcDoc
-                let! uref = Uref.ofElement atPos
-                let! ref = Ref.tryResolveUref uref srcDoc folder
+                    let destScope = Ref.scope ref
 
-                let destScope = Ref.scope ref
+                    let content =
+                        (Ref.doc ref).text.Substring destScope |> markdown |> MarkupContent
 
-                let content =
-                    (Ref.doc ref).text.Substring destScope |> markdown |> MarkupContent
+                    let hover = { Contents = content; Range = None }
 
-                let hover = { Contents = content; Range = None }
+                    hover
+                }
 
-                hover
-            }
-
-        AsyncLspResult.success hover
+            LspResult.success hover
 
 
 
     override this.TextDocumentReferences(par: ReferenceParams) =
-        let state = requireState ()
-        let docUri = par.TextDocument.Uri |> PathUri.fromString
+        withState
+        <| fun state ->
+            let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-        let locs =
-            monad' {
-                let! folder = State.tryFindFolderEnclosing docUri state
-                let! curDoc = Folder.tryFindDocByPath docUri folder
-                let! atPos = Cst.elementAtPos par.Position curDoc.cst
-                let referencingEls = Ref.findElementRefs folder curDoc atPos
+            let locs =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docUri state
+                    let! curDoc = Folder.tryFindDocByPath docUri folder
+                    let! atPos = Cst.elementAtPos par.Position curDoc.cst
 
-                let referencingEls =
-                    if par.Context.IncludeDeclaration then
-                        Seq.append referencingEls [ curDoc, atPos ]
-                    else
-                        referencingEls
+                    let referencingEls =
+                        Ref.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
 
-                let toLoc (doc, el) = { Uri = doc.path.DocumentUri; Range = Element.range el }
+                    let toLoc (doc, el) = { Uri = doc.path.DocumentUri; Range = Element.range el }
 
-                referencingEls |> Seq.map toLoc |> Array.ofSeq
-            }
+                    referencingEls |> Seq.map toLoc |> Array.ofSeq
+                }
 
-        let locs = Option.map Array.ofSeq locs
+            let locs = Option.map Array.ofSeq locs
 
-        AsyncLspResult.success locs
+            LspResult.success locs
 
     override this.TextDocumentSemanticTokensFull(par: SemanticTokensParams) =
-        let state = requireState ()
-        let docPath = par.TextDocument.Uri |> PathUri.fromString
+        withState
+        <| fun state ->
+            let docPath = par.TextDocument.Uri |> PathUri.fromString
 
-        let tokens =
-            monad' {
-                let! folder = State.tryFindFolderEnclosing docPath state
-                let! doc = Folder.tryFindDocByPath docPath folder
-                let data = Semato.Token.ofIndexEncoded (Doc.index doc)
-                { ResultId = None; Data = data }
-            }
+            let tokens =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docPath state
+                    let! doc = Folder.tryFindDocByPath docPath folder
+                    let data = Semato.Token.ofIndexEncoded (Doc.index doc)
+                    { ResultId = None; Data = data }
+                }
 
-        AsyncLspResult.success tokens
+            LspResult.success tokens
 
     override this.TextDocumentSemanticTokensRange(par: SemanticTokensRangeParams) =
-        let state = requireState ()
-        let docPath = par.TextDocument.Uri |> PathUri.fromString
-        let range = par.Range
+        withState
+        <| fun state ->
+            let docPath = par.TextDocument.Uri |> PathUri.fromString
+            let range = par.Range
 
-        let tokens =
-            monad' {
-                let! folder = State.tryFindFolderEnclosing docPath state
-                let! doc = Folder.tryFindDocByPath docPath folder
-                let data = Semato.Token.ofIndexEncodedInRange (Doc.index doc) range
-                { ResultId = None; Data = data }
-            }
+            let tokens =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docPath state
+                    let! doc = Folder.tryFindDocByPath docPath folder
+                    let data = Semato.Token.ofIndexEncodedInRange (Doc.index doc) range
+                    { ResultId = None; Data = data }
+                }
 
-        AsyncLspResult.success tokens
+            LspResult.success tokens
 
     override this.TextDocumentCodeAction(opts: CodeActionParams) =
-        let state = requireState ()
-        let docPath = opts.TextDocument.Uri |> PathUri.fromString
+        withStateExclusive
+        <| fun state ->
+            let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
-        let codeAction title edit =
-            { Title = title
-              Kind = Some CodeActionKind.Source
-              Diagnostics = None
-              Command = None
-              Data = None
-              IsPreferred = Some false
-              Disabled = None
-              Edit = Some edit }
+            let documentBeginning = Range.Mk(0, 0, 0, 0)
 
-        let tocAction =
-            State.tryFindDocument docPath state
-            |> Option.bind CodeActions.tableOfContents
-            |> Option.toArray
-            |> Array.map (fun ca ->
-                let wsEdit =
-                    (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
+// <<<<<<< HEAD
+//             let codeAction title edit =
+//                 { Title = title
+//                   Kind = Some CodeActionKind.Source
+//                   Diagnostics = None
+//                   Command = None
+//                   Data = None
+//                   IsPreferred = Some false
+//                   Disabled = None
+//                   Edit = Some edit }
 
-                codeAction ca.name wsEdit)
+//             let tocAction =
+//                 State.tryFindDocument docPath state
+//                 |> Option.bind CodeActions.tableOfContents
+//                 |> Option.toArray
+//                 |> Array.map (fun ca ->
+//                     let wsEdit =
+//                         (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
 
-        let commands = TextDocumentCodeActionResult.CodeActions tocAction
+//                     codeAction ca.name wsEdit)
 
-        AsyncLspResult.success (Some commands)
+//             let commands = TextDocumentCodeActionResult.CodeActions tocAction
+// =======
+            let editAt rangeOpt text =
+                let textEdit =
+                    { NewText = text
+                      Range = Option.defaultValue documentBeginning rangeOpt }
 
-    override this.Dispose() = ()
+                let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
+
+                { Changes = Some mp; DocumentChanges = None }
+
+            let toc =
+                monad' {
+                    let! document = State.tryFindDocument docPath state
+                    let! toc = TableOfContents.mk document.index
+
+                    let rendered = TableOfContents.render toc
+                    let detected = TableOfContents.detect document.text
+
+                    let result = ($"{rendered}", detected)
+
+                    result
+                }
+
+            let codeAction title edit =
+                { Title = title
+                  Kind = Some CodeActionKind.Source
+                  Diagnostics = None
+                  Command = None
+                  Data = None
+                  IsPreferred = Some false
+                  Disabled = None
+                  Edit = Some edit }
+
+            let codeActions =
+                match toc with
+                | None -> Array.empty
+                | Some (render, existing) ->
+                    match existing with
+                    | None ->
+                        [| U2.Second(codeAction "Create a Table of Contents" (editAt None render)) |]
+                    | Some oldTocRange ->
+                        [| U2.Second(
+                               codeAction
+                                   "Update the Table of Contents"
+                                   (editAt (Some oldTocRange) render)
+                           ) |]
+
+            Mutation.output (LspResult.success (Some codeActions))
+
+
+    override this.TextDocumentRename(pars) =
+        withStateExclusive
+        <| fun state ->
+            let docPath = pars.TextDocument.Uri |> PathUri.fromString
+
+            let edit: option<LspResult<option<WorkspaceEdit>>> =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docPath state
+                    let! srcDoc = Folder.tryFindDocByPath docPath folder
+
+                    let renameResult =
+                        Refactor.rename
+                            (State.client state).SupportsDocumentEdit
+                            folder
+                            srcDoc
+                            pars.Position
+                            pars.NewName
+
+                    return (Refactor.RenameResult.toLsp renameResult)
+                }
+
+            match edit with
+            | None -> Mutation.output (Ok None)
+            | Some result -> Mutation.output result
+
+    override this.TextDocumentPrepareRename(pars) =
+        withStateExclusive
+        <| fun state ->
+            let docPath = pars.TextDocument.Uri |> PathUri.fromString
+
+            let renameRange =
+                monad' {
+                    let! folder = State.tryFindFolderEnclosing docPath state
+                    let! srcDoc = Folder.tryFindDocByPath docPath folder
+                    return! Refactor.renameRange srcDoc pars.Position
+                }
+
+            Mutation.output (renameRange |> Option.map PrepareRenameResult.Range |> Ok)
+// >>>>>>> main
+
+    override this.Dispose() =
+        (statusManager :> IDisposable).Dispose()
+        (diagnosticsManager :> IDisposable).Dispose()
+
+        match stateManager with
+        | Some stateManager -> (stateManager :> IDisposable).Dispose()
+        | _ -> ()

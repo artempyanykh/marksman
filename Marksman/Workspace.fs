@@ -2,6 +2,7 @@ module Marksman.Workspace
 
 open System
 open System.IO
+open GlobExpressions
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
@@ -49,33 +50,33 @@ module Doc =
         { doc with text = newText; cst = newCst; index = newIndex }
 
 
-    let applyLspChange (change: DidChangeTextDocumentParams) (document: Doc) : Doc =
+    let applyLspChange (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =
         let newVersion = change.TextDocument.Version
 
         logger.trace (
             Log.setMessage "Processing text change"
-            >> Log.addContext "uri" document.path
-            >> Log.addContext "currentVersion" document.version
+            >> Log.addContext "uri" doc.path
+            >> Log.addContext "currentVersion" doc.version
             >> Log.addContext "newVersion" newVersion
         )
 
         // Sanity checking
-        match newVersion, document.version with
-        | Some newVersion, Some curVersion ->
+        match newVersion, doc.version with
+        | Some newVersion, Some curVersion when curVersion > 0 ->
             let expectedVersion = curVersion + change.ContentChanges.Length
 
             if expectedVersion <> newVersion then
                 logger.warn (
                     Log.setMessage "Unexpected document version"
-                    >> Log.addContext "uri" document.path
+                    >> Log.addContext "uri" doc.path
                     >> Log.addContext "currentVersion" curVersion
                     >> Log.addContext "newVersion" newVersion
                 )
         | _ -> ()
 
-        let newText = applyTextChange change.ContentChanges document.text
+        let newText = applyTextChange change.ContentChanges doc.text
 
-        { withText newText document with version = newVersion }
+        { withText newText doc with version = newVersion }
 
     let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Doc =
         let path = PathUri.fromString item.Uri
@@ -122,12 +123,43 @@ type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
+    let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
 
     let tryFindDocByPath (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
 
     let docs (folder: Folder) : seq<Doc> = seq { for doc in folder.docs |> Map.values -> doc }
 
-    let private loadDocs (root: PathUri) : seq<Doc> =
+    let private readIgnoreFiles (root: PathUri) : array<string> =
+        let lines = ResizeArray()
+
+        for file in ignoreFiles do
+            let path = Path.Combine(root.LocalPath, file)
+
+            if File.Exists(path) then
+                logger.trace (Log.setMessage "Reading ignore globs" >> Log.addContext "file" path)
+
+                try
+                    let content = using (new StreamReader(path)) (fun f -> f.ReadToEnd())
+                    lines.AddRange(content.Lines())
+                with
+                | :? FileNotFoundException
+                | :? IOException ->
+                    logger.trace (
+                        Log.setMessage "Failed to read ignore globs"
+                        >> Log.addContext "file" path
+                    )
+
+        lines.ToArray()
+
+    let private buildGlobs (strs: array<string>) : array<Glob> = strs |> Array.map Glob
+
+    let shouldBeIgnored (ignores: array<Glob>) (root: string) (fullFilePath: string) =
+        let relPath = fullFilePath.TrimPrefix(root).AsUnixAbsPath()
+        ignores |> Array.exists (fun glob -> glob.IsMatch(relPath))
+
+    let private loadDocs (root: PathUri) (ignores: array<Glob>) : seq<Doc> =
+        let shouldBeIgnoredHere = shouldBeIgnored ignores root.LocalPath
+
         let rec collect (cur: PathUri) =
             let di = DirectoryInfo(cur.LocalPath)
 
@@ -137,16 +169,28 @@ module Folder =
 
                 seq {
                     for file in files do
-                        let pathUri = PathUri.fromString file.FullName
+                        if not (shouldBeIgnoredHere file.FullName) then
+                            let pathUri = PathUri.fromString file.FullName
 
-                        let document = Doc.load root pathUri
+                            let document = Doc.load root pathUri
 
-                        match document with
-                        | Some document -> yield document
-                        | _ -> ()
+                            match document with
+                            | Some document -> yield document
+                            | _ -> ()
+                        else
+                            logger.trace (
+                                Log.setMessage "Skipping ignored file"
+                                >> Log.addContext "file" file.FullName
+                            )
 
                     for dir in dirs do
-                        yield! collect (PathUri.fromString dir.FullName)
+                        if not (shouldBeIgnoredHere dir.FullName) then
+                            yield! collect (PathUri.fromString dir.FullName)
+                        else
+                            logger.trace (
+                                Log.setMessage "Skipping ignored directory"
+                                >> Log.addContext "file" dir.FullName
+                            )
                 }
             with
             | :? UnauthorizedAccessException as exn ->
@@ -172,8 +216,12 @@ module Folder =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
 
         if Directory.Exists(root.LocalPath) then
+            let ignores = readIgnoreFiles root |> buildGlobs
+
             let documents =
-                loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
+                loadDocs root ignores
+                |> Seq.map (fun doc -> doc.path, doc)
+                |> Map.ofSeq
 
             { name = name; root = root; docs = documents } |> Some
         else

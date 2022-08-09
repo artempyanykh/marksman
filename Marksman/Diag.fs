@@ -195,3 +195,5 @@ module WorkspaceDiag =
         Workspace.folders ws
         |> Seq.map (fun folder -> folder.root, FolderDiag.mk folder)
         |> Map.ofSeq
+
+    let empty = Map.empty

@@ -27,6 +27,7 @@ module TokenType =
 type Token =
     { range: Range
       typ: TokenType }
+
     override this.ToString() = $"{this.typ}@{this.range.DebuggerDisplay}"
 
 module Token =

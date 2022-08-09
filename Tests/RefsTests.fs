@@ -71,7 +71,7 @@ module DocRefTests =
         Assert.Equal(None, actual)
 
 let doc1 =
-    FakeDoc.mk (
+    FakeDoc.Mk(
         path = "doc1.md",
         content =
             "\
@@ -86,7 +86,7 @@ let doc1 =
     )
 
 let doc2 =
-    FakeDoc.mk (
+    FakeDoc.Mk(
         path = "doc2.md",
         content =
             "\
@@ -109,7 +109,7 @@ let doc2 =
 "
     )
 
-let folder = FakeFolder.mk [ doc1; doc2 ]
+let folder = FakeFolder.Mk [ doc1; doc2 ]
 
 let stripRefs (refs: seq<Doc * Element>) =
     refs
@@ -117,50 +117,117 @@ let stripRefs (refs: seq<Doc * Element>) =
         Path.GetFileName(doc.path.DocumentUri), (Element.range el).DebuggerDisplay)
     |> Array.ofSeq
 
-[<Fact>]
-let refToLinkDef_atDef () =
-    let def = Cst.elementAtPos (Position.Mk(15, 3)) doc2.cst
-    let def = def |> Option.defaultWith (fun _ -> failwith "No def")
-    let refs = Ref.findElementRefs folder doc2 def
-    let refs = stripRefs refs
+module RefsTests =
+    [<Fact>]
+    let refToLinkDef_atDef () =
+        let def =
+            Cst.elementAtPos (Position.Mk(15, 3)) doc2.cst
+            |> Option.defaultWith (fun _ -> failwith "No def")
 
-    checkInlineSnapshot
-        (fun x -> x.ToString())
-        refs
-        [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
+        let refs = Ref.findElementRefs false folder doc2 def |> stripRefs
 
-[<Fact>]
-let refToLinkDef_atLink () =
-    let def = Cst.elementAtPos (Position.Mk(8, 4)) doc2.cst
-    let def = def |> Option.defaultWith (fun _ -> failwith "No def")
-    let refs = Ref.findElementRefs folder doc2 def
-    let refs = stripRefs refs
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
 
-    checkInlineSnapshot
-        (fun x -> x.ToString())
-        refs
-        [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
+    [<Fact>]
+    let refToLinkDef_atDef_withDecl () =
+        let def =
+            Cst.elementAtPos (Position.Mk(15, 3)) doc2.cst
+            |> Option.defaultWith (fun _ -> failwith "No def")
 
-[<Fact>]
-let refToDoc_atTitle () =
-    let title = Cst.elementAtPos (Position.Mk(0, 2)) doc1.cst
-    let title = title |> Option.defaultWith (fun _ -> failwith "No title")
-    let refs = Ref.findElementRefs folder doc1 title
-    let refs = stripRefs refs
+        let refs = Ref.findElementRefs true folder doc2 def |> stripRefs
 
-    checkInlineSnapshot
-        (fun x -> x.ToString())
-        refs
-        [ "(doc2.md, (12,0)-(12,9))"; "(doc2.md, (13,0)-(13,16))" ]
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (15,0)-(15,21))"
+              "(doc2.md, (4,0)-(4,11))"
+              "(doc2.md, (8,0)-(8,11))" ]
 
-[<Fact>]
-let refToDoc_atLink () =
-    let wl = Cst.elementAtPos (Position.Mk(4, 4)) doc1.cst
-    let wl = wl |> Option.defaultWith (fun _ -> failwith "No title")
-    let refs = Ref.findElementRefs folder doc1 wl
-    let refs = stripRefs refs
+    [<Fact>]
+    let refToLinkDef_atLink () =
+        let def =
+            Cst.elementAtPos (Position.Mk(8, 4)) doc2.cst
+            |> Option.defaultWith (fun _ -> failwith "No def")
 
-    checkInlineSnapshot
-        (fun x -> x.ToString())
-        refs
-        [ "(doc1.md, (4,0)-(4,16))"; "(doc2.md, (6,0)-(6,11))" ]
+        let refs = Ref.findElementRefs false folder doc2 def |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
+
+    [<Fact>]
+    let refToLinkDef_atLink_withDecl () =
+        let def =
+            Cst.elementAtPos (Position.Mk(8, 4)) doc2.cst
+            |> Option.defaultWith (fun _ -> failwith "No def")
+
+        let refs = Ref.findElementRefs true folder doc2 def |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (15,0)-(15,21))"
+              "(doc2.md, (4,0)-(4,11))"
+              "(doc2.md, (8,0)-(8,11))" ]
+
+    [<Fact>]
+    let refToDoc_atTitle () =
+        let title =
+            Cst.elementAtPos (Position.Mk(0, 2)) doc1.cst
+            |> Option.defaultWith (fun _ -> failwith "No title")
+
+        let refs = Ref.findElementRefs false folder doc1 title |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (12,0)-(12,9))"; "(doc2.md, (13,0)-(13,16))" ]
+
+    [<Fact>]
+    let refToDoc_atTitle_withDecl () =
+        let title =
+            Cst.elementAtPos (Position.Mk(0, 2)) doc1.cst
+            |> Option.defaultWith (fun _ -> failwith "No title")
+
+        let refs = Ref.findElementRefs true folder doc1 title |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc1.md, (0,0)-(0,7))"
+              "(doc2.md, (12,0)-(12,9))"
+              "(doc2.md, (13,0)-(13,16))" ]
+
+    [<Fact>]
+    let refToDoc_atLink () =
+        let wl =
+            Cst.elementAtPos (Position.Mk(4, 4)) doc1.cst
+            |> Option.defaultWith (fun _ -> failwith "No title")
+
+        let refs = Ref.findElementRefs false folder doc1 wl |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc1.md, (4,0)-(4,16))"; "(doc2.md, (6,0)-(6,11))" ]
+
+    [<Fact>]
+    let refToDoc_atLink_withDecl () =
+        let wl =
+            Cst.elementAtPos (Position.Mk(4, 4)) doc1.cst
+            |> Option.defaultWith (fun _ -> failwith "No title")
+
+        let refs = Ref.findElementRefs true folder doc1 wl |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (10,0)-(10,9))"
+              "(doc1.md, (4,0)-(4,16))"
+              "(doc2.md, (6,0)-(6,11))" ]
+
+    // TODO: add tests for title refs

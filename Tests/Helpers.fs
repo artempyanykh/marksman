@@ -32,7 +32,7 @@ let applyDocumentAction (doc: Doc) (action: DocumentAction) =
 
 type FakeDoc =
     class
-        static member mk(content: string, ?path: string) : Doc =
+        static member Mk(content: string, ?path: string) : Doc =
             let text = Text.mkText content
             let path = defaultArg path "fake.md"
             let pathComp = path.TrimStart('/').Split("/") |> List.ofArray
@@ -41,14 +41,14 @@ type FakeDoc =
             let rootUri = dummyRoot |> pathToUri
             Doc.mk (PathUri.fromString pathUri) (PathUri.fromString rootUri) None text
 
-        static member mk(contentLines: array<string>, ?path: string) : Doc =
+        static member Mk(contentLines: array<string>, ?path: string) : Doc =
             let content = String.concat System.Environment.NewLine contentLines
-            FakeDoc.mk (content, ?path = path)
+            FakeDoc.Mk (content, ?path = path)
     end
 
 type FakeFolder =
     class
-        static member mk(docs: seq<Doc>) : Folder =
+        static member Mk(docs: seq<Doc>) : Folder =
             let docsMap = docs |> Seq.map (fun d -> d.path, d) |> Map.ofSeq
 
             { name = "dummy"

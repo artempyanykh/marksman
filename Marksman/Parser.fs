@@ -4,7 +4,6 @@ open System
 open Ionide.LanguageServerProtocol.Types
 
 open Markdig.Syntax
-open MarkdigPatches
 open Text
 open Marksman.Cst
 
@@ -52,9 +51,11 @@ module Markdown =
                 let shouldStop (c: char) = c.IsNewLineOrLineFeed() || c.IsZero() || found
 
                 while not (shouldStop current) do
-                    if current = '#'
-                       && slice.PeekCharExtra(-1) <> '\\'
-                       && offsetHashDelim.IsNone then
+                    if
+                        current = '#'
+                        && slice.PeekCharExtra(-1) <> '\\'
+                        && offsetHashDelim.IsNone
+                    then
                         offsetHashDelim <- Some(processor.GetSourcePosition(slice.Start))
 
                     if current = ']' then
@@ -133,7 +134,7 @@ module Markdown =
                 .UsePreciseSourceLocation()
                 .UseYamlFrontMatter()
 
-        pipelineBuilder.InlineParsers.Insert(0, PatchedLinkInlineParser())
+        pipelineBuilder.InlineParsers.Insert(0, MarkdigPatches.PatchedLinkInlineParser())
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
         pipelineBuilder.Build()
 

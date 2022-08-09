@@ -56,6 +56,7 @@ type MdLink =
 type DocUrl =
     { url: Option<TextNode>
       anchor: Option<TextNode> }
+
     override this.ToString() : string =
         let parts =
             [ this.url
@@ -71,6 +72,8 @@ type DocUrl =
         String.Join(';', parts)
 
 module DocUrl =
+    let anchor (x: DocUrl) = x.anchor
+
     let ofUrlNode (url: TextNode) : DocUrl =
         let offsetHash = url.text.IndexOf('#')
 
@@ -173,9 +176,12 @@ and private fmtHeading node =
 
     let l2 = $"  text=`{node.text}`"
 
+    let l3 =
+        $"  title=`{inner.title.text}` @ {inner.title.range.DebuggerDisplay}"
+
     let rest = Array.map (indentFmt fmtElement) inner.children
 
-    String.Join(Environment.NewLine, Array.concat [ [| l1; l2 |]; rest ])
+    String.Join(Environment.NewLine, Array.concat [ [| l1; l2; l3 |]; rest ])
 
 and private fmtWikiLink node =
     let first = $"WL: {node.text}; {node.range.DebuggerDisplay}"
@@ -195,8 +201,7 @@ and private fmtMdLinkDef node =
 module Heading =
     let fmt = fmtHeading
 
-    let name (heading: Heading) : string =
-        (Node.text heading.title).TrimStart(' ', '#').TrimEnd(' ')
+    let name (heading: Heading) : string = Node.text heading.title
 
     let slug (heading: Heading) : Slug = name heading |> Slug.ofString
 

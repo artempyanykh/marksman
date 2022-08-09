@@ -35,7 +35,9 @@ module Index =
 
                 headingsBySlug[ slug ].Add(hn)
 
-                if Heading.isTitle hn.data then titles.Add(hn)
+                if Heading.isTitle hn.data then
+                    titles.Add(hn)
+
                 headings.Add(hn)
             | WL wl -> wikiLinks.Add(wl)
             | ML ml -> mdLinks.Add(ml)

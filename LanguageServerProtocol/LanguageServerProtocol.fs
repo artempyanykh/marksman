@@ -1,133 +1,5 @@
 namespace Ionide.LanguageServerProtocol
 
-module LspJsonConverters =
-  open Microsoft.FSharp.Reflection
-  open Newtonsoft.Json
-  open System
-  open System.Collections.Concurrent
-  open Ionide.LanguageServerProtocol.Types
-
-  let inline memorise (f: 'a -> 'b) : ('a -> 'b) =
-    let d = ConcurrentDictionary<'a, 'b>()
-    fun key -> d.GetOrAdd(key, f)
-
-  type ErasedUnionConverter() =
-    inherit JsonConverter()
-
-    let canConvert =
-      memorise (fun t ->
-        if not (FSharpType.IsUnion t) then
-          false
-        else
-          t.BaseType.GetCustomAttributes(typedefof<ErasedUnionAttribute>, false).Length > 0)
-
-    override __.CanConvert(t) = canConvert t
-
-    override __.WriteJson(writer, value, serializer) =
-      let _, fields = FSharpValue.GetUnionFields(value, value.GetType())
-      let unionField = fields.[0]
-      serializer.Serialize(writer, unionField)
-
-    override __.ReadJson(_reader, _t, _existingValue, _serializer) = failwith "Not implemented"
-
-  /// converter that can convert enum-style DUs
-  type SingleCaseUnionConverter() =
-    inherit JsonConverter()
-
-
-    let canConvert =
-      let allCases (t: System.Type) = FSharpType.GetUnionCases t
-
-      memorise (fun t ->
-        FSharpType.IsUnion t
-        && allCases t
-           |> Array.forall (fun c -> c.GetFields().Length = 0))
-
-    override _.CanConvert t = canConvert t
-
-    override _.WriteJson(writer: Newtonsoft.Json.JsonWriter, value: obj, serializer: Newtonsoft.Json.JsonSerializer) =
-      serializer.Serialize(writer, string value)
-
-    override _.ReadJson(reader: Newtonsoft.Json.JsonReader, t, _existingValue, serializer) =
-      let caseName = string reader.Value
-
-      match
-        FSharpType.GetUnionCases(t)
-        |> Array.tryFind (fun c -> c.Name.Equals(caseName, StringComparison.OrdinalIgnoreCase))
-        with
-      | Some caseInfo -> FSharpValue.MakeUnion(caseInfo, [||])
-      | None -> failwith $"Could not create an instance of the type '%s{t.Name}' with the name '%s{caseName}'"
-
-  type U2BoolObjectConverter() =
-    inherit JsonConverter()
-
-    let canConvert =
-      memorise (fun (t: System.Type) ->
-        t.IsGenericType
-        && t.GetGenericTypeDefinition() = typedefof<U2<_, _>>
-        && t.GetGenericArguments().Length = 2
-        && t.GetGenericArguments().[0] = typeof<bool>
-        && not (t.GetGenericArguments().[1].IsValueType))
-
-    override _.CanConvert t = canConvert t
-
-    override _.WriteJson(writer, value, serializer) =
-      let case, fields = FSharpValue.GetUnionFields(value, value.GetType())
-
-      match case.Name with
-      | "First" -> writer.WriteValue(value :?> bool)
-      | "Second" -> serializer.Serialize(writer, fields.[0])
-      | _ -> failwith $"Unrecognized case '{case.Name}' for union type '{value.GetType().FullName}'."
-
-    override _.ReadJson(reader, t, _existingValue, serializer) =
-      let cases = FSharpType.GetUnionCases(t)
-
-      match reader.TokenType with
-      | JsonToken.Boolean ->
-        // 'First' side
-        FSharpValue.MakeUnion(cases.[0], [| box (reader.Value :?> bool) |])
-      | JsonToken.StartObject ->
-        // Second side
-        let value = serializer.Deserialize(reader, (t.GetGenericArguments().[1]))
-        FSharpValue.MakeUnion(cases.[1], [| value |])
-      | _ ->
-        failwithf $"Unrecognized json TokenType '%s{string reader.TokenType}' when reading value of type '{t.FullName}'"
-
-  type OptionConverter() =
-    inherit JsonConverter()
-
-    override __.CanConvert(t) =
-      t.IsGenericType
-      && t.GetGenericTypeDefinition() = typedefof<option<_>>
-
-    override __.WriteJson(writer, value, serializer) =
-      let value =
-        if isNull value then
-          null
-        else
-          let _, fields = FSharpValue.GetUnionFields(value, value.GetType())
-          fields.[0]
-
-      serializer.Serialize(writer, value)
-
-    override __.ReadJson(reader, t, _existingValue, serializer) =
-      let innerType = t.GetGenericArguments().[0]
-
-      let innerType =
-        if innerType.IsValueType then
-          (typedefof<Nullable<_>>).MakeGenericType([| innerType |])
-        else
-          innerType
-
-      let value = serializer.Deserialize(reader, innerType)
-      let cases = FSharpType.GetUnionCases(t)
-
-      if isNull value then
-        FSharpValue.MakeUnion(cases.[0], [||])
-      else
-        FSharpValue.MakeUnion(cases.[1], [| value |])
-
-
 module Server =
   open System
   open System.IO
@@ -138,8 +10,7 @@ module Server =
   open System.Reflection
   open StreamJsonRpc
   open Newtonsoft.Json
-  open Newtonsoft.Json.Serialization
-  open LspJsonConverters
+  open Ionide.LanguageServerProtocol.JsonUtils
   open Newtonsoft.Json.Linq
 
   let logger = LogProvider.getLoggerByName "LSP Server"
@@ -148,28 +19,22 @@ module Server =
   jsonRpcFormatter.JsonSerializer.NullValueHandling <- NullValueHandling.Ignore
   jsonRpcFormatter.JsonSerializer.ConstructorHandling <- ConstructorHandling.AllowNonPublicDefaultConstructor
   jsonRpcFormatter.JsonSerializer.MissingMemberHandling <- MissingMemberHandling.Ignore
+  jsonRpcFormatter.JsonSerializer.Converters.Add(StrictNumberConverter())
+  jsonRpcFormatter.JsonSerializer.Converters.Add(StrictStringConverter())
+  jsonRpcFormatter.JsonSerializer.Converters.Add(StrictBoolConverter())
   jsonRpcFormatter.JsonSerializer.Converters.Add(SingleCaseUnionConverter())
-  jsonRpcFormatter.JsonSerializer.Converters.Add(U2BoolObjectConverter())
   jsonRpcFormatter.JsonSerializer.Converters.Add(OptionConverter())
   jsonRpcFormatter.JsonSerializer.Converters.Add(ErasedUnionConverter())
-  jsonRpcFormatter.JsonSerializer.ContractResolver <- CamelCasePropertyNamesContractResolver()
+  jsonRpcFormatter.JsonSerializer.ContractResolver <- OptionAndCamelCasePropertyNamesContractResolver()
 
   let deserialize<'t> (token: JToken) = token.ToObject<'t>(jsonRpcFormatter.JsonSerializer)
   let serialize<'t> (o: 't) = JToken.FromObject(o, jsonRpcFormatter.JsonSerializer)
 
   let requestHandling<'param, 'result> (run: 'param -> AsyncLspResult<'result>) : Delegate =
     let runAsTask param ct =
-      let asyncLspResult =
-        try
-          // Although `run` returns an async result, its body may not be fully in an async context.
-          // Here we make sure that we catch and properly handle any exception before the first async.
-          run param
-        with
-        | ex ->
-          let rpcException = LocalRpcException(ex.Message)
-          rpcException.ErrorCode <- JsonRpc.ErrorCodes.internalError
-          rpcException.ErrorData <- ex.Data
-          raise rpcException
+      // Execute non-async portion of `run` before forking the async portion into a task.
+      // This is needed to avoid reordering of messages from a client.
+      let asyncLspResult = run param
 
       let asyncContinuation =
         async {
@@ -220,7 +85,12 @@ module Server =
     =
 
     use jsonRpcHandler = new HeaderDelimitedMessageHandler(output, input, jsonRpcFormatter)
-    use jsonRpc = new JsonRpc(jsonRpcHandler)
+    // Without overriding isFatalException, JsonRpc serializes exceptions and sends them to the client.
+    // This is particularly bad for notifications such as textDocument/didChange which don't require a response,
+    // and thus any exception that happens during e.g. text sync gets swallowed.
+    use jsonRpc =
+      { new JsonRpc(jsonRpcHandler) with
+          member this.IsFatalException(ex: Exception) = true }
 
     /// When the server wants to send a notification to the client
     let sendServerNotification (rpcMethod: string) (notificationObj: obj) : AsyncLspResult<unit> =
@@ -249,6 +119,17 @@ module Server =
             member __.Send x t = sendServerRequest x t }
       )
 
+    // Note on server shutdown.
+    // According the the LSP spec the shutdown sequence consists fo a client sending onShutdown request followed by
+    // onExit notification. The server can terminate after receiving onExit. However, real language clients implements
+    // the shutdown in their own way:
+    // 1. VSCode Language Client has a bug that causes it to NOT send an `exit` notification when stopping a server:
+    //    https://github.com/microsoft/vscode-languageserver-node/pull/776
+    //    VSCode sends onShutdown and then closes the connection.
+    // 2. Neovim LSP sends onShutdown followed by onExit but does NOT close the connection on its own.
+    // 3. Emacs LSP mode sends onShutdown followed by onExit and then closes the connection.
+    // This is the reason for the complicated logic below.
+
     let mutable shutdownReceived = false
     let mutable quitReceived = false
     use quitSemaphore = new SemaphoreSlim(0, 1)
@@ -256,17 +137,6 @@ module Server =
     let onShutdown () =
       logger.trace (Log.setMessage "Shutdown received")
       shutdownReceived <- true
-      // VSCode Language Client has a bug that causes it to NOT send an `exit` notification when stopping a server:
-      // https://github.com/microsoft/vscode-languageserver-node/pull/776 This may result in a bunch of zombie language
-      // servers just hanging around after a few reloads/restarts.  Although the fix was merged a while ago, the new
-      // client is yet to be released.  As a workaround let's forcefully exit after 10s after receiving a `shutdown`
-      // request.
-      task {
-        do! Task.Delay(10_000)
-        logger.trace (Log.setMessage "No `exit` notification within 10s after `shutdown` request. Exiting now.")
-        quitSemaphore.Release() |> ignore
-      }
-      |> ignore
 
     jsonRpc.AddLocalRpcMethod("shutdown", Action(onShutdown))
 
@@ -288,7 +158,16 @@ module Server =
 
     jsonRpc.StartListening()
 
-    quitSemaphore.Wait()
+    // 1. jsonRpc.Completion finishes when either a connection is closed or a fatal exception is thrown.
+    // 2. quitSemaphore is released when the server receives both onShutdown and onExit.
+    // Completion of either of those causes the server to stop.
+    let completed_task_idx = Task.WaitAny(jsonRpc.Completion, quitSemaphore.WaitAsync())
+    // jsonRpc.Completion throws on fatal exception. However, Task.WaitAny doesn't even when jsonRpc.Completion would.
+    // Here we check and re-raise if needed.
+    if completed_task_idx = 0 then
+      match jsonRpc.Completion.Exception with
+      | null -> ()
+      | exn -> raise exn
 
     match shutdownReceived, quitReceived with
     | true, true -> LspCloseReason.RequestedByClient
@@ -314,6 +193,7 @@ module Server =
       "textDocument/completion", requestHandling (fun s p -> s.TextDocumentCompletion(p))
       "completionItem/resolve", requestHandling (fun s p -> s.CompletionItemResolve(p))
       "textDocument/rename", requestHandling (fun s p -> s.TextDocumentRename(p))
+      "textDocument/prepareRename", requestHandling (fun s p -> s.TextDocumentPrepareRename(p))
       "textDocument/definition", requestHandling (fun s p -> s.TextDocumentDefinition(p))
       "textDocument/typeDefinition", requestHandling (fun s p -> s.TextDocumentTypeDefinition(p))
       "textDocument/implementation", requestHandling (fun s p -> s.TextDocumentImplementation(p))
@@ -385,7 +265,7 @@ module Client =
   open Ionide.LanguageServerProtocol
   open Ionide.LanguageServerProtocol.JsonRpc
   open Ionide.LanguageServerProtocol.Logging
-  open LspJsonConverters
+  open Ionide.LanguageServerProtocol.JsonUtils
   open Newtonsoft.Json
   open Newtonsoft.Json.Serialization
   open Newtonsoft.Json.Linq

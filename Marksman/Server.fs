@@ -766,29 +766,6 @@ type MarksmanServer(client: MarksmanClient) =
 
             let documentBeginning = Range.Mk(0, 0, 0, 0)
 
-// <<<<<<< HEAD
-//             let codeAction title edit =
-//                 { Title = title
-//                   Kind = Some CodeActionKind.Source
-//                   Diagnostics = None
-//                   Command = None
-//                   Data = None
-//                   IsPreferred = Some false
-//                   Disabled = None
-//                   Edit = Some edit }
-
-//             let tocAction =
-//                 State.tryFindDocument docPath state
-//                 |> Option.bind CodeActions.tableOfContents
-//                 |> Option.toArray
-//                 |> Array.map (fun ca ->
-//                     let wsEdit =
-//                         (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
-
-//                     codeAction ca.name wsEdit)
-
-//             let commands = TextDocumentCodeActionResult.CodeActions tocAction
-// =======
             let editAt rangeOpt text =
                 let textEdit =
                     { NewText = text
@@ -876,7 +853,6 @@ type MarksmanServer(client: MarksmanClient) =
                 }
 
             Mutation.output (renameRange |> Option.map PrepareRenameResult.Range |> Ok)
-// >>>>>>> main
 
     override this.Dispose() =
         (statusManager :> IDisposable).Dispose()

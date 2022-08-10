@@ -25,7 +25,7 @@ let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<str
 
     lines.ShouldMatchInlineSnapshot(snapshot)
 
-let applyDocumentAction (doc: Doc) (action: DocumentAction) =
+let applyDocumentAction (doc: Doc) (action: DocumentAction): string =
     let (before, after) = doc.text.Cutout(action.edit)
 
     before + action.newText + after

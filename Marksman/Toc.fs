@@ -61,15 +61,15 @@ module TableOfContents =
         | _ ->
             match doc.index.yamlFrontMatter with
             | None -> Replacing Text.documentBeginning
-            | Some (yml) -> After yml.range
+            | Some yml -> After yml.range
 
 
     let render (toc: TableOfContents) =
         let offset =
-            if toc.entries.Length <> 0 then
-                toc.entries |> Array.map (fun x -> x.level) |> Array.min
-            else
+            if Array.isEmpty toc.entries then
                 1
+            else
+                (Array.minBy (fun x -> x.level) toc.entries).level
 
         let tocLinks = Array.map (fun x -> Entry.renderLink x offset) toc.entries
         let startMarkerLines = [| StartMarker |]

@@ -1,6 +1,6 @@
 module Marksman.WorkspaceTest
 
-open GlobExpressions
+open System.Runtime.InteropServices
 open Ionide.LanguageServerProtocol.Types
 
 open Xunit
@@ -14,24 +14,48 @@ module FolderTests =
     module ShouldBeIgnoredTests =
         [<Fact>]
         let absGlob_Unix () =
-            let glob = Glob("/node_modules")
-            let root = "/Users/john/notes"
-            let ignored = "/Users/john/notes/node_modules"
-            Folder.shouldBeIgnored [|glob|] root ignored |> Assert.True
-            
-            let notIgnored = "/Users/john/notes/real.md"
-            Folder.shouldBeIgnored [|glob|] root notIgnored |> Assert.False
-            
+            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
+                let glob = Folder.buildGlobs ([| "/node_modules" |])
+                let root = "/Users/john/notes"
+                let ignored = "/Users/john/notes/node_modules"
+                Folder.shouldBeIgnored glob root ignored |> Assert.True
+
+                let notIgnored = "/Users/john/notes/real.md"
+                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+
+        [<Fact>]
+        let relGlob_Unix () =
+            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
+                let glob = Folder.buildGlobs ([| "a/b" |])
+                let root = "/Users/john/notes"
+                let ignored = "/Users/john/notes/a/b"
+                Folder.shouldBeIgnored glob root ignored |> Assert.True
+
+                let notIgnored = "/Users/john/notes/a/real.md"
+                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+
         [<Fact>]
         let absGlob_Win () =
-            let glob = Glob("/node_modules")
-            let root = "C:\\notes"
-            let ignored = "C:\\notes\\node_modules"
-            Folder.shouldBeIgnored [|glob|] root ignored |> Assert.True
-            
-            let notIgnored = "C:\\notes\\real.md"
-            Folder.shouldBeIgnored [|glob|] root notIgnored |> Assert.False
-        
+            if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
+                let glob = Folder.buildGlobs ([| "/node_modules" |])
+                let root = "C:\\notes"
+                let ignored = "C:\\notes\\node_modules"
+                Folder.shouldBeIgnored glob root ignored |> Assert.True
+
+                let notIgnored = "C:\\notes\\real.md"
+                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+
+        [<Fact>]
+        let relGlob_Win () =
+            if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
+                let glob = Folder.buildGlobs ([| "a/b" |])
+                let root = "C:\\notes"
+                let ignored = "C:\\notes\\a\\b"
+                Folder.shouldBeIgnored glob root ignored |> Assert.True
+
+                let notIgnored = "C:\\notes\\a\\real.md"
+                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+
 
 module DocTest =
     [<Fact>]

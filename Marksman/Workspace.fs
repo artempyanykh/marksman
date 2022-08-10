@@ -2,7 +2,6 @@ module Marksman.Workspace
 
 open System
 open System.IO
-open GlobExpressions
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
@@ -14,6 +13,7 @@ open Marksman.Misc
 open Marksman.Cst
 open Marksman.Index
 
+open Microsoft.Extensions.FileSystemGlobbing
 open Microsoft.FSharp.Core
 
 type Doc =
@@ -151,13 +151,19 @@ module Folder =
 
         lines.ToArray()
 
-    let private buildGlobs (strs: array<string>) : array<Glob> = strs |> Array.map Glob
+    let buildGlobs (patterns: array<string>) : Matcher =
+        let matcher = Matcher().AddInclude("**")
 
-    let shouldBeIgnored (ignores: array<Glob>) (root: string) (fullFilePath: string) =
-        let relPath = fullFilePath.TrimPrefix(root).AsUnixAbsPath()
-        ignores |> Array.exists (fun glob -> glob.IsMatch(relPath))
+        matcher.AddExcludePatterns([| ".git"; ".hg" |])
+        matcher.AddExcludePatterns(patterns)
+        matcher
 
-    let private loadDocs (root: PathUri) (ignores: array<Glob>) : seq<Doc> =
+    let shouldBeIgnored (ignores: Matcher) (root: string) (fullFilePath: string) : bool =
+        // let relPath = fullFilePath.TrimPrefix(root).AsUnixAbsPath()
+        let shouldIgnore = ignores.Match(root, fullFilePath).HasMatches |> not
+        shouldIgnore
+
+    let private loadDocs (root: PathUri) (ignores: Matcher) : seq<Doc> =
         let shouldBeIgnoredHere = shouldBeIgnored ignores root.LocalPath
 
         let rec collect (cur: PathUri) =

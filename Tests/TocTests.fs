@@ -19,12 +19,7 @@ module DetectToc =
     [<Fact>]
     let detectToc_noMarker () =
         let doc =
-            FakeDoc.Mk [| "- [T1][#t1]"
-                          " - [T2][#t2]"
-                          ""
-                          ""
-                          "# T1"
-                          "## T2" |]
+            FakeDoc.Mk [| "- [T1][#t1]"; " - [T2][#t2]"; ""; ""; "# T1"; "## T2" |]
 
         let titles = TableOfContents.detect doc.text
 
@@ -33,12 +28,13 @@ module DetectToc =
     [<Fact>]
     let detectToc_withMarker () =
         let doc =
-            FakeDoc.Mk [| StartMarker
-                          "- [T1][#t1]"
-                          " - [T2][#t2]"
-                          EndMarker
-                          "# T1"
-                          "## T2" |]
+            FakeDoc.Mk
+                [| StartMarker
+                   "- [T1][#t1]"
+                   " - [T2][#t2]"
+                   EndMarker
+                   "# T1"
+                   "## T2" |]
 
         let toc = (TableOfContents.detect doc.text).Value
         let tocText = doc.text.Substring toc
@@ -206,8 +202,7 @@ module DocumentEdit =
 
     [<Fact>]
     let insert_documentBeginning () =
-        let doc =
-            FakeDoc.Mk [| "## T1"; "### T2"; "## T3"; "#### T4" |]
+        let doc = FakeDoc.Mk [| "## T1"; "### T2"; "## T3"; "#### T4" |]
 
         let action = CodeActions.tableOfContents doc |> Option.get
 
@@ -231,26 +226,54 @@ module DocumentEdit =
 
     [<Fact>]
     let idempotent_application () =
+        
+        let text = 
+            stripMarginTrim
+                "
+                |---
+                |hello: bla 
+                |yo: 11 
+                |---
+                |
+                |## T1 
+                |
+                |hello 
+                |## T2 
+                |
+                |### T3
+                |
+                |#### T4"
+
         let doc =
-            FakeDoc.Mk [| "## T1"; "### T2"; "## T3"; "#### T4" |]
+            FakeDoc.Mk text
 
         let action = CodeActions.tableOfContents doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
-
-        let expected =
-            String.concat
-                NewLine
-                [| Toc.StartMarker
-                   "- [T1](#t1)"
-                   "  - [T2](#t2)"
-                   "- [T3](#t3)"
-                   "    - [T4](#t4)"
-                   Toc.EndMarker
-                   "## T1"
-                   "### T2"
-                   "## T3"
-                   "#### T4" |]
+        
+        let expected = 
+            stripMarginTrim 
+                $"
+                |---
+                |hello: bla 
+                |yo: 11 
+                |---
+                |
+                |{Toc.StartMarker}
+                |- [T1](#t1)
+                |- [T2](#t2)
+                |  - [T3](#t3)
+                |    - [T4](#t4)
+                |{Toc.EndMarker}
+                |
+                |## T1 
+                |
+                |hello 
+                |## T2 
+                |
+                |### T3
+                |
+                |#### T4"
 
         Assert.Equal(expected, modifiedText)
 
@@ -260,4 +283,3 @@ module DocumentEdit =
         let modifiedText2 = applyDocumentAction doc2 action2
 
         Assert.Equal(expected, modifiedText2)
-

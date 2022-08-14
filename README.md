@@ -76,7 +76,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 2. Inside `marksman` folder run `make install`
 3. The binary will be installed under `$HOME/.local/bin` (make sure this folder is in your `PATH`).
 
-## Screenshots
+## Demo
 
 Below is a mix of VSCode, Neovim, and Emacs screenshots. Although, not all features demonstrated for each editor,
 generally most features should work equaly in all editors.
@@ -114,6 +114,23 @@ generally most features should work equaly in all editors.
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.
 - 🗓  Support for Jupyter notebooks.
+
+### Code actions
+
+**Table of Contents**: Marksman has a code action to create and update a table
+of contents of a document.
+
+![Table of Contents](assets/readme/gifs/toc.gif)
+
+### Ignore files
+
+Marksman by default reads ignore globs from `.gitignore`, `.hgignore`, and
+`.ignore` and doesn't scan directories matching any of the glob patterns.
+
+**NOTE**: Marksman will only read **top-level** ignore files, or in other words
+ignore files at the root of your workspace folder. This is unlike Git which
+supports ignore files inside any project folder. If the lack of support for non
+top-level ignore files affects your workflow do open an issue.
 
 ## Where's `zeta-note` and where's Rust?
 

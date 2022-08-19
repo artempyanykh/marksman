@@ -89,11 +89,12 @@ let applyTextChange_insert_next_line () =
 
 [<Fact>]
 let applyTextChange_replace_single () =
+    //                      012345678901
     let text = Text.mkText "Hello World!"
 
     let actual =
         Text.applyTextChange
-            [| { Range = Some(Text.mkRange ((0, 0), (0, 6)))
+            [| { Range = Some(Text.mkRange ((0, 0), (0, 5)))
                  RangeLength = Some 5
                  Text = "Bye" } |]
             text

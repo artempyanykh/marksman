@@ -167,10 +167,13 @@ let mkPosition (line, char) = { Line = line; Character = char }
 let mkRange (start, end_) = { Start = mkPosition start; End = mkPosition end_ }
 
 let private applyChangeOne (text: Text) (change: TextDocumentContentChangeEvent) : Text =
-    match change.Range, change.RangeLength with
-    | Some range, Some length ->
+    match change.Range with
+    | Some range ->
         let lineMap = text.lineMap
         let start = range.Start |> lineMap.FindOffset
+        let end_ = range.End |> lineMap.FindOffset
+        // Since End points to the position AFTER the last char we don't need +1 here
+        let length = end_ - start
 
         let newContent =
             StringBuilder(text.content)
@@ -179,8 +182,7 @@ let private applyChangeOne (text: Text) (change: TextDocumentContentChangeEvent)
                 .ToString()
 
         mkText newContent
-    | None, None -> mkText change.Text
-    | _, _ -> failwith $"Unexpected change event structure: {change}"
+    | None -> mkText change.Text
 
 let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text: Text) : Text =
     Array.fold applyChangeOne text changeEvents

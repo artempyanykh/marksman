@@ -112,7 +112,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                   Full = { Delta = Some false } |> U2.Second |> Some }
         RenameProvider = renameOptions }
 
-let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
+let headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation =
     let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
@@ -125,12 +125,7 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInforma
           Location = location
           ContainerName = None }
 
-    let children =
-        h.data.children
-        |> Element.pickHeadings
-        |> Array.collect (headingToSymbolInfo docUri)
-
-    Array.append [| sym |] children
+    sym
 
 let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
     let name = Heading.name h.data
@@ -630,7 +625,7 @@ type MarksmanServer(client: MarksmanClient) =
                     let allHeadings = Index.headings doc.index
 
                     allHeadings
-                    |> Seq.collect (headingToSymbolInfo docUri)
+                    |> Seq.map (headingToSymbolInfo docUri)
                     |> Array.ofSeq
                     |> First
 

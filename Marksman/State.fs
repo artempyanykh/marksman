@@ -65,7 +65,7 @@ type State =
           workspace: Workspace
           revision: int }
 
-    member this.Diag: WorkspaceDiag = WorkspaceDiag.mk this.workspace
+    member this.Diag(): WorkspaceDiag = WorkspaceDiag.mk this.workspace
 
 module State =
     let private logger = LogProvider.getLoggerByName "State"
@@ -81,7 +81,7 @@ module State =
 
     let revision s = s.revision
 
-    let diag (s: State) = s.Diag
+    let diag (s: State) = s.Diag()
 
     let tryFindFolderEnclosing (uri: PathUri) (state: State) : option<Folder> =
         Workspace.tryFindFolderEnclosing uri state.workspace

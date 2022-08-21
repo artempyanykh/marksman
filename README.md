@@ -132,6 +132,21 @@ ignore files at the root of your workspace folder. This is unlike Git which
 supports ignore files inside any project folder. If the lack of support for non
 top-level ignore files affects your workflow do open an issue.
 
+### Workspace folders and project roots
+
+The LSP specification is designed to work with projects rather than individual
+files<sup>[4](#fn4)</sup>. How a root folder of a project is found varies
+between editors, but usually it's either
+1. a root of the version control system (applicable to all languages),
+2. a folder with `.marksman.toml` marker file (specific to Marksman integrations).
+
+Therefore, in case Marksman doesn't provide Markdown language assist for your
+files and you don't understand why, you can either:
+1. check your project into version control, or
+2. create a `.marksman.toml` at the root folder of your project, or
+3. refer to your editor/LSP client documentation regarding how project root is
+   defined.
+
 ## Where's `zeta-note` and where's Rust?
 
 After much deliberation, I've decided that it'd be _cheaper_ for me to write a new from-scratch implementation of the
@@ -154,6 +169,9 @@ can be used with any editor that has LSP support: Emacs, Vim, Neovim, etc.
 
 <span id="fn3">\[3\]</span>: Since Marksman is a regular Language Server most of the functionality works out of the box
 with any LSP client.
+
+<span id="fn4">\[4\]</span>: There is an initiative to add a single-file mode to
+LSP but it's not a part of the spec at least until and including v3.17.
 
 [zettel-wiki]: https://en.wikipedia.org/wiki/Zettelkasten
 

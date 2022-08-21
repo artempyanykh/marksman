@@ -65,7 +65,7 @@ type State =
           workspace: Workspace
           revision: int }
 
-    member this.Diag(): WorkspaceDiag = WorkspaceDiag.mk this.workspace
+    member this.Diag() : WorkspaceDiag = WorkspaceDiag.mk this.workspace
 
 module State =
     let private logger = LogProvider.getLoggerByName "State"

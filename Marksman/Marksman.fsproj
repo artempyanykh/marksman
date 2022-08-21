@@ -4,7 +4,17 @@
         <OutputType>Exe</OutputType>
         <TargetFramework>net6.0</TargetFramework>
         <AssemblyName>marksman</AssemblyName>
+        <VersionPrefix>1.0.0</VersionPrefix>
     </PropertyGroup>
+    <Target Name="Version" BeforeTargets="BeforeBuild">
+        <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true">
+            <Output TaskParameter="ConsoleOutput" PropertyName="VersionString"/>
+        </Exec>
+        <PropertyGroup>
+            <VersionSuffix>$(VersionString)</VersionSuffix>
+            <Version>$(VersionPrefix)-$(VersionSuffix)</Version>
+        </PropertyGroup>
+    </Target>
     <Target Name="FSharpLint" AfterTargets="BeforeBuild">
         <PropertyGroup>
             <LintCommand>dotnet fsharplint -f msbuild lint --lint-config $(MSBuildProjectDirectory)/../fsharplint.json $(MSBuildProjectFullPath)</LintCommand>

@@ -238,7 +238,10 @@ type DiagnosticsManager(client: MarksmanClient) =
         MailboxProcessor.Start(fun inbox ->
             let rec accumulate lastProcessedState mostRecentState =
                 async {
-                    let! newState = inbox.TryReceive(timeout = 0)
+                    // 200ms grace period to avoid recalculating diagnostics during active editing
+                    // The diagnostics update still feels pretty much instant, but doing it this
+                    // way is much more efficient
+                    let! newState = inbox.TryReceive(timeout = 200)
 
                     match newState with
                     | None -> return! publishOn lastProcessedState mostRecentState

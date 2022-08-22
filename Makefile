@@ -91,7 +91,8 @@ install: publish
 else
 install: publish
 	mkdir -p $${HOME}/.local/bin
-	cp -f Marksman/bin/Release/net6.0/$(RID)/publish/marksman $${HOME}/.local/bin
+	rm $${HOME}/.local/bin/marksman
+	cp Marksman/bin/Release/net6.0/$(RID)/publish/marksman $${HOME}/.local/bin
 endif
 
 .DEFAULT_GOAL := build

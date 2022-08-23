@@ -94,6 +94,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
 
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
+        WorkspaceSymbolProvider = Some(not clientDesc.IsVSCode)
         TextDocumentSync = Some textSyncCaps
         DocumentSymbolProvider = Some(not clientDesc.IsVSCode)
         CompletionProvider =
@@ -621,6 +622,32 @@ type MarksmanServer(client: MarksmanClient) =
                 newState <- State.removeDocument uri newState
 
             Mutation.state newState
+
+
+    override this.WorkspaceSymbol(pars) =
+        withState
+        <| fun state ->
+            let ws = State.workspace state
+
+            let symbols =
+                seq {
+                    for folder in Workspace.folders ws do
+                        for doc in Folder.docs folder do
+                            let headings = Doc.index doc |> Index.headings
+
+                            let matchingHeadings =
+                                headings
+                                |> Seq.filter (fun { data = h } ->
+                                    pars.Query.IsSubSequenceOf(Heading.name h))
+
+                            let matchingSymbols =
+                                matchingHeadings |> Seq.map (headingToSymbolInfo doc.path)
+
+                            yield! matchingSymbols
+                }
+                |> Array.ofSeq
+
+            LspResult.success (Some symbols)
 
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
         withState

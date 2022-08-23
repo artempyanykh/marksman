@@ -99,6 +99,9 @@ generally most features should work equaly in all editors.
 
 ✅ - done; 🗓 - planned.
 
+- ✅ Document symbols from headings.
+- ✅ Workspace symbols from headings.
+  * Query matching is subsequence-based, that is `lsp` will match both `LSP` and `Low Seimic Profile`.
 - ✅ Completion for links (inline, reference, wiki).
 - ✅ Hover prevew for links.
 - ✅ "Go to definition" for links.

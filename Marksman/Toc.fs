@@ -39,6 +39,7 @@ module Entry =
 type InsertionPoint =
     | After of Range
     | Replacing of Range
+    | DocumentBeginning
 
 type TableOfContents = { entries: array<Entry> }
 
@@ -60,7 +61,7 @@ module TableOfContents =
         | [ singleTitle ] -> After singleTitle.range
         | _ ->
             match doc.index.yamlFrontMatter with
-            | None -> Replacing Text.documentBeginning
+            | None -> DocumentBeginning
             | Some yml -> After yml.range
 
 
@@ -73,7 +74,7 @@ module TableOfContents =
 
         let tocLinks = Array.map (fun x -> Entry.renderLink x offset) toc.entries
         let startMarkerLines = [| StartMarker |]
-        let endMarkerLines = [| EndMarker; EmptyLine |]
+        let endMarkerLines = [| EndMarker |]
 
         let lines = Array.concat [| startMarkerLines; tocLinks; endMarkerLines |]
 
@@ -95,8 +96,8 @@ module TableOfContents =
                 let lineRange = text.LineContentRange(i)
                 let lineContent = text.LineContent(i)
                 let lineIsEmpty = lineContent.Trim().Length.Equals(0)
-                let isStartMarker = lineContent.Equals(StartMarker)
-                let isEndMarker = lineContent.Equals(EndMarker)
+                let isStartMarker = lineContent.Trim().Equals(StartMarker)
+                let isEndMarker = lineContent.Trim().Equals(EndMarker)
                 let expandToThisLine (range: Range) = { range with End = lineRange.End }
 
                 match st with
@@ -111,10 +112,10 @@ module TableOfContents =
                     let toThisLine = expandToThisLine range
 
                     if isEndMarker then
-                        let extraLine =
-                            { toThisLine with End = Position.Mk(toThisLine.End.Line + 1, 0) }
+                        // let extraLine =
+                        //     { toThisLine with End = Position.Mk(toThisLine.End.Line + 1, 0) }
 
-                        Collected extraLine
+                        Collected toThisLine
                     else
                         go (i + 1) (Collecting toThisLine)
                 | _ -> st

@@ -46,8 +46,8 @@ module DetectToc =
 
 
         Assert.Equal(tocText.TrimEnd(), expectedTocText.TrimEnd())
-        Assert.Equal(4, toc.End.Line)
-        Assert.Equal(0, toc.End.Character)
+        Assert.Equal(3, toc.End.Line)
+        Assert.Equal(Toc.EndMarker.Length, toc.End.Character)
 
 module CreateToc =
     [<Fact>]
@@ -89,7 +89,7 @@ module InsertToc =
 
         let insertion = TableOfContents.insertionPoint doc
 
-        Assert.Equal(insertion, Replacing Text.documentBeginning)
+        Assert.Equal(insertion, DocumentBeginning)
 
     [<Fact>]
     let insert_firstTitle () =
@@ -152,8 +152,7 @@ module RenderToc =
                "    - [T3](#t3)"
                "  - [T4](#t4)"
                "    - [T5](#t5)"
-               Toc.EndMarker
-               "" |]
+               Toc.EndMarker |]
 
         let expected = String.concat NewLine expectedLines
 
@@ -202,32 +201,50 @@ module DocumentEdit =
 
     [<Fact>]
     let insert_documentBeginning () =
-        let doc = FakeDoc.Mk [| "## T1"; "### T2"; "## T3"; "#### T4" |]
+        // let doc = FakeDoc.Mk [| "## T1"; "### T2"; "## T3"; "#### T4" |]
+        let text =
+            stripMarginTrim
+                "
+                |## T1 
+                |
+                |hello 
+                |### T2 
+                |
+                |## T3
+                |
+                |#### T4"
+
+        let doc = FakeDoc.Mk text
 
         let action = CodeActions.tableOfContents doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
         let expected =
-            String.concat
-                NewLine
-                [| Toc.StartMarker
-                   "- [T1](#t1)"
-                   "  - [T2](#t2)"
-                   "- [T3](#t3)"
-                   "    - [T4](#t4)"
-                   Toc.EndMarker
-                   "## T1"
-                   "### T2"
-                   "## T3"
-                   "#### T4" |]
+            stripMarginTrim
+                $"
+                |{Toc.StartMarker}
+                |- [T1](#t1)
+                |  - [T2](#t2)
+                |- [T3](#t3)
+                |    - [T4](#t4)
+                |{Toc.EndMarker}
+                |
+                |## T1 
+                |
+                |hello 
+                |### T2 
+                |
+                |## T3
+                |
+                |#### T4"
 
         Assert.Equal(expected, modifiedText)
 
     [<Fact>]
     let idempotent_application () =
-        
-        let text = 
+
+        let text =
             stripMarginTrim
                 "
                 |---
@@ -244,15 +261,14 @@ module DocumentEdit =
                 |
                 |#### T4"
 
-        let doc =
-            FakeDoc.Mk text
+        let doc = FakeDoc.Mk text
 
         let action = CodeActions.tableOfContents doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
-        
-        let expected = 
-            stripMarginTrim 
+
+        let expected =
+            stripMarginTrim
                 $"
                 |---
                 |hello: bla 

@@ -252,6 +252,7 @@ module Element =
         function
         | WL _
         | ML _ -> false
+        | YML _
         | H _
         | MLD _ -> true
 

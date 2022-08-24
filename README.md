@@ -56,6 +56,21 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
     (require 'lsp-marksman))
   ```
 
+* [Helix][helix-editor] requires configuration (unless
+  [helix#3499][helix-marksman-pr] gets merged); add the following to your
+  `~/.config/helix/languages.toml`:
+
+  ```toml
+  [[language]]
+  name = "markdown"
+  scope = "source.md"
+  injection-regex = "md|markdown"
+  file-types = ["md"]
+  roots = [".marksman.toml"]
+  language-server = { command = "marksman", args=["server"] }
+  indent = { tab-width = 2, unit = "  " }
+  ```
+
 ## How to install
 
 ### Option 1: use pre-built binary
@@ -190,3 +205,6 @@ LSP but it's not a part of the spec at least until and including v3.17.
 [nvim-marksman-lsp-installer]: https://github.com/williamboman/nvim-lsp-installer
 
 [lsp-main]: https://microsoft.github.io/language-server-protocol/
+
+[helix-editor]: https://helix-editor.com
+[helix-marksman-pr]: https://github.com/helix-editor/helix/pull/3499

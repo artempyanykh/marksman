@@ -800,8 +800,6 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let docPath = opts.TextDocument.Uri |> PathUri.fromString
 
-            let documentBeginning = Range.Mk(0, 0, 0, 0)
-
             let codeAction title edit =
                 { Title = title
                   Kind = Some CodeActionKind.Source

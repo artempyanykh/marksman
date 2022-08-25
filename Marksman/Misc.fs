@@ -30,6 +30,10 @@ type String with
 
         isMatching 0 0
 
+    member this.IsEmpty() : bool = String.IsNullOrEmpty(this)
+
+    member this.IsWhitespace() : bool = String.IsNullOrWhiteSpace(this)
+
     member this.Slug() : string =
         let mutable sb = StringBuilder()
         let mutable sepSeen = false

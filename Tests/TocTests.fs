@@ -47,7 +47,7 @@ module DetectToc =
 
         Assert.Equal(tocText.TrimEnd(), expectedTocText.TrimEnd())
         Assert.Equal(3, toc.End.Line)
-        Assert.Equal(Toc.EndMarker.Length, toc.End.Character)
+        Assert.Equal(EndMarker.Length, toc.End.Character)
 
 module CreateToc =
     [<Fact>]
@@ -152,7 +152,7 @@ module RenderToc =
                "    - [T3](#t3)"
                "  - [T4](#t4)"
                "    - [T5](#t5)"
-               Toc.EndMarker |]
+               EndMarker |]
 
         let expected = String.concat NewLine expectedLines
 
@@ -161,7 +161,7 @@ module RenderToc =
 module DocumentEdit =
     [<Fact>]
     let insert_afterYaml () =
-        let text = 
+        let text =
             stripMarginTrim
                 $"
                 |---
@@ -174,6 +174,7 @@ module DocumentEdit =
                 |## T3
                 |#### T4
                 "
+
         let doc = FakeDoc.Mk text
 
         let action = CodeActions.tableOfContents doc |> Option.get
@@ -188,12 +189,12 @@ module DocumentEdit =
                 |tags: [1, 2]
                 |---
                 |
-                |{Toc.StartMarker}
+                |{StartMarker}
                 |- [T1](#t1)
                 |  - [T2](#t2)
                 |- [T3](#t3)
                 |    - [T4](#t4)
-                |{Toc.EndMarker}
+                |{EndMarker}
                 |
                 |## T1 
                 |### T2
@@ -226,12 +227,12 @@ module DocumentEdit =
                 $"
                 |# T1 
                 |
-                |{Toc.StartMarker}
+                |{StartMarker}
                 |- [T1](#t1)
                 |    - [T2](#t2)
                 |  - [T3](#t3)
                 |      - [T4](#t4)
-                |{Toc.EndMarker}
+                |{EndMarker}
                 |
                 |### T2 
                 |
@@ -264,12 +265,12 @@ module DocumentEdit =
         let expected =
             stripMarginTrim
                 $"
-                |{Toc.StartMarker}
+                |{StartMarker}
                 |- [T1](#t1)
                 |  - [T2](#t2)
                 |- [T3](#t3)
                 |    - [T4](#t4)
-                |{Toc.EndMarker}
+                |{EndMarker}
                 |
                 |## T1 
                 |
@@ -283,81 +284,46 @@ module DocumentEdit =
         Assert.Equal(expected, modifiedText)
 
     [<Fact>]
-    let idempotent_application () =
-
-        let text =
-            stripMarginTrim
-                "
-                |---
-                |hello: bla 
-                |yo: 11 
-                |---
-                |
-                |## T1 
-                |
-                |hello 
-                |## T2 
-                |
-                |### T3
-                |
-                |#### T4"
-
-        let doc = FakeDoc.Mk text
+    let update_atBeginningOfFile () =
+        let doc =
+            FakeDoc.Mk(
+                stripMarginTrim
+                    $"
+                    |{StartMarker}
+                    |- [T1](#t1)
+                    |{EndMarker}
+                    |
+                    |# T2"
+            )
 
         let action = CodeActions.tableOfContents doc |> Option.get
-
         let modifiedText = applyDocumentAction doc action
 
         let expected =
             stripMarginTrim
                 $"
-                |---
-                |hello: bla 
-                |yo: 11 
-                |---
-                |
-                |{Toc.StartMarker}
-                |- [T1](#t1)
+                |{StartMarker}
                 |- [T2](#t2)
-                |  - [T3](#t3)
-                |    - [T4](#t4)
-                |{Toc.EndMarker}
+                |{EndMarker}
                 |
-                |## T1 
-                |
-                |hello 
-                |## T2 
-                |
-                |### T3
-                |
-                |#### T4"
+                |# T2"
+
 
         Assert.Equal(expected, modifiedText)
 
-        let doc2 = FakeDoc.Mk modifiedText
-
-        let action2 = CodeActions.tableOfContents doc2 |> Option.get
-        let modifiedText2 = applyDocumentAction doc2 action2
-
-        Assert.Equal(expected, modifiedText2)
-        
     [<Fact>]
-    let update_atBeginningOfFile () =
-
+    let upToDate_noUpdate () =
         let text =
             stripMarginTrim
                 $"
-                |{Toc.StartMarker}
+                |{StartMarker}
                 |- [T1](#t1)
-                |{Toc.EndMarker}
+                |{EndMarker}
                 |
                 |# T1"
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContents doc |> Option.get
+        let action = CodeActions.tableOfContents doc
 
-        let modifiedText = applyDocumentAction doc action
-
-
-        Assert.Equal(text, modifiedText)
+        Assert.Equal(None, action)

@@ -27,14 +27,19 @@ module Entry =
     let Mk (level: EntryLevel, title: Title) =
         { level = level; title = title; link = Slug.ofString title }
 
-    let renderLink entry =
-        let offset = String.replicate (entry.level - 1) " "
+    let renderLink entry minLevel =
+        let offset = String.replicate (entry.level - minLevel) "  "
         let slug = entry.link |> Slug.toString
         $"{offset}- [{entry.title}](#{slug})"
 
     let fromHeading (heading: Heading) : Entry =
         let slug = Heading.slug heading
         { level = heading.level; link = slug; title = heading.title.text }
+
+type InsertionPoint =
+    | After of Range
+    | Replacing of Range
+    | DocumentBeginning
 
 type TableOfContents = { entries: array<Entry> }
 
@@ -50,10 +55,26 @@ module TableOfContents =
         else
             Some { entries = Array.map Entry.fromHeading headings }
 
+    let insertionPoint (doc: Workspace.Doc) : InsertionPoint =
+        match (Array.toList doc.index.titles) with
+        // if there's only a single title
+        | [ singleTitle ] -> After singleTitle.range
+        | _ ->
+            match doc.index.yamlFrontMatter with
+            | None -> DocumentBeginning
+            | Some yml -> After yml.range
+
+
     let render (toc: TableOfContents) =
-        let tocLinks = Array.map Entry.renderLink toc.entries
+        let offset =
+            if Array.isEmpty toc.entries then
+                1
+            else
+                (Array.minBy (fun x -> x.level) toc.entries).level
+
+        let tocLinks = Array.map (fun x -> Entry.renderLink x offset) toc.entries
         let startMarkerLines = [| StartMarker |]
-        let endMarkerLines = [| EndMarker; EmptyLine |]
+        let endMarkerLines = [| EndMarker |]
 
         let lines = Array.concat [| startMarkerLines; tocLinks; endMarkerLines |]
 
@@ -75,8 +96,8 @@ module TableOfContents =
                 let lineRange = text.LineContentRange(i)
                 let lineContent = text.LineContent(i)
                 let lineIsEmpty = lineContent.Trim().Length.Equals(0)
-                let isStartMarker = lineContent.Equals(StartMarker)
-                let isEndMarker = lineContent.Equals(EndMarker)
+                let isStartMarker = lineContent.Trim().Equals(StartMarker)
+                let isEndMarker = lineContent.Trim().Equals(EndMarker)
                 let expandToThisLine (range: Range) = { range with End = lineRange.End }
 
                 match st with
@@ -91,10 +112,7 @@ module TableOfContents =
                     let toThisLine = expandToThisLine range
 
                     if isEndMarker then
-                        let extraLine =
-                            { toThisLine with End = Position.Mk(toThisLine.End.Line + 1, 0) }
-
-                        Collected extraLine
+                        Collected toThisLine
                     else
                         go (i + 1) (Collecting toThisLine)
                 | _ -> st

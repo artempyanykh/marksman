@@ -12,6 +12,7 @@ module Markdown =
     open Markdig.Syntax.Inlines
     open Markdig.Parsers
     open Markdig.Helpers
+    open Markdig.Extensions.Yaml
 
     type WikiLinkInline
         (
@@ -128,7 +129,10 @@ module Markdown =
                 false
 
     let markdigPipeline =
-        let pipelineBuilder = MarkdownPipelineBuilder().UsePreciseSourceLocation()
+        let pipelineBuilder =
+            MarkdownPipelineBuilder()
+                .UsePreciseSourceLocation()
+                .UseYamlFrontMatter()
 
         pipelineBuilder.InlineParsers.Insert(0, MarkdigPatches.PatchedLinkInlineParser())
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
@@ -154,6 +158,14 @@ module Markdown =
 
         for b in parsed.Descendants() do
             match b with
+            | :? YamlFrontMatterBlock as y ->
+                let fullText = text.content.Substring(y.Span.Start, y.Span.Length)
+                let range = sourceSpanToRange text y.Span
+
+                let node: TextNode = Node.mkText fullText range
+
+                elements.Add(YML node)
+
             | :? HeadingBlock as h ->
                 let level = h.Level
 
@@ -333,6 +345,7 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
 
         for el in flat do
             match el with
+            | YML _
             | WL _
             | ML _
             | MLD _ ->

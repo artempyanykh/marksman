@@ -802,28 +802,6 @@ type MarksmanServer(client: MarksmanClient) =
 
             let documentBeginning = Range.Mk(0, 0, 0, 0)
 
-            let editAt rangeOpt text =
-                let textEdit =
-                    { NewText = text
-                      Range = Option.defaultValue documentBeginning rangeOpt }
-
-                let mp = Map.ofList [ opts.TextDocument.Uri, [| textEdit |] ]
-
-                { Changes = Some mp; DocumentChanges = None }
-
-            let toc =
-                monad' {
-                    let! document = State.tryFindDocument docPath state
-                    let! toc = TableOfContents.mk document.index
-
-                    let rendered = TableOfContents.render toc
-                    let detected = TableOfContents.detect document.text
-
-                    let result = ($"{rendered}", detected)
-
-                    result
-                }
-
             let codeAction title edit =
                 { Title = title
                   Kind = Some CodeActionKind.Source
@@ -834,19 +812,18 @@ type MarksmanServer(client: MarksmanClient) =
                   Disabled = None
                   Edit = Some edit }
 
-            let codeActions =
-                match toc with
-                | None -> Array.empty
-                | Some (render, existing) ->
-                    match existing with
-                    | None ->
-                        [| U2.Second(codeAction "Create a Table of Contents" (editAt None render)) |]
-                    | Some oldTocRange ->
-                        [| U2.Second(
-                               codeAction
-                                   "Update the Table of Contents"
-                                   (editAt (Some oldTocRange) render)
-                           ) |]
+            let tocAction =
+                State.tryFindDocument docPath state
+                |> Option.bind CodeActions.tableOfContents
+                |> Option.toArray
+                |> Array.map (fun ca ->
+                    let wsEdit =
+                        (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
+
+                    codeAction ca.name wsEdit)
+
+            let codeActions: TextDocumentCodeActionResult =
+                tocAction |> Array.map U2.Second
 
             Mutation.output (LspResult.success (Some codeActions))
 

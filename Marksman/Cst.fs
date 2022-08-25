@@ -150,6 +150,7 @@ type Element =
     | WL of Node<WikiLink>
     | ML of Node<MdLink>
     | MLD of Node<MdLinkDef>
+    | YML of TextNode
 
 and Heading =
     { level: int
@@ -163,6 +164,7 @@ let rec private fmtElement =
     | WL x -> fmtWikiLink x
     | ML l -> fmtMdLink l
     | MLD r -> fmtMdLinkDef r
+    | YML y -> Node.fmtText y
 
 and private fmtHeading node =
     let inner = node.data
@@ -216,6 +218,7 @@ module Element =
         | WL n -> n.range
         | ML n -> n.range
         | MLD n -> n.range
+        | YML n -> n.range
 
     let text =
         function
@@ -223,6 +226,7 @@ module Element =
         | WL n -> n.text
         | ML n -> n.text
         | MLD n -> n.text
+        | YML n -> n.text
 
     let asHeading =
         function
@@ -246,6 +250,7 @@ module Element =
         function
         | WL _
         | ML _ -> false
+        | YML _
         | H _
         | MLD _ -> true
 
@@ -254,7 +259,8 @@ module Element =
         | WL _
         | ML _ -> true
         | H _
-        | MLD _ -> false
+        | MLD _
+        | YML _ -> false
 
     let isTitle el =
         asHeading el |>> Node.data |>> Heading.isTitle
@@ -271,6 +277,7 @@ module Cst =
 
                     match el with
                     | H h -> yield! collect h.data.children
+                    | YML _
                     | WL _
                     | ML _
                     | MLD _ -> ()

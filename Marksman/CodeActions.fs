@@ -3,10 +3,8 @@ module Marksman.CodeActions
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
-open FSharpPlus.GenericBuilders
 open Marksman.Toc
 open Marksman.Workspace
-open Marksman.Text
 open Marksman.Misc
 
 open type System.Environment
@@ -50,7 +48,7 @@ let tableOfContents (document: Doc) : DocumentAction option =
         let emptyLine = NewLine + NewLine
         let lineBreak = NewLine
 
-        let (editRange, newLinesBefore, newLinesAfter) =
+        let editRange, newLinesBefore, newLinesAfter =
             match insertionPoint with
             | DocumentBeginning ->
                 let after =
@@ -59,7 +57,12 @@ let tableOfContents (document: Doc) : DocumentAction option =
                 Text.documentBeginning, "", after
 
             | Replacing range ->
-                let before = if isEmpty (range.Start.Line - 1) then "" else emptyLine
+                let before =
+                    if range.Start.Line <= 0 || isEmpty (range.Start.Line - 1) then
+                        ""
+                    else
+                        emptyLine
+
                 let after = if isEmpty (range.End.Line + 1) then "" else emptyLine
 
                 range, before, after

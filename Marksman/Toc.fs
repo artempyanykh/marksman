@@ -95,7 +95,6 @@ module TableOfContents =
             else
                 let lineRange = text.LineContentRange(i)
                 let lineContent = text.LineContent(i)
-                let lineIsEmpty = lineContent.Trim().Length.Equals(0)
                 let isStartMarker = lineContent.Trim().Equals(StartMarker)
                 let isEndMarker = lineContent.Trim().Equals(EndMarker)
                 let expandToThisLine (range: Range) = { range with End = lineRange.End }

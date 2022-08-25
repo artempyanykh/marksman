@@ -21,8 +21,6 @@ module Node =
     let inner node = node.data
     let fmtText (node: TextNode) : string = $"{node.text} @ {node.range.DebuggerDisplay}"
 
-type YamlContent = string
-
 [<RequireQualifiedAccess>]
 type WikiLink = { doc: option<TextNode>; heading: option<TextNode> }
 
@@ -152,7 +150,7 @@ type Element =
     | WL of Node<WikiLink>
     | ML of Node<MdLink>
     | MLD of Node<MdLinkDef>
-    | YML of Node<YamlContent>
+    | YML of TextNode
 
 and Heading =
     { level: int

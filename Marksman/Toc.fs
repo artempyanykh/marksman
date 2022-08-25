@@ -112,9 +112,6 @@ module TableOfContents =
                     let toThisLine = expandToThisLine range
 
                     if isEndMarker then
-                        // let extraLine =
-                        //     { toThisLine with End = Position.Mk(toThisLine.End.Line + 1, 0) }
-
                         Collected toThisLine
                     else
                         go (i + 1) (Collecting toThisLine)

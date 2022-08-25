@@ -162,7 +162,7 @@ module Markdown =
                 let fullText = text.content.Substring(y.Span.Start, y.Span.Length)
                 let range = sourceSpanToRange text y.Span
 
-                let node: Node<YamlContent> = Node.mk fullText range fullText
+                let node: TextNode = Node.mkText fullText range
 
                 elements.Add(YML node)
 

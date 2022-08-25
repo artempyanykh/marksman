@@ -9,8 +9,6 @@ open Marksman.Workspace
 open Marksman.Text
 open Marksman.Misc
 
-open type System.Console
-
 open type System.Environment
 
 let private logger = LogProvider.getLoggerByName "CodeActions"
@@ -20,14 +18,13 @@ type DocumentAction = { name: string; newText: string; edit: Range }
 let documentEdit range text documentUri : WorkspaceEdit =
     let textEdit = { NewText = text; Range = range }
 
-    let mp = Map.ofList [ documentUri, [| textEdit |] ]
+    let workspaceChanges = Map.ofList [ documentUri, [| textEdit |] ]
 
-    { Changes = Some mp; DocumentChanges = None }
+    { Changes = Some workspaceChanges; DocumentChanges = None }
 
 let tableOfContents (document: Doc) : DocumentAction option =
-    monad' {
-        let! toc = Toc.TableOfContents.mk document.index
-
+    match Toc.TableOfContents.mk document.index with
+    | Some (toc) ->
         let rendered = TableOfContents.render toc
         let existing = TableOfContents.detect document.text
 
@@ -79,5 +76,6 @@ let tableOfContents (document: Doc) : DocumentAction option =
 
         let text = $"{newLinesBefore}{rendered}{newLinesAfter}"
 
-        { name = name; newText = text; edit = editRange }
-    }
+        Some { name = name; newText = text; edit = editRange }
+
+    | _ -> None

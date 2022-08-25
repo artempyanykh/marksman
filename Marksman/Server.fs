@@ -20,8 +20,6 @@ open Marksman.Index
 open Marksman.Toc
 open Marksman.Refs
 
-open type System.Environment
-
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
     match par.WorkspaceFolders with
     | Some folders ->

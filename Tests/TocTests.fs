@@ -161,47 +161,88 @@ module RenderToc =
 module DocumentEdit =
     [<Fact>]
     let insert_afterYaml () =
-        let doc =
-            FakeDoc.Mk
-                [| "---"
-                   """title: "First" """
-                   """tags: ["1", "2"] """
-                   "---"
-                   ""
-                   "## T1"
-                   "### T2"
-                   "## T3"
-                   "#### T4" |]
+        let text = 
+            stripMarginTrim
+                $"
+                |---
+                |title: \"First\"
+                |tags: [1, 2]
+                |---
+                |
+                |## T1 
+                |### T2
+                |## T3
+                |#### T4
+                "
+        let doc = FakeDoc.Mk text
 
         let action = CodeActions.tableOfContents doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
         let expected =
-            String.concat
-                NewLine
-                [| "---"
-                   """title: "First" """
-                   """tags: ["1", "2"] """
-                   "---"
-                   ""
-                   Toc.StartMarker
-                   "- [T1](#t1)"
-                   "  - [T2](#t2)"
-                   "- [T3](#t3)"
-                   "    - [T4](#t4)"
-                   Toc.EndMarker
-                   ""
-                   "## T1"
-                   "### T2"
-                   "## T3"
-                   "#### T4" |]
+            stripMarginTrim
+                $"
+                |---
+                |title: \"First\"
+                |tags: [1, 2]
+                |---
+                |
+                |{Toc.StartMarker}
+                |- [T1](#t1)
+                |  - [T2](#t2)
+                |- [T3](#t3)
+                |    - [T4](#t4)
+                |{Toc.EndMarker}
+                |
+                |## T1 
+                |### T2
+                |## T3
+                |#### T4
+                "
+
+        Assert.Equal(expected, modifiedText)
+
+    [<Fact>]
+    let insertAfterTopHeading () =
+        let text =
+            stripMarginTrim
+                "
+                |# T1 
+                |### T2 
+                |
+                |## T3
+                |
+                |#### T4"
+
+        let doc = FakeDoc.Mk text
+
+        let action = CodeActions.tableOfContents doc |> Option.get
+
+        let modifiedText = applyDocumentAction doc action
+
+        let expected =
+            stripMarginTrim
+                $"
+                |# T1 
+                |
+                |{Toc.StartMarker}
+                |- [T1](#t1)
+                |    - [T2](#t2)
+                |  - [T3](#t3)
+                |      - [T4](#t4)
+                |{Toc.EndMarker}
+                |
+                |### T2 
+                |
+                |## T3
+                |
+                |#### T4"
 
         Assert.Equal(expected, modifiedText)
 
     [<Fact>]
     let insert_documentBeginning () =
-        // let doc = FakeDoc.Mk [| "## T1"; "### T2"; "## T3"; "#### T4" |]
         let text =
             stripMarginTrim
                 "

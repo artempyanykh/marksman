@@ -48,37 +48,33 @@ let tableOfContents (document: Doc) : DocumentAction option =
             >> Log.addContext "text" rendered
         )
 
+        let isEmpty lineNumber = document.text.LineContent(lineNumber).Trim().Length.Equals(0)
 
-        let newlineIfNonEmpty lineNumber =
-            if document.text.LineContent(lineNumber).Trim().Length.Equals(0) then
-                ""
-            else
-                (NewLine + NewLine)
-
-        let lineBreakIfNonEmpty lineNumber =
-            if document.text.LineContent(lineNumber).Trim().Length.Equals(0) then
-                ""
-            else
-                NewLine
-
+        let emptyLine = NewLine + NewLine
+        let lineBreak = NewLine
 
         let (editRange, newLinesBefore, newLinesAfter) =
             match insertionPoint with
             | DocumentBeginning ->
-                Text.documentBeginning, "", (newlineIfNonEmpty Text.documentBeginning.Start.Line)
+                let after =
+                    if isEmpty Text.documentBeginning.Start.Line then "" else emptyLine
+
+                Text.documentBeginning, "", after
 
             | Replacing range ->
-                range,
-                (newlineIfNonEmpty (range.Start.Line - 1)),
-                (newlineIfNonEmpty (range.End.Line + 1))
+                let before = if isEmpty (range.Start.Line - 1) then "" else emptyLine
+                let after = if isEmpty (range.End.Line + 1) then "" else emptyLine
+
+                range, before, after
 
             | After range ->
                 let lineAfterLast = range.End.Line + 1
                 let newRange = Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
 
-                newRange,
-                (lineBreakIfNonEmpty range.End.Line),
-                (lineBreakIfNonEmpty (lineAfterLast + 1))
+                let before = if isEmpty range.End.Line then "" else lineBreak
+                let after = if isEmpty (lineAfterLast) then lineBreak else emptyLine
+
+                newRange, before, after
 
 
         let text = $"{newLinesBefore}{rendered}{newLinesAfter}"

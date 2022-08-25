@@ -119,7 +119,7 @@ module InsertToc =
         Assert.Equal(insertion, After yamlRange)
 
     [<Fact>]
-    let insert_afterfirstTitle_withYaml () =
+    let insert_afterFirstTitle_withYaml () =
         let doc =
             FakeDoc.Mk
                 [| "---"
@@ -204,7 +204,7 @@ module DocumentEdit =
         Assert.Equal(expected, modifiedText)
 
     [<Fact>]
-    let insertAfterTopHeading () =
+    let insert_afterTopHeading () =
         let text =
             stripMarginTrim
                 "
@@ -340,3 +340,24 @@ module DocumentEdit =
         let modifiedText2 = applyDocumentAction doc2 action2
 
         Assert.Equal(expected, modifiedText2)
+        
+    [<Fact>]
+    let update_atBeginningOfFile () =
+
+        let text =
+            stripMarginTrim
+                $"
+                |{Toc.StartMarker}
+                |- [T1](#t1)
+                |{Toc.EndMarker}
+                |
+                |# T1"
+
+        let doc = FakeDoc.Mk text
+
+        let action = CodeActions.tableOfContents doc |> Option.get
+
+        let modifiedText = applyDocumentAction doc action
+
+
+        Assert.Equal(text, modifiedText)

@@ -23,7 +23,7 @@ let documentEdit range text documentUri : WorkspaceEdit =
     { Changes = Some workspaceChanges; DocumentChanges = None }
 
 let tableOfContents (document: Doc) : DocumentAction option =
-    match Toc.TableOfContents.mk document.index with
+    match TableOfContents.mk document.index with
     | Some (toc) ->
         let rendered = TableOfContents.render toc
         let existing = TableOfContents.detect document.text

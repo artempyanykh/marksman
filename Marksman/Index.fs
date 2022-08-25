@@ -13,7 +13,7 @@ type Index =
       wikiLinks: array<Node<WikiLink>>
       mdLinks: array<Node<MdLink>>
       linkDefs: array<Node<MdLinkDef>>
-      yamlFrontMatter: TextNode option }
+      yamlFrontMatter: option<TextNode> }
 
 module Index =
     let ofCst (cst: Cst) : Index =

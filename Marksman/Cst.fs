@@ -164,7 +164,7 @@ let rec private fmtElement =
     | WL x -> fmtWikiLink x
     | ML l -> fmtMdLink l
     | MLD r -> fmtMdLinkDef r
-    | YML y -> failwith "Format for yaml is not implemented"
+    | YML y -> Node.fmtText y
 
 and private fmtHeading node =
     let inner = node.data

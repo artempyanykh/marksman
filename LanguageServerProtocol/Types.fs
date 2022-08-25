@@ -30,6 +30,8 @@ module LspResult =
 
   let notImplemented<'a> : LspResult<'a> = Result.Error(JsonRpc.Error.MethodNotFound)
 
+  let requestCancelled<'a> : LspResult<'a> = Result.Error(JsonRpc.Error.RequestCancelled)
+
 module AsyncLspResult =
   open Ionide.LanguageServerProtocol
 
@@ -331,6 +333,17 @@ type InlayHintWorkspaceClientCapabilities =
     /// change that requires such a calculation.
     RefreshSupport: bool option }
 
+type CodeLensWorkspaceClientCapabilities = {
+  /// Whether the client implementation supports a refresh request sent from the
+  /// server to the client.
+  ///
+  /// Note that this event is global and will force the client to refresh all
+  /// code lenses currently shown. It should be used with absolute care and is
+  /// useful for situation where a server for example detect a project wide
+  /// change that requires such a calculation.
+   RefreshSupport: bool option
+}
+
 /// Workspace specific client capabilities.
 type WorkspaceClientCapabilities =
   { /// The client supports applying batch edits to the workspace by supporting
@@ -358,7 +371,12 @@ type WorkspaceClientCapabilities =
     /// Client workspace capabilities specific to inlay hints.
     ///
     /// @since 3.17.0
-    InlayHint: InlayHintWorkspaceClientCapabilities option }
+    InlayHint: InlayHintWorkspaceClientCapabilities option
+
+    /// Client workspace capabilities specific to code lenses.
+    ///
+    /// @since 3.16.0
+    CodeLens: CodeLensWorkspaceClientCapabilities option }
 
 type SynchronizationCapabilities =
   { /// Whether text document synchronization supports dynamic registration.
@@ -708,20 +726,19 @@ type InlayHintClientCapabilities =
     /// Indicates which properties a client can resolve lazily on a inlay
     /// hint.
     ResolveSupport: InlayHintClientCapabilitiesResolveSupport option }
-  
-  type RenameClientCapabilities = {
-      /// Whether rename supports dynamic registration.
-      DynamicRegistration: bool option
-      /// Client supports testing for validity of rename operations before execution.
-      /// @since version 3.12.0
-      PrepareSupport: bool option
-      /// Whether the client honors the change annotations in text edits and resource operations
-      /// returned via the rename request's workspace edit by for example presenting the workspace
-      /// edit in the user interface and asking for confirmation.
-      ///
-      /// @since 3.16.0
-      HonorsChangeAnnotations: bool option
-  }
+
+type RenameClientCapabilities =
+  { /// Whether rename supports dynamic registration.
+    DynamicRegistration: bool option
+    /// Client supports testing for validity of rename operations before execution.
+    /// @since version 3.12.0
+    PrepareSupport: bool option
+    /// Whether the client honors the change annotations in text edits and resource operations
+    /// returned via the rename request's workspace edit by for example presenting the workspace
+    /// edit in the user interface and asking for confirmation.
+    ///
+    /// @since 3.16.0
+    HonorsChangeAnnotations: bool option }
 
 /// Text document specific client capabilities.
 type TextDocumentClientCapabilities =
@@ -1006,10 +1023,9 @@ type WorkspaceServerCapabilities =
 
 /// RenameOptions may only be specified if the client states that it supports prepareSupport in its
 /// initial initialize request.
-type RenameOptions = {
-    /// Renames should be checked and tested before being executed.
-    PrepareProvider: bool option
-}
+type RenameOptions =
+  { /// Renames should be checked and tested before being executed.
+    PrepareProvider: bool option }
 
 type ServerCapabilities =
   { /// Defines how text documents are synced. Is either a detailed structure defining each notification or
@@ -1807,7 +1823,7 @@ type RenameParams =
   interface ITextDocumentPositionParams with
     member this.TextDocument = this.TextDocument
     member this.Position = this.Position
-    
+
 type PrepareRenameParams =
   { /// The document to rename.
     TextDocument: TextDocumentIdentifier
@@ -1817,20 +1833,20 @@ type PrepareRenameParams =
   interface ITextDocumentPositionParams with
     member this.TextDocument = this.TextDocument
     member this.Position = this.Position
-    
-type DefaultBehavior = {DefaultBehavior: bool}
 
-type RangeWithPlaceholder = {Range: Range; Placeholder: string}
-    
+type DefaultBehavior = { DefaultBehavior: bool }
+
+type RangeWithPlaceholder = { Range: Range; Placeholder: string }
+
 [<ErasedUnion>]
 [<RequireQualifiedAccess>]
 type PrepareRenameResult =
-    /// A range of the string to rename.
-    | Range of Range
-    /// A range of the string to rename and a placeholder text of the string content to be renamed.
-    | RangeWithPlaceholder of RangeWithPlaceholder
-    /// The rename position is valid and the client should use its default behavior to compute the rename range.
-    | Default of DefaultBehavior
+  /// A range of the string to rename.
+  | Range of Range
+  /// A range of the string to rename and a placeholder text of the string content to be renamed.
+  | RangeWithPlaceholder of RangeWithPlaceholder
+  /// The rename position is valid and the client should use its default behavior to compute the rename range.
+  | Default of DefaultBehavior
 
 [<ErasedUnion>]
 [<RequireQualifiedAccess>]

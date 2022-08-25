@@ -90,7 +90,11 @@ module Server =
     // and thus any exception that happens during e.g. text sync gets swallowed.
     use jsonRpc =
       { new JsonRpc(jsonRpcHandler) with
-          member this.IsFatalException(ex: Exception) = true }
+          member this.IsFatalException(ex: Exception) =
+              match ex with
+              | :? LocalRpcException -> false
+              | _ -> true
+      }
 
     /// When the server wants to send a notification to the client
     let sendServerNotification (rpcMethod: string) (notificationObj: obj) : AsyncLspResult<unit> =

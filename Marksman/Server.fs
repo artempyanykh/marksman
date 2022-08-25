@@ -96,6 +96,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
 
     { ServerCapabilities.Default with
         Workspace = Some workspaceCaps
+        WorkspaceSymbolProvider = Some(not clientDesc.IsVSCode)
         TextDocumentSync = Some textSyncCaps
         DocumentSymbolProvider = Some(not clientDesc.IsVSCode)
         CompletionProvider =
@@ -114,7 +115,7 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                   Full = { Delta = Some false } |> U2.Second |> Some }
         RenameProvider = renameOptions }
 
-let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation[] =
+let headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation =
     let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
@@ -127,12 +128,7 @@ let rec headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInforma
           Location = location
           ContainerName = None }
 
-    let children =
-        h.data.children
-        |> Element.pickHeadings
-        |> Array.collect (headingToSymbolInfo docUri)
-
-    Array.append [| sym |] children
+    sym
 
 let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
     let name = Heading.name h.data
@@ -181,95 +177,111 @@ type MarksmanClient(notiSender: ClientNotificationSender, _reqSender: ClientRequ
     member this.MarksmanUpdateStatus(par: MarksmanStatusParams) =
         notiSender "marksman/status" (box par) |> Async.Ignore
 
-type DiagnosticsMessage = PublishDiagnostics of PublishDiagnosticsParams
+let calcDiagnosticsUpdate
+    (prevState: Option<State>)
+    (newState: State)
+    : seq<PublishDiagnosticsParams> =
+    let existingDiag =
+        prevState
+        |> Option.map State.diag
+        |> Option.defaultValue WorkspaceDiag.empty
+
+    let newDiag = State.diag newState
+
+    let allFolders =
+        Set.union (Map.keys existingDiag |> Set.ofSeq) (Map.keys newDiag |> Set.ofSeq)
+
+    seq {
+        for folderPath in allFolders do
+            let existingFolderDiag =
+                Map.tryFind folderPath existingDiag |> Option.defaultValue [||]
+
+            let newFolderDiag =
+                Map.tryFind folderPath newDiag |> Option.defaultValue [||]
+
+            let allDocs =
+                Set.union
+                    (Array.map fst newFolderDiag |> Set.ofArray)
+                    (Array.map fst existingFolderDiag |> Set.ofArray)
+
+            logger.trace (
+                Log.setMessage "Updating folder diag"
+                >> Log.addContext "folder" folderPath
+                >> Log.addContext "num_docs" allDocs.Count
+            )
+
+            for docUri in allDocs do
+                let existingDocDiag =
+                    existingFolderDiag
+                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
+                    |> Option.map snd
+                    |> Option.defaultValue [||]
+
+                let newDocDiag =
+                    newFolderDiag
+                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
+                    |> Option.map snd
+                    |> Option.defaultValue [||]
+
+                if newDocDiag <> existingDocDiag then
+                    logger.trace (
+                        Log.setMessage "Diagnostic changed, queueing the update"
+                        >> Log.addContext "doc" docUri
+                    )
+
+                    let publishParams = { Uri = docUri.DocumentUri; Diagnostics = newDocDiag }
+
+                    yield publishParams
+    }
 
 type DiagnosticsManager(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "BackgroundAgent"
 
-    let agent: MailboxProcessor<DiagnosticsMessage> =
+    let agent: MailboxProcessor<State> =
         MailboxProcessor.Start(fun inbox ->
-            let rec processMessages () =
+            let rec accumulate lastProcessedState mostRecentState =
                 async {
-                    let! msg = inbox.Receive()
+                    // 200ms grace period to avoid recalculating diagnostics during active editing
+                    // The diagnostics update still feels pretty much instant, but doing it this
+                    // way is much more efficient
+                    let! newState = inbox.TryReceive(timeout = 200)
 
-                    match msg with
-                    | PublishDiagnostics pars ->
-                        logger.trace (
-                            Log.setMessage "Updating document diagnostic"
-                            >> Log.addContext "uri" pars.Uri
-                            >> Log.addContext "numEntries" pars.Diagnostics.Length
-                        )
+                    match newState with
+                    | None -> return! publishOn lastProcessedState mostRecentState
+                    | Some newState -> return! accumulate lastProcessedState newState
+                }
 
-                        do! client.TextDocumentPublishDiagnostics(pars)
+            and publishOn lastProcessedState mostRecentState =
+                async {
+                    let diagnostics = calcDiagnosticsUpdate lastProcessedState mostRecentState
 
-                    return! processMessages ()
+                    for update in diagnostics do
+                        do! client.TextDocumentPublishDiagnostics(update)
+
+                    return! waitStateUpdate (Some mostRecentState)
+                }
+
+            and waitStateUpdate lastProcessedState =
+                async {
+                    let! newState = inbox.Receive()
+                    return! accumulate lastProcessedState newState
                 }
 
             logger.trace (Log.setMessage "Preparing to start background agent")
 
-            processMessages ())
+            waitStateUpdate None)
 
-    member this.UpdateDiagnostics(par: PublishDiagnosticsParams) : unit =
-        agent.Post(PublishDiagnostics par)
+    member this.UpdateDiagnostics(state: State) : unit = agent.Post(state)
 
     interface IDisposable with
         member _.Dispose() = (agent :> IDisposable).Dispose()
 
 let queueDiagnosticsUpdate
     (manager: DiagnosticsManager)
-    (prevState: Option<State>)
+    (_prevState: Option<State>)
     (newState: State)
-    : unit =
-    let existingDiag =
-        prevState
-        |> Option.map (fun x -> x.Diag)
-        |> Option.defaultValue WorkspaceDiag.empty
-
-    let newDiag = newState.Diag
-
-    let allFolders =
-        Set.union (Map.keys existingDiag |> Set.ofSeq) (Map.keys newDiag |> Set.ofSeq)
-
-    for folderPath in allFolders do
-        let existingFolderDiag =
-            Map.tryFind folderPath existingDiag |> Option.defaultValue [||]
-
-        let newFolderDiag =
-            Map.tryFind folderPath newDiag |> Option.defaultValue [||]
-
-        let allDocs =
-            Set.union
-                (Array.map fst newFolderDiag |> Set.ofArray)
-                (Array.map fst existingFolderDiag |> Set.ofArray)
-
-        logger.trace (
-            Log.setMessage "Updating folder diag"
-            >> Log.addContext "folder" folderPath
-            >> Log.addContext "num_docs" allDocs.Count
-        )
-
-        for docUri in allDocs do
-            let existingDocDiag =
-                existingFolderDiag
-                |> Array.tryFind (fun (uri, _) -> uri = docUri)
-                |> Option.map snd
-                |> Option.defaultValue [||]
-
-            let newDocDiag =
-                newFolderDiag
-                |> Array.tryFind (fun (uri, _) -> uri = docUri)
-                |> Option.map snd
-                |> Option.defaultValue [||]
-
-            if newDocDiag <> existingDocDiag then
-                logger.trace (
-                    Log.setMessage "Diagnostic changed, queueing the update"
-                    >> Log.addContext "doc" docUri
-                )
-
-                let publishParams = { Uri = docUri.DocumentUri; Diagnostics = newDocDiag }
-
-                manager.UpdateDiagnostics(publishParams)
+    =
+    manager.UpdateDiagnostics(newState)
 
 type StatusMessage = DocCount of int
 
@@ -613,6 +625,32 @@ type MarksmanServer(client: MarksmanClient) =
 
             Mutation.state newState
 
+
+    override this.WorkspaceSymbol(pars) =
+        withState
+        <| fun state ->
+            let ws = State.workspace state
+
+            let symbols =
+                seq {
+                    for folder in Workspace.folders ws do
+                        for doc in Folder.docs folder do
+                            let headings = Doc.index doc |> Index.headings
+
+                            let matchingHeadings =
+                                headings
+                                |> Seq.filter (fun { data = h } ->
+                                    pars.Query.IsSubSequenceOf(Heading.name h))
+
+                            let matchingSymbols =
+                                matchingHeadings |> Seq.map (headingToSymbolInfo doc.path)
+
+                            yield! matchingSymbols
+                }
+                |> Array.ofSeq
+
+            LspResult.success (Some symbols)
+
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
         withState
         <| fun state ->
@@ -632,7 +670,7 @@ type MarksmanServer(client: MarksmanClient) =
                     let allHeadings = Index.headings doc.index
 
                     allHeadings
-                    |> Seq.collect (headingToSymbolInfo docUri)
+                    |> Seq.map (headingToSymbolInfo docUri)
                     |> Array.ofSeq
                     |> First
 

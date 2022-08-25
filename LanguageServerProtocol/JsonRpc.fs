@@ -48,6 +48,7 @@ module ErrorCodes =
   let internalError = -32603
   let serverErrorStart = -32000
   let serverErrorEnd = -32099
+  let requestCancelled = -32800
 
 type Error =
   { Code: int
@@ -60,6 +61,8 @@ type Error =
   static member InvalidParams = Error.Create(ErrorCodes.invalidParams, "Invalid params")
   static member InternalError = Error.Create(ErrorCodes.internalError, "Internal error")
   static member InternalErrorMessage message = Error.Create(ErrorCodes.internalError, message)
+  static member RequestCancelled = Error.Create(ErrorCodes.requestCancelled, "Request cancelled")
+  static member RequestCancelledMessage message = Error.Create(ErrorCodes.requestCancelled, message)
 
 type Response =
   { [<JsonProperty("jsonrpc")>]

@@ -49,31 +49,37 @@ let tableOfContents (document: Doc) : DocumentAction option =
         )
 
 
-        let newLines lineNumber =
+        let newlineIfNonEmpty lineNumber =
             if document.text.LineContent(lineNumber).Trim().Length.Equals(0) then
                 ""
             else
                 (NewLine + NewLine)
 
+        let lineBreakIfNonEmpty lineNumber =
+            if document.text.LineContent(lineNumber).Trim().Length.Equals(0) then
+                ""
+            else
+                NewLine
 
 
-        let (editRange, prevLine, nextLine) =
+        let (editRange, newLinesBefore, newLinesAfter) =
             match insertionPoint with
             | DocumentBeginning ->
-                let range = Text.documentBeginning
-                range, None, 0
+                Text.documentBeginning, "", (newlineIfNonEmpty Text.documentBeginning.Start.Line)
 
-            | Replacing range -> range, Some(range.Start.Line - 1), range.End.Line + 1
+            | Replacing range ->
+                range,
+                (newlineIfNonEmpty (range.Start.Line - 1)),
+                (newlineIfNonEmpty (range.End.Line + 1))
 
             | After range ->
                 let lineAfterLast = range.End.Line + 1
-                let newRange = Range.Mk(lineAfterLast, 1, lineAfterLast, 1)
+                let newRange = Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
 
-                newRange, Some(lineAfterLast), lineAfterLast + 1
+                newRange,
+                (lineBreakIfNonEmpty range.End.Line),
+                (lineBreakIfNonEmpty (lineAfterLast + 1))
 
-
-        let newLinesBefore = defaultArg (prevLine |> Option.map newLines) ""
-        let newLinesAfter = newLines nextLine
 
         let text = $"{newLinesBefore}{rendered}{newLinesAfter}"
 

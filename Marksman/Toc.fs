@@ -50,7 +50,7 @@ module TableOfContents =
     let mk (index: Marksman.Index.Index) : TableOfContents option =
         let headings = index.headings |> Array.map (fun x -> x.data)
 
-        if index.headings.Length.Equals 0 then
+        if Array.isEmpty index.headings then
             None
         else
             Some { entries = Array.map Entry.fromHeading headings }

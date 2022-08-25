@@ -22,63 +22,71 @@ let documentEdit range text documentUri : WorkspaceEdit =
 
 let tableOfContents (document: Doc) : DocumentAction option =
     match TableOfContents.mk document.index with
-    | Some (toc) ->
+    | Some toc ->
         let rendered = TableOfContents.render toc
-        let existing = TableOfContents.detect document.text
+        let existingRange = TableOfContents.detect document.text
 
-        let name =
-            match existing with
-            | None -> "Create a Table of Contents"
-            | _ -> "Update the Table of Contents"
+        let existingText =
+            existingRange
+            |> Option.map document.text.Substring
+            |> Option.map (fun x -> x.Trim())
 
-        let insertionPoint =
-            match existing with
-            | Some (range) -> Replacing range
-            | None -> TableOfContents.insertionPoint document
+        if existingText = Some rendered then
+            None
+        else
+            let name =
+                match existingRange with
+                | None -> "Create a Table of Contents"
+                | _ -> "Update the Table of Contents"
 
-        logger.trace (
-            Log.setMessage ("Determining table of contents insertion point")
-            >> Log.addContext "insertionPoint" insertionPoint
-            >> Log.addContext "existing" existing
-            >> Log.addContext "text" rendered
-        )
+            let insertionPoint =
+                match existingRange with
+                | Some range -> Replacing range
+                | None -> TableOfContents.insertionPoint document
 
-        let isEmpty lineNumber = document.text.LineContent(lineNumber).Trim().Length.Equals(0)
+            logger.trace (
+                Log.setMessage "Determining table of contents insertion point"
+                >> Log.addContext "insertionPoint" insertionPoint
+                >> Log.addContext "existing" existingRange
+                >> Log.addContext "text" rendered
+            )
 
-        let emptyLine = NewLine + NewLine
-        let lineBreak = NewLine
+            let isEmpty lineNumber = document.text.LineContent(lineNumber).IsWhitespace()
 
-        let editRange, newLinesBefore, newLinesAfter =
-            match insertionPoint with
-            | DocumentBeginning ->
-                let after =
-                    if isEmpty Text.documentBeginning.Start.Line then "" else emptyLine
+            let emptyLine = NewLine + NewLine
+            let lineBreak = NewLine
 
-                Text.documentBeginning, "", after
+            let editRange, newLinesBefore, newLinesAfter =
+                match insertionPoint with
+                | DocumentBeginning ->
+                    let after =
+                        if isEmpty Text.documentBeginning.Start.Line then "" else emptyLine
 
-            | Replacing range ->
-                let before =
-                    if range.Start.Line <= 0 || isEmpty (range.Start.Line - 1) then
-                        ""
-                    else
-                        emptyLine
+                    Text.documentBeginning, "", after
 
-                let after = if isEmpty (range.End.Line + 1) then "" else emptyLine
+                | Replacing range ->
+                    let before =
+                        if range.Start.Line <= 0 || isEmpty (range.Start.Line - 1) then
+                            ""
+                        else
+                            emptyLine
 
-                range, before, after
+                    let after = if isEmpty (range.End.Line + 1) then "" else emptyLine
 
-            | After range ->
-                let lineAfterLast = range.End.Line + 1
-                let newRange = Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
+                    range, before, after
 
-                let before = if isEmpty range.End.Line then "" else lineBreak
-                let after = if isEmpty (lineAfterLast) then lineBreak else emptyLine
+                | After range ->
+                    let lineAfterLast = range.End.Line + 1
+                    let newRange = Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
 
-                newRange, before, after
+                    let before = if isEmpty range.End.Line then "" else lineBreak
+                    let after = if isEmpty (lineAfterLast) then lineBreak else emptyLine
+
+                    newRange, before, after
 
 
-        let text = $"{newLinesBefore}{rendered}{newLinesAfter}"
+            let text = $"{newLinesBefore}{rendered}{newLinesAfter}"
 
-        Some { name = name; newText = text; edit = editRange }
+            Some { name = name; newText = text; edit = editRange }
 
     | _ -> None

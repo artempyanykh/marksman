@@ -119,6 +119,8 @@ module Doc =
 
     let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.index
 
+    let version (doc: Doc) : option<int> = doc.version
+
 type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
 
 module Folder =

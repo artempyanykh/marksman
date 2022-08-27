@@ -79,6 +79,8 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
   language-server = { command = "marksman", args=["server"] }
   indent = { tab-width = 2, unit = "  " }
   ```
+* Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
+  installation).
 
 ## How to install
 
@@ -222,3 +224,5 @@ LSP but it's not a part of the spec at least until and including v3.17.
 
 [eglot]: https://github.com/joaotavora/eglot
 [eglot-marksman-pr]: https://github.com/joaotavora/eglot/pull/1013
+
+[sublime-marksman]: https://github.com/bitsper2nd/LSP-marksman

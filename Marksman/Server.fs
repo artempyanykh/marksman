@@ -209,11 +209,17 @@ let calcDiagnosticsUpdate
             )
 
             for docUri in allDocs do
+                let existingDoc = prevState |> Option.bind (State.tryFindDocument docUri)
+                let existingDocVersion = Option.bind Doc.version existingDoc
+
                 let existingDocDiag =
                     existingFolderDiag
                     |> Array.tryFind (fun (uri, _) -> uri = docUri)
                     |> Option.map snd
                     |> Option.defaultValue [||]
+
+                let newDoc = State.tryFindDocument docUri newState
+                let newDocVersion = Option.bind Doc.version newDoc
 
                 let newDocDiag =
                     newFolderDiag
@@ -221,7 +227,14 @@ let calcDiagnosticsUpdate
                     |> Option.map snd
                     |> Option.defaultValue [||]
 
-                if newDocDiag <> existingDocDiag then
+                let shouldUpdate =
+                    newDocDiag <> existingDocDiag
+                    // Diag didn't change but the document was re-opened; re-send the diag
+                    || (existingDocVersion = None
+                        && Option.isSome newDocVersion
+                        && not (Array.isEmpty newDocDiag))
+
+                if shouldUpdate then
                     logger.trace (
                         Log.setMessage "Diagnostic changed, queueing the update"
                         >> Log.addContext "doc" docUri

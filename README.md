@@ -44,18 +44,27 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 * VSCode via [Marksman VSCode][mn-vscode].
 * Neovim:
     * via [nvim-lsp-installer][nvim-marksman-lsp-installer] (automatic server installation),
-    * via [nvim-lspconfig][nvim-marksman].
-* Emacs via [LSP Mode](https://emacs-lsp.github.io/lsp-mode/page/lsp-marksman/) (automatic server installation).
+    * via [nvim-lspconfig][nvim-marksman],
+    * via [CoC-marksman][coc-marksman].
+* Emacs: 
+    * via [LSP Mode](https://emacs-lsp.github.io/lsp-mode/page/lsp-marksman/) (automatic server installation).
 
-  Example config for `use-package` users:
+      Example config for `use-package` users:
 
-  ```lisp
-  (use-package markdown-mode
-    :hook (markdown-mode . lsp)
-    :config
-    (require 'lsp-marksman))
-  ```
+      ```lisp
+      (use-package markdown-mode
+        :hook (markdown-mode . lsp)
+        :config
+        (require 'lsp-marksman))
+      ```
+    * via [Eglot][eglot], requires configuration (unless
+      [eglot#1013][eglot-marksman-pr] gets merged); add the following to your
+      `init.el`
 
+      ```lisp
+      (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))      
+      (add-hook 'markdown-mode-hook #'eglot-ensure)
+      ````
 * [Helix][helix-editor] requires configuration (unless
   [helix#3499][helix-marksman-pr] gets merged); add the following to your
   `~/.config/helix/languages.toml`:
@@ -208,3 +217,8 @@ LSP but it's not a part of the spec at least until and including v3.17.
 
 [helix-editor]: https://helix-editor.com
 [helix-marksman-pr]: https://github.com/helix-editor/helix/pull/3499
+
+[coc-marksman]: https://github.com/yaegassy/coc-marksman
+
+[eglot]: https://github.com/joaotavora/eglot
+[eglot-marksman-pr]: https://github.com/joaotavora/eglot/pull/1013

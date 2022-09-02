@@ -27,16 +27,18 @@ let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
         |> Array.map (fun { Name = name; Uri = uri } -> name, PathUri.fromString uri)
         |> Map.ofArray
     | _ ->
-        let rootPath =
-            par.RootUri
-            |> Option.orElse par.RootPath
-            |> Option.defaultWith (fun () -> failwith $"No folders configured in workspace: {par}")
+        let rootPath = par.RootUri |> Option.orElse par.RootPath
 
-        let rootUri = PathUri.fromString rootPath
+        match rootPath with
+        | None ->
+            // No folders are configured. The client can still add folders later using a notification.
+            Map.empty
+        | Some rootPath ->
+            let rootUri = PathUri.fromString rootPath
 
-        let rootName = Path.GetFileName(rootUri.LocalPath)
+            let rootName = Path.GetFileName(rootUri.LocalPath)
 
-        Map.ofList [ rootName, rootUri ]
+            Map.ofList [ rootName, rootUri ]
 
 let readWorkspace (roots: Map<string, PathUri>) : list<Folder> =
     seq {

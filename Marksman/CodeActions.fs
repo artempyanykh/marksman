@@ -26,12 +26,13 @@ let tableOfContents (document: Doc) : DocumentAction option =
         let rendered = TableOfContents.render toc
         let existingRange = TableOfContents.detect document.text
 
-        let existingText =
+        let isSame =
             existingRange
             |> Option.map document.text.Substring
-            |> Option.map (fun x -> x.Trim())
+            |> Option.map (TableOfContents.isSame rendered)
+            |> Option.defaultValue false
 
-        if existingText = Some rendered then
+        if isSame then
             None
         else
             let name =

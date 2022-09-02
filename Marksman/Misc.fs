@@ -10,6 +10,8 @@ let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 
 let lineEndings = [| "\r\n"; "\n" |]
 
+let concatLines (lines: array<string>) : string = String.concat Environment.NewLine lines
+
 type String with
 
     member this.Lines() : array<string> = this.Split(lineEndings, StringSplitOptions.None)
@@ -83,6 +85,15 @@ type String with
             this.Substring(prefix.Length)
         else
             this
+
+    member this.TrimSuffix(suffix: string) : string =
+        if this.EndsWith(suffix) then
+            this.Substring(0, this.Length - suffix.Length)
+        else
+            this
+
+    member this.TrimBoth(prefix: string, suffix: string) : string =
+        this.TrimPrefix(prefix).TrimSuffix(suffix)
 
 type Slug = Slug of string
 

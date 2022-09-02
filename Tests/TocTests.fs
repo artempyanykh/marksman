@@ -327,3 +327,21 @@ module DocumentEdit =
         let action = CodeActions.tableOfContents doc
 
         Assert.Equal(None, action)
+        
+    [<Fact>]
+    let upToDate_whitespace_noUpdate () =
+        let text =
+            stripMarginTrim
+                $"
+                |{StartMarker}
+                |
+                |- [T1](#t1)
+                |{EndMarker}
+                |
+                |# T1"
+
+        let doc = FakeDoc.Mk text
+
+        let action = CodeActions.tableOfContents doc
+
+        Assert.Equal(None, action)

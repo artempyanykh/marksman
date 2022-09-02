@@ -78,6 +78,14 @@ module StringExtensionsTests =
     let abspath_urlencode_5 () =
         Assert.Equal("/folder%20name/file%20name.md", "folder name/file name.md".AbsPathUrlEncode())
         Assert.Equal("/folder%20name/file%20name.md".AbsPathUrlEncodedToRelPath(), "folder name/file name.md")
+        
+    [<Fact>]
+    let trimSuffix_1 () =
+        Assert.Equal("foo", "foobar".TrimSuffix("bar"))
+        
+    [<Fact>]
+    let trimSuffix_2 () =
+        Assert.Equal("foobar", "foobar".TrimSuffix("baz"))
     
 module PathUriTests =
     [<Fact>]

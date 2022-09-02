@@ -23,20 +23,19 @@ let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<str
 
     lines.ShouldMatchInlineSnapshot(snapshot)
 
-let applyDocumentAction (doc: Doc) (action: DocumentAction): string =
+let applyDocumentAction (doc: Doc) (action: DocumentAction) : string =
     let (before, after) = doc.text.Cutout(action.edit)
 
     before + action.newText + after
 
-let stripMargin (str: string) = 
+let stripMargin (str: string) =
     let lines = str.Lines()
-    let modified = lines |> Array.map(fun line -> 
-        System.Text.RegularExpressions.Regex.Replace(line, "^[\s]*\|", "")
-    )
-    String.concat System.Environment.NewLine modified
 
-let stripMarginTrim (str: string) = 
-    stripMargin (str.Trim())
+    lines
+    |> Array.map (fun line -> System.Text.RegularExpressions.Regex.Replace(line, "^[\s]*\|", ""))
+    |> concatLines
+
+let stripMarginTrim (str: string) = stripMargin (str.Trim())
 
 type FakeDoc =
     class
@@ -51,7 +50,7 @@ type FakeDoc =
 
         static member Mk(contentLines: array<string>, ?path: string) : Doc =
             let content = String.concat System.Environment.NewLine contentLines
-            FakeDoc.Mk (content, ?path = path)
+            FakeDoc.Mk(content, ?path = path)
     end
 
 type FakeFolder =

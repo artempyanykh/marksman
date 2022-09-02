@@ -78,7 +78,7 @@ module TableOfContents =
 
         let lines = Array.concat [| startMarkerLines; tocLinks; endMarkerLines |]
 
-        String.concat NewLine lines
+        concatLines lines
 
     type State =
         | BeforeMarker
@@ -128,3 +128,15 @@ module TableOfContents =
             )
 
             None
+
+
+    let isSame (tocA: string) (tocB: string) =
+        // Have to do this line-by-line comparison to make sure that things work as expected both
+        // on Unix and Windows and when mixed line-endings are used.
+        let contentA = tocA.TrimBoth(StartMarker, EndMarker).Trim().Lines()
+        let contentB = tocB.TrimBoth(StartMarker, EndMarker).Trim().Lines()
+
+        if contentA.Length <> contentB.Length then
+            false
+        else
+            Array.forall2 (=) contentA contentB

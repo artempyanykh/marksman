@@ -4,11 +4,7 @@ open System.Runtime.InteropServices
 open Snapper
 open Marksman.Misc
 open Marksman.Workspace
-open Marksman.Text
-open Ionide.LanguageServerProtocol.Types
 open Marksman.CodeActions
-
-open type System.Environment
 
 let pathToUri path = $"file://{path}"
 
@@ -33,11 +29,11 @@ let applyDocumentAction (doc: Doc) (action: DocumentAction): string =
     before + action.newText + after
 
 let stripMargin (str: string) = 
-    let lines = str.Split NewLine
+    let lines = str.Lines()
     let modified = lines |> Array.map(fun line -> 
         System.Text.RegularExpressions.Regex.Replace(line, "^[\s]*\|", "")
     )
-    String.concat NewLine modified
+    String.concat System.Environment.NewLine modified
 
 let stripMarginTrim (str: string) = 
     stripMargin (str.Trim())

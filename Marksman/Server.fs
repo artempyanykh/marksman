@@ -490,12 +490,22 @@ type MarksmanServer(client: MarksmanClient) =
         let initResult =
             { InitializeResult.Default with Capabilities = serverCaps }
 
+        logger.debug (
+            Log.setMessage
+                "Finished workspace initialization. Waiting for the `initialized` notification from the client."
+        )
+
         AsyncLspResult.success initResult
 
 
     override this.Initialized(_: InitializedParams) =
         withStateExclusive
         <| fun state ->
+            logger.debug (
+                Log.setMessage
+                    "Received `initialized` notification from the client. Setting up background services."
+            )
+
             let diagHook = queueDiagnosticsUpdate diagnosticsManager
             let mutable newHooks = [ { name = "diag"; fn = diagHook } ]
 
@@ -511,6 +521,8 @@ type MarksmanServer(client: MarksmanClient) =
                     Log.setMessage
                         "Client doesn't support status notifications. Agent won't be initialized."
                 )
+
+            logger.debug (Log.setMessage "Initialization complete.")
 
             Mutation.hooks newHooks
 

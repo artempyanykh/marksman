@@ -8,7 +8,7 @@
     </PropertyGroup>
     <Target Name="Version" BeforeTargets="BeforeBuild">
         <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true">
-            <Output TaskParameter="ConsoleOutput" PropertyName="VersionString"/>
+            <Output TaskParameter="ConsoleOutput" PropertyName="VersionString" />
         </Exec>
         <PropertyGroup>
             <VersionSuffix>$(VersionString)</VersionSuffix>
@@ -19,38 +19,38 @@
         <PropertyGroup>
             <LintCommand>dotnet fsharplint -f msbuild lint --lint-config $(MSBuildProjectDirectory)/../fsharplint.json $(MSBuildProjectFullPath)</LintCommand>
         </PropertyGroup>
-        <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true"/>
+        <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true" />
     </Target>
     <ItemGroup>
-        <Compile Include="Misc.fs"/>
-        <Compile Include="Text.fs"/>
-        <Compile Include="Cst.fs"/>
-        <Compile Include="Parser.fs"/>
-        <Compile Include="Index.fs"/>
-        <Compile Include="Workspace.fs"/>
-        <Compile Include="Semato.fs"/>
-        <Compile Include="Diag.fs"/>
-        <Compile Include="State.fs"/>
-        <Compile Include="Toc.fs"/>
-        <Compile Include="CodeActions.fs"/>
-        <Compile Include="Refs.fs"/>
-        <Compile Include="Compl.fs"/>
-        <Compile Include="Refactor.fs"/>
-        <Compile Include="Server.fs"/>
-        <Compile Include="Program.fs"/>
+        <Compile Include="Misc.fs" />
+        <Compile Include="Text.fs" />
+        <Compile Include="Cst.fs" />
+        <Compile Include="Parser.fs" />
+        <Compile Include="Index.fs" />
+        <Compile Include="Workspace.fs" />
+        <Compile Include="Semato.fs" />
+        <Compile Include="Refs.fs" />
+        <Compile Include="Diag.fs" />
+        <Compile Include="State.fs" />
+        <Compile Include="Toc.fs" />
+        <Compile Include="CodeActions.fs" />
+        <Compile Include="Compl.fs" />
+        <Compile Include="Refactor.fs" />
+        <Compile Include="Server.fs" />
+        <Compile Include="Program.fs" />
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.5"/>
-        <PackageReference Include="FSharp.SystemCommandLine" Version="0.13.0-beta4"/>
-        <PackageReference Include="FSharpPlus" Version="1.2.4"/>
-        <PackageReference Include="Markdig" Version="0.30.2"/>
-        <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="6.0.0"/>
+        <PackageReference Update="FSharp.Core" Version="6.0.5" />
+        <PackageReference Include="FSharp.SystemCommandLine" Version="0.13.0-beta4" />
+        <PackageReference Include="FSharpPlus" Version="1.2.4" />
+        <PackageReference Include="Markdig" Version="0.30.2" />
+        <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="6.0.0" />
         <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->
-        <PackageReference Include="Serilog" Version="2.11.0"/>
-        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
+        <PackageReference Include="Serilog" Version="2.11.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
     </ItemGroup>
     <ItemGroup>
-        <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj"/>
-        <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj"/>
+        <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj" />
+        <ProjectReference Include="..\MarkdigPatches\MarkdigPatches.csproj" />
     </ItemGroup>
 </Project>

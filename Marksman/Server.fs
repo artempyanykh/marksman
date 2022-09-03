@@ -733,10 +733,18 @@ type MarksmanServer(client: MarksmanClient) =
                     let! srcDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Doc.linkAtPos par.Position srcDoc
                     let! uref = Uref.ofElement atPos
-                    let! ref = Ref.tryResolveUref uref srcDoc folder
 
-                    GotoResult.Single
-                        { Uri = (Ref.doc ref).path.DocumentUri; Range = (Ref.range ref) }
+                    let refs = Dest.tryResolveUref uref srcDoc folder
+
+                    let locs =
+                        refs
+                        |> Seq.map (fun ref ->
+                            { Uri = (Dest.doc ref).path.DocumentUri; Range = (Dest.range ref) })
+                        |> Array.ofSeq
+
+                    if locs.Length = 0 then return! None
+                    else if locs.Length = 1 then GotoResult.Single locs[0]
+                    else GotoResult.Multiple locs
                 }
 
             LspResult.success goto
@@ -752,12 +760,15 @@ type MarksmanServer(client: MarksmanClient) =
                     let! srcDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Doc.linkAtPos par.Position srcDoc
                     let! uref = Uref.ofElement atPos
-                    let! ref = Ref.tryResolveUref uref srcDoc folder
+                    // NOTE: Due to ambiguity there may be several sources for hover. Since hover
+                    // request requires a single result we return the first. When links are not
+                    // ambiguous this is OK, otherwise the author is to blame for ambiguity anyway.
+                    let! ref = Dest.tryResolveUref uref srcDoc folder |> Seq.tryHead
 
-                    let destScope = Ref.scope ref
+                    let destScope = Dest.scope ref
 
                     let content =
-                        (Ref.doc ref).text.Substring destScope |> markdown |> MarkupContent
+                        (Dest.doc ref).text.Substring destScope |> markdown |> MarkupContent
 
                     let hover = { Contents = content; Range = None }
 
@@ -780,7 +791,7 @@ type MarksmanServer(client: MarksmanClient) =
                     let! atPos = Cst.elementAtPos par.Position curDoc.cst
 
                     let referencingEls =
-                        Ref.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
+                        Dest.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
 
                     let toLoc (doc, el) = { Uri = doc.path.DocumentUri; Range = Element.range el }
 

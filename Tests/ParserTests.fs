@@ -298,12 +298,12 @@ module DocUrlTests =
 
     [<Fact>]
     let test1 () =
-        let actual = mkTextNode "/some.md" |> DocUrl.ofUrlNode
+        let actual = mkTextNode "/some.md" |> Url.ofUrlNode
         Assert.Equal("docUrl=/some.md @ (0,0)-(0,8)", actual.ToString())
 
     [<Fact>]
     let test2 () =
-        let actual = mkTextNode "/some.md#anchor" |> DocUrl.ofUrlNode
+        let actual = mkTextNode "/some.md#anchor" |> Url.ofUrlNode
 
         Assert.Equal(
             "docUrl=/some.md @ (0,0)-(0,8);anchor=anchor @ (0,9)-(0,15)",
@@ -313,6 +313,6 @@ module DocUrlTests =
     [<Fact>]
     let test3 () =
         //                       01234567
-        let actual = mkTextNode "#anchor" |> DocUrl.ofUrlNode
+        let actual = mkTextNode "#anchor" |> Url.ofUrlNode
 
         Assert.Equal("anchor=anchor @ (0,1)-(0,7)", actual.ToString())

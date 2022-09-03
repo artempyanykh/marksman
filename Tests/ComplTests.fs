@@ -1,10 +1,14 @@
 module Marksman.ComplTests
 
 open Ionide.LanguageServerProtocol.Types
+open Snapper.Attributes
 open Xunit
+open Snapper
 
+open Marksman.Helpers
 open Marksman.Compl
 open Marksman.Misc
+open Marksman.Workspace
 
 type Helpers =
     static member mkTitleComp(range: Range, ?needsClosing: bool) =
@@ -263,3 +267,50 @@ module DocAnchorOfText =
             Helpers.mkDocAnchorComp (Range.Mk(0, 9, 1, 0), dest = "doc.md")
 
         Assert.Equal(Some expected, comp)
+
+let checkSnapshot (completions: array<CompletionItem>) =
+    let fmtItem (ci: CompletionItem) =
+        ci.TextEdit
+        |> Option.map (fun te -> $"{te.Range.DebuggerDisplay}: {te.NewText}")
+        |> Option.defaultValue "<no-edit>"
+
+    let lines = Array.map fmtItem completions
+
+    lines.ShouldMatchSnapshot()
+
+[<StoreSnapshotsPerClass>]
+module Candidates =
+    let doc1 =
+        FakeDoc.Mk(
+            path = "doc1.md",
+            contentLines =
+                //  012345678901234567890
+                [| "# H1" // 0
+                   "[[#"
+                   "# A"
+                   "## H2" // 3
+                   "#B"
+                   "## H2"
+                   "[](/doc%202.md#)" |] // 6
+                //  012345678901234567890
+        )
+
+    let doc2 =
+        FakeDoc.Mk(path = "doc 2.md", contentLines = [| "# H1"; "[[doc1#"; "## D2 H2" |])
+
+    let folder = FakeFolder.Mk([ doc1; doc2 ])
+
+    [<Fact>]
+    let noDupsOnAchor_intraFile () =
+        let cand = findCandidates (Position.Mk(1, 3)) doc1.path folder
+        checkSnapshot cand
+
+    [<Fact>]
+    let noDupsOnAchor_crossFile () =
+        let cand = findCandidates (Position.Mk(1, 3)) doc1.path folder
+        checkSnapshot cand
+        
+    [<Fact>]
+    let fileWithSpaces_anchor () =
+        let cand = findCandidates (Position.Mk(6, 15)) doc1.path folder
+        checkSnapshot cand

@@ -1,5 +1,6 @@
 module Marksman.Diag
 
+open Ionide.LanguageServerProtocol.Types
 open Marksman.Workspace
 
 module Lsp = Ionide.LanguageServerProtocol.Types
@@ -7,30 +8,18 @@ module Lsp = Ionide.LanguageServerProtocol.Types
 open Marksman.Misc
 open Marksman.Cst
 open Marksman.Index
+open Marksman.Refs
 
 type Entry =
-    | DupTitle of orig: Node<Heading> * dup: Node<Heading>
-    | DupHeading of orig: Node<Heading> * dup: Node<Heading>
-    | BrokenDocWL of Node<WikiLink>
-    | BrokenHeadingWL of Node<WikiLink>
+    | AmbiguousLink of Element * Uref * array<Dest>
+    | BrokenLink of Element * Uref
     | NonBreakableWhitespace of Lsp.Range
 
 let code: Entry -> string =
     function
-    | DupTitle _ -> "1"
-    | DupHeading _ -> "2"
-    | BrokenDocWL _ -> "3"
-    | BrokenHeadingWL _ -> "4"
-    | NonBreakableWhitespace _ -> "5"
-
-let checkTitles (index: Index) : seq<Entry> =
-    match Index.titles index |> List.ofArray with
-    | [] -> []
-    | [ _ ] -> []
-    | first :: rest ->
-        rest
-        |> List.map (fun dup -> DupTitle(orig = first, dup = dup))
-        |> Seq.ofList
+    | AmbiguousLink _ -> "1"
+    | BrokenLink _ -> "2"
+    | NonBreakableWhitespace _ -> "3"
 
 let checkNonBreakingWhitespace (doc: Doc) =
     let nonBreakingWhitespace = "\u00a0"
@@ -46,58 +35,42 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
         match headingLike with
         | None -> []
-        | Some (heading) ->
+        | Some heading ->
             let whitespaceRange: Lsp.Range =
                 { Start = { Line = x; Character = heading.Length }
                   End = { Line = x; Character = heading.Length + 1 } }
 
             [ NonBreakableWhitespace(whitespaceRange) ])
 
+let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
+    let uref = Uref.ofElement link
 
-let checkHeadings (db: Index) : seq<Entry> =
-    seq {
-        for KeyValue (_, hs) in Index.headingsBySlug db do
-            match hs with
-            | [] -> ()
-            | [ _ ] -> ()
-            | first :: rest ->
-                for dup in rest do
-                    yield DupHeading(orig = first, dup = dup)
-    }
+    match uref with
+    | None -> []
+    | Some uref ->
+        let refs = Dest.tryResolveUref uref doc folder |> Array.ofSeq
 
-let checkWikiLinks (doc: Doc) (folder: Folder) : seq<Entry> =
-    let docSlug = Doc.slug doc
+        if refs.Length = 1 then
+            []
+        else if refs.Length = 0 then
+            match link with
+            // Inline shortcut links often are a part of regular text.
+            // Raising diagnostics on them would be noisy.
+            | ML { data = MdLink.RS _ } -> []
+            | _ -> [ BrokenLink(link, uref) ]
+        else
+            [ AmbiguousLink(link, uref, refs) ]
 
-    seq {
-        for wl in Index.wikiLinks doc.index do
-            let destDocSlug =
-                WikiLink.destDoc wl.data
-                |> Option.map Slug.ofString
-                |> Option.defaultValue docSlug
-
-            let destDoc = Folder.tryFindDocBySlug destDocSlug folder
-
-            match destDoc with
-            | None -> yield BrokenDocWL(wl)
-            | Some destDoc ->
-                match WikiLink.destHeading wl.data with
-                | None -> ()
-                | Some destHeading ->
-                    let destSlug = Slug.ofString destHeading
-
-                    match Index.tryFindHeadingBySlug destSlug destDoc.index with
-                    | None -> yield BrokenHeadingWL(wl)
-                    | Some _ -> ()
-    }
+let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
+    let links = Index.links doc.index
+    links |> Seq.collect (checkLink folder doc)
 
 let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
     seq {
         for doc in Folder.docs folder do
             let docDiag =
                 seq {
-                    yield! checkTitles doc.index
-                    yield! checkHeadings doc.index
-                    yield! checkWikiLinks doc folder
+                    yield! checkLinks folder doc
                     yield! checkNonBreakingWhitespace doc
                 }
                 |> List.ofSeq
@@ -105,74 +78,83 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
             doc.path, docDiag
     }
 
-let clippy msg =
-    $"""
-{msg}
+let refToHuman (ref: Dest) : string =
+    match ref with
+    | Dest.Doc doc -> $"document {Doc.name doc}"
+    | Dest.Heading (doc, { data = heading }) ->
+        $"heading {Heading.name heading} in the document {Doc.name doc}"
+    | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
 
-/  \
-|  |
-@  @
-|  |
-|| |/
-|| ||
-|\_/|
-\___/
-"""
+let docRefToHuman: DocRef -> string =
+    function
+    | DocRef.Title title -> $"document with the title '{title}'"
+    | DocRef.Url url -> $"document at '{url}'"
 
-
+let urefToHuman (uref: Uref) : string =
+    match uref with
+    | Uref.Doc docRef -> docRefToHuman docRef
+    | Uref.Heading (docRef, heading) ->
+        match docRef with
+        | None -> $"heading '{Node.text heading}'"
+        | Some docRef -> $"heading '{Node.text heading}' in {docRefToHuman docRef}"
+    | Uref.LinkDef ld -> $"link definition with the label '{Node.text ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
     match diag with
-    | DupTitle (_orig, dup) ->
-        { Range = dup.range
-          Severity = Some Lsp.DiagnosticSeverity.Error
+    | AmbiguousLink (el, uref, refs) ->
+        let severity =
+            match el with
+            | WL _ -> Lsp.DiagnosticSeverity.Error
+            | ML _ -> Lsp.DiagnosticSeverity.Warning
+            | H _
+            | MLD _
+            | YML _ -> Lsp.DiagnosticSeverity.Information
+
+        let mkRelated ref : DiagnosticRelatedInformation =
+            let loc = Dest.location ref
+            let msg = $"Duplicate definition of {refToHuman ref}"
+            { Location = loc; Message = msg }
+
+        let related = refs |> Array.map mkRelated
+
+        { Range = Element.range el
+          Severity = Some severity
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = "Duplicate title"
-          RelatedInformation = None
+          Message = $"Ambiguous link to {urefToHuman uref}"
+          RelatedInformation = Some related
           Tags = None
           Data = None }
-    | DupHeading (_orig, dup) ->
-        { Range = dup.range
-          Severity = Some Lsp.DiagnosticSeverity.Error
+    | BrokenLink (el, uref) ->
+        let severity =
+            match el with
+            | WL _ -> Lsp.DiagnosticSeverity.Error
+            | ML _ -> Lsp.DiagnosticSeverity.Warning
+            | H _
+            | MLD _
+            | YML _ -> Lsp.DiagnosticSeverity.Information
+
+        let msg = $"Link to non-existent {urefToHuman uref}"
+
+        { Range = Element.range el
+          Severity = Some severity
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
-          Message = "Heading with the same slug already exists"
+          Message = msg
           RelatedInformation = None
           Tags = None
           Data = None }
-    | NonBreakableWhitespace (dup) ->
+
+    | NonBreakableWhitespace dup ->
         { Range = dup
           Severity = Some Lsp.DiagnosticSeverity.Warning
           Code = Some(code diag)
           CodeDescription = None
           Source = "Marksman"
           Message =
-            clippy
-                "Non-breaking whitespace used instead of regular whitespace - this line won't be interpreted as a heading"
-          RelatedInformation = None
-          Tags = None
-          Data = None }
-    | BrokenDocWL wl ->
-        { Range = wl.range
-          Severity = Some Lsp.DiagnosticSeverity.Error
-          Code = Some(code diag)
-          CodeDescription = None
-          Source = "Marksman"
-          Message = $"Reference to non-existent document: {WikiLink.destDoc wl.data |> Option.get}"
-          RelatedInformation = None
-          Tags = None
-          Data = None }
-    | BrokenHeadingWL wl ->
-        { Range = wl.range
-          Severity = Some Lsp.DiagnosticSeverity.Error
-          Code = Some(code diag)
-          CodeDescription = None
-          Source = "Marksman"
-          Message =
-            $"Reference to non-existent heading: {WikiLink.destHeading wl.data |> Option.get}"
+            "Non-breaking whitespace used instead of regular whitespace. This line won't be interpreted as a heading"
           RelatedInformation = None
           Tags = None
           Data = None }

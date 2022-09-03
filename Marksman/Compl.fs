@@ -75,7 +75,7 @@ let compOfElement (pos: Position) (el: Element) : option<Compl> =
             | MdLink.RS label
             | MdLink.RC label -> Some(Compl.LinkReference(label.range, false))
             | MdLink.IL (_, Some url, _) ->
-                let docUrl = DocUrl.ofUrlNode url
+                let docUrl = Url.ofUrlNode url
 
                 match docUrl.url, docUrl.anchor with
                 | Some url, _ when url.range.ContainsInclusive pos ->
@@ -162,7 +162,7 @@ let matchParenParaElement (pos: Position) (line: Line) : option<Compl> =
             let rangeStart = (Cursor.pos start).NextChar(1)
             let range = Range.Mk(rangeStart, rangeEnd)
             let input = line.text.Substring(range)
-            let docUrl = DocUrl.ofUrlNode (Node.mkText input range)
+            let docUrl = Url.ofUrlNode (Node.mkText input range)
 
             let needsClosing =
                 paraElEnd |> Option.exists (fun c -> Cursor.char c = ')') |> not
@@ -257,6 +257,9 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
                 |> Seq.filter (fun { data = h } -> h.level <> 1)
                 |> Seq.map (fun { data = h } -> Heading.name h)
                 |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
+                // There may be several headings with the same name.
+                // Remove duplicates in completion candidates
+                |> Set.ofSeq
 
             let toCompletionItem hd =
                 let newText = Slug.str hd
@@ -312,23 +315,24 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
 
         matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
     | Compl.DocAnchor (destDocUrl, range, needsClosing) ->
-        let destDoc =
+        let destDocs =
             match destDocUrl with
             | Some url ->
                 let docRef = DocRef.Url url
-                DocRef.tryFindDoc folder srcDoc docRef
-            | None -> Some srcDoc
+                DocRef.filterMatchingDocs folder srcDoc docRef |> Array.ofSeq
+            | None -> [| srcDoc |]
 
-        match destDoc with
-        | Some destDoc ->
+        let completionsInDoc (destDoc: Doc) : array<CompletionItem> =
             let input = srcDoc.text.Substring(range)
             let inputSlug = Slug.ofString input
 
             let matchingHeadings =
                 Doc.headings destDoc
-                |> Seq.filter (fun { data = h } -> h.level <> 1)
                 |> Seq.map (fun { data = h } -> Heading.name h)
                 |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
+                // There may be several headings with the same name.
+                // Remove duplicates in completion candidates
+                |> Set.ofSeq
 
             let toCompletionItem hd =
                 let newText = Slug.str hd
@@ -341,7 +345,9 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
                     FilterText = Some hd }
 
             matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
-        | None -> [||]
+
+        destDocs |> Array.collect completionsInDoc
+
 
 let findCandidates (pos: Position) (docUri: PathUri) (folder: Folder) : array<CompletionItem> =
     let doc = Folder.tryFindDocByPath docUri folder

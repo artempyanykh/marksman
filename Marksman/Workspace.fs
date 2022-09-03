@@ -160,14 +160,19 @@ module Folder =
         matcher
 
     let shouldBeIgnored (ignores: Matcher) (root: string) (fullFilePath: string) : bool =
-        // let relPath = fullFilePath.TrimPrefix(root).AsUnixAbsPath()
         let shouldIgnore = ignores.Match(root, fullFilePath).HasMatches |> not
         shouldIgnore
 
-    let private loadDocs (root: PathUri) (ignores: Matcher) : seq<Doc> =
-        let shouldBeIgnoredHere = shouldBeIgnored ignores root.LocalPath
+    let shouldBeIgnoredByAny (ignoreFns: list<string -> bool>) (fullFilePath: string) : bool =
+        ignoreFns |> List.exists (fun f -> f fullFilePath)
 
-        let rec collect (cur: PathUri) =
+    let private loadDocs (root: PathUri) : seq<Doc> =
+
+        let rec collect (cur: PathUri) (ignoreFns: list<string -> bool>) =
+            let ignores = readIgnoreFiles cur |> buildGlobs
+            let ignoreFn = shouldBeIgnored ignores cur.LocalPath
+            let ignoreFns = ignoreFn :: ignoreFns
+
             let di = DirectoryInfo(cur.LocalPath)
 
             try
@@ -176,7 +181,7 @@ module Folder =
 
                 seq {
                     for file in files do
-                        if not (shouldBeIgnoredHere file.FullName) then
+                        if not (shouldBeIgnoredByAny ignoreFns file.FullName) then
                             let pathUri = PathUri.fromString file.FullName
 
                             let document = Doc.load root pathUri
@@ -191,8 +196,8 @@ module Folder =
                             )
 
                     for dir in dirs do
-                        if not (shouldBeIgnoredHere dir.FullName) then
-                            yield! collect (PathUri.fromString dir.FullName)
+                        if not (shouldBeIgnoredByAny ignoreFns dir.FullName) then
+                            yield! collect (PathUri.fromString dir.FullName) ignoreFns
                         else
                             logger.trace (
                                 Log.setMessage "Skipping ignored directory"
@@ -217,18 +222,15 @@ module Folder =
 
                 Seq.empty
 
-        collect root
+        collect root []
 
     let tryLoad (name: string) (root: PathUri) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
 
         if Directory.Exists(root.LocalPath) then
-            let ignores = readIgnoreFiles root |> buildGlobs
 
             let documents =
-                loadDocs root ignores
-                |> Seq.map (fun doc -> doc.path, doc)
-                |> Map.ofSeq
+                loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
 
             { name = name; root = root; docs = documents } |> Some
         else

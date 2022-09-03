@@ -23,7 +23,16 @@ module DocRef =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
             None
         else
-            Some(DocRef.Url url)
+            try
+                let ext = Path.GetExtension url
+                let ext = ext.ToLowerInvariant()
+
+                if ext = ".md" || ext = ".markdown" || ext = ".mdx" then
+                    Some(DocRef.Url url)
+                else
+                    None
+            with :? ArgumentException ->
+                None
 
     let tryResolveToRootPath
         (folderPath: string)

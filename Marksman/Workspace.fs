@@ -95,6 +95,8 @@ module Doc =
         with :? FileNotFoundException ->
             None
 
+    let uri (doc: Doc) : DocumentUri = doc.path.DocumentUri
+
     let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
 
     let index (doc: Doc) : Index = doc.index
@@ -107,9 +109,6 @@ module Doc =
     let slug (doc: Doc) : Slug = name doc |> Slug.ofString
 
     let headings (doc: Doc) : seq<Node<Heading>> = Index.headings doc.index
-
-    let headingBySlug (nameSlug: Slug) (document: Doc) : option<Node<Heading>> =
-        document.index |> Index.tryFindHeadingBySlug nameSlug
 
     let linkDefs (doc: Doc) : array<Node<MdLinkDef>> = Index.linkDefs doc.index
 
@@ -252,10 +251,10 @@ module Folder =
         { folder with docs = Map.add doc.path doc folder.docs }
 
 
-    let tryFindDocBySlug (slug: Slug) (folder: Folder) : option<Doc> =
+    let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
         let isMatchingDoc doc = Doc.slug doc = slug
 
-        folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
+        folder.docs |> Map.values |> Seq.filter isMatchingDoc
 
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()

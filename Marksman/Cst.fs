@@ -51,7 +51,7 @@ type MdLink =
     // reference shortcut
     | RS of label: TextNode
 
-type DocUrl =
+type Url =
     { url: Option<TextNode>
       anchor: Option<TextNode> }
 
@@ -69,10 +69,10 @@ type DocUrl =
 
         String.Join(';', parts)
 
-module DocUrl =
-    let anchor (x: DocUrl) = x.anchor
+module Url =
+    let anchor (x: Url) = x.anchor
 
-    let ofUrlNode (url: TextNode) : DocUrl =
+    let ofUrlNode (url: TextNode) : Url =
         let offsetHash = url.text.IndexOf('#')
 
         if offsetHash < 0 then
@@ -144,6 +144,8 @@ module MdLinkDef =
             mld.title |> Option.map Node.fmtText |> Option.defaultValue "∅"
 
         $"label={fmtLabel}; url={fmtUrl}; title={fmtTitle}"
+
+    let name (mld: MdLinkDef) = mld.label |> Node.text
 
 type Element =
     | H of Node<Heading>
@@ -219,6 +221,8 @@ module Element =
         | ML n -> n.range
         | MLD n -> n.range
         | YML n -> n.range
+
+    let rangeStart el = (range el).Start
 
     let text =
         function

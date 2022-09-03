@@ -86,8 +86,8 @@ module Index =
 
     let headings index = index.headingsBySlug |> Map.values |> Seq.concat
 
-    let tryFindHeadingBySlug slug index =
-        index.headingsBySlug |> Map.tryFind slug |> Option.bind List.tryHead
+    let filterHeadingBySlug slug index =
+        index.headingsBySlug |> Map.tryFind slug |> Option.defaultValue []
 
     let linkAtPos (pos: Position) index =
         let matching el =

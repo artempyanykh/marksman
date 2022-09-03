@@ -72,11 +72,11 @@ let renameHeadingLink (heading: Heading) (newSlug: Slug) (element: Element) : op
         toEdit
         |> Option.map (fun node -> { Range = node.range; NewText = Slug.toString newSlug })
     | ML { data = MdLink.IL (_, url, _) } ->
-        let docUrl = url |> Option.map DocUrl.ofUrlNode
+        let docUrl = url |> Option.map Url.ofUrlNode
 
         let toEdit =
             if not (Heading.isTitle heading) then
-                docUrl |> Option.bind DocUrl.anchor
+                docUrl |> Option.bind Url.anchor
             else
                 None
 
@@ -131,7 +131,7 @@ let rename
             if not (isValidLabel newName) then
                 Error $"Not a valid label name: {newName}"
             else if label.range.ContainsInclusive pos then
-                let refs = Ref.findElementRefs true folder srcDoc el
+                let refs = Dest.findElementRefs true folder srcDoc el
                 let byDoc = refs |> groupByFirst
 
                 let docEdits =
@@ -145,7 +145,7 @@ let rename
         if not (isValidLabel newName) then
             Error $"Not a valid label name: {newName}"
         else if def.label.range.ContainsInclusive pos then
-            let refs = Ref.findElementRefs true folder srcDoc el
+            let refs = Dest.findElementRefs true folder srcDoc el
             let byDoc = refs |> groupByFirst
 
             let docEdits =
@@ -164,7 +164,7 @@ let rename
                 let edit = { Range = heading.title.range; NewText = newName }
                 { TextDocument = lspDoc; Edits = [| edit |] }
 
-            let refs = Ref.findElementRefs false folder srcDoc el
+            let refs = Dest.findElementRefs false folder srcDoc el
             let byDoc = refs |> groupByFirst
 
             let linkEdits =

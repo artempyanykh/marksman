@@ -3,6 +3,7 @@
 open System
 open System.IO
 
+open FSharpPlus.Data
 open FSharpPlus.Operators
 open FSharpPlus.GenericBuilders
 open Ionide.LanguageServerProtocol.Types
@@ -18,6 +19,12 @@ type DocRef =
     | Url of url: string
 
 module DocRef =
+    let ofUrl url : option<DocRef> =
+        if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
+            None
+        else
+            Some(DocRef.Url url)
+
     let tryResolveToRootPath
         (folderPath: string)
         (srcDocPath: string)
@@ -26,7 +33,7 @@ module DocRef =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
             None
         else if url.StartsWith('/') then
-            Some(url.TrimStart('/'))
+            Some(url.AbsPathUrlEncodedToRelPath())
         else
             try
                 let srcDirComponents =
@@ -36,7 +43,7 @@ module DocRef =
                 if srcDocPath.StartsWith('/') && srcDirComponents[0] = "" then
                     srcDirComponents[0] <- "/"
 
-                let urlComponents = url.Split('\\', '/')
+                let urlComponents = url.AbsPathUrlEncodedToRelPath().Split('\\', '/')
                 let allComponents = Array.append srcDirComponents urlComponents
                 let targetPath = Path.Combine(allComponents)
                 let targetPathNormalized = (PathUri.fromString targetPath).LocalPath
@@ -59,14 +66,19 @@ module DocRef =
             | :? UriFormatException
             | :? InvalidOperationException -> None
 
-    let tryFindDoc (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : option<Doc> =
+    let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : seq<Doc> =
         match docRef with
-        | DocRef.Title title -> Folder.tryFindDocBySlug (Slug.ofString title) folder
+        | DocRef.Title title -> Folder.filterDocsBySlug (Slug.ofString title) folder
         | DocRef.Url url ->
             let url =
                 tryResolveToRootPath srcDoc.rootPath.LocalPath srcDoc.path.LocalPath url
 
-            url >>= flip Folder.tryFindDocByUrl folder
+            match url >>= fun url -> Folder.tryFindDocByUrl url folder with
+            | Some doc -> [ doc ]
+            | _ -> []
+
+    let tryFindFirstDoc (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : option<Doc> =
+        filterMatchingDocs folder srcDoc docRef |> Seq.tryHead
 
 /// Unresolved reference.
 [<RequireQualifiedAccess>]
@@ -87,11 +99,13 @@ module Uref =
         | ML ml ->
             match ml.data with
             | MdLink.IL (_, Some url, _) ->
-                let docUrl = DocUrl.ofUrlNode url
+                let docUrl = Url.ofUrlNode url
 
                 match docUrl.url, docUrl.anchor with
-                | Some url, Some anchor -> Uref.Heading(Some(DocRef.Url url.text), anchor) |> Some
-                | Some url, None -> Uref.Doc(DocRef.Url url.text) |> Some
+                | Some url, Some anchor ->
+                    DocRef.ofUrl url.text
+                    |> Option.map (fun url -> Uref.Heading(Some(url), anchor))
+                | Some url, None -> DocRef.ofUrl url.text |> Option.map Uref.Doc
                 | None, Some anchor -> Uref.Heading(None, anchor) |> Some
                 | None, None -> None
             | MdLink.IL (_, None, _) -> None
@@ -111,84 +125,105 @@ module Uref =
 
 /// Resolved reference.
 [<RequireQualifiedAccess>]
-type Ref =
+type Dest =
     | Doc of Doc
     | Heading of Doc * Node<Heading>
     | LinkDef of Doc * Node<MdLinkDef>
 
-module Ref =
-    let doc: Ref -> Doc =
+module Dest =
+    let doc: Dest -> Doc =
         function
-        | Ref.Doc doc -> doc
-        | Ref.Heading (doc, _) -> doc
-        | Ref.LinkDef (doc, _) -> doc
+        | Dest.Doc doc -> doc
+        | Dest.Heading (doc, _) -> doc
+        | Dest.LinkDef (doc, _) -> doc
 
-    let element: Ref -> Element option =
+    let element: Dest -> Element option =
         function
-        | Ref.Doc d -> Doc.title d |>> H
-        | Ref.Heading (_, h) -> Some(H h)
-        | Ref.LinkDef (_, ld) -> Some(MLD ld)
+        | Dest.Doc d -> Doc.title d |>> H
+        | Dest.Heading (_, h) -> Some(H h)
+        | Dest.LinkDef (_, ld) -> Some(MLD ld)
 
-    let range: Ref -> Range =
+    let range: Dest -> Range =
         function
-        | Ref.Doc doc ->
+        | Dest.Doc doc ->
             Doc.title doc
             |> Option.map Node.range
             |> Option.defaultWith doc.text.FullRange
-        | Ref.Heading (_, heading) -> heading.range
-        | Ref.LinkDef (_, linkDef) -> linkDef.range
+        | Dest.Heading (_, heading) -> heading.range
+        | Dest.LinkDef (_, linkDef) -> linkDef.range
 
-    let scope: Ref -> Range =
+    let scope: Dest -> Range =
         function
-        | Ref.Doc doc -> doc.text.FullRange()
-        | Ref.Heading (_, heading) -> heading.data.scope
-        | Ref.LinkDef (_, linkDef) -> linkDef.range
+        | Dest.Doc doc -> doc.text.FullRange()
+        | Dest.Heading (_, heading) -> heading.data.scope
+        | Dest.LinkDef (_, linkDef) -> linkDef.range
 
-    let tryResolveUref (uref: Uref) (srcDoc: Doc) (folder: Folder) : option<Ref> =
+    let uri (ref: Dest) : DocumentUri = doc ref |> Doc.uri
+
+    let location (ref: Dest) : Location = { Uri = uri ref; Range = range ref }
+
+    let tryResolveUref (uref: Uref) (srcDoc: Doc) (folder: Folder) : seq<Dest> =
         match uref with
         | Uref.LinkDef label ->
             let ld = srcDoc.index |> Index.tryFindLinkDef label.text
-            ld |>> fun x -> Ref.LinkDef(srcDoc, x)
+
+            match ld |>> fun x -> Dest.LinkDef(srcDoc, x) with
+            | None -> Seq.empty
+            | Some ld -> [ ld ]
         | Uref.Doc docRef ->
-            let doc = DocRef.tryFindDoc folder srcDoc docRef
-            doc |>> Ref.Doc
+            let doc = DocRef.filterMatchingDocs folder srcDoc docRef
+            doc |>> Dest.Doc
         | Uref.Heading (docRef, heading) ->
-            let doc =
+            let matchingDocs =
                 docRef
-                >>= DocRef.tryFindDoc folder srcDoc
-                |> Option.defaultValue srcDoc
+                |> Option.map (DocRef.filterMatchingDocs folder srcDoc)
+                |> Option.defaultValue [ srcDoc ]
 
-            let heading =
-                doc.index |> Index.tryFindHeadingBySlug (Slug.ofString heading.text)
+            seq {
+                for doc in matchingDocs do
+                    let headings =
+                        doc.index |> Index.filterHeadingBySlug (Slug.ofString heading.text)
 
-            heading |>> fun h -> Ref.Heading(doc, h)
+                    for h in headings do
+                        yield Dest.Heading(doc, h)
+            }
 
-    let tryResolveLink (folder: Folder) (doc: Doc) (link: Element) : option<Ref> =
-        Uref.ofElement link >>= fun uref -> tryResolveUref uref doc folder
+    let tryResolveElement (folder: Folder) (doc: Doc) (element: Element) : seq<Dest> =
+        match Uref.ofElement element with
+        | Some uref -> tryResolveUref uref doc folder
+        | None -> Seq.empty
 
-    let resolveLinks (folder: Folder) (doc: Doc) : Map<Element, Ref> =
+    let resolveLinks (folder: Folder) (doc: Doc) : Map<Element, list<Dest>> =
         let links = Index.links doc.index
 
         links
         |> Seq.collect (fun link ->
-            match tryResolveLink folder doc link with
-            | Some ref -> [ link, ref ]
-            | _ -> [])
+            match tryResolveElement folder doc link |> Seq.toList with
+            | refs -> [ link, refs ])
         |> Map.ofSeq
 
-    let private findReferencingElements (refMap: Map<Element, Ref>) (target: Ref) : seq<Element> =
+    let private findReferencingElements
+        (refMap: Map<Element, list<Dest>>)
+        (target: Dest)
+        : seq<Element> =
         seq {
-            for KeyValue (el, ref) in refMap do
+            for KeyValue (el, refs) in refMap do
                 match target with
-                | Ref.Doc targetDoc ->
+                | Dest.Doc targetDoc ->
                     let curUref = Uref.ofElement el
 
                     let explicitDoc =
                         curUref |> Option.map Uref.hasExplicitDoc |> Option.defaultValue false
 
-                    if doc ref = targetDoc && explicitDoc then yield el else ()
-                | _ -> if target = ref then yield el else ()
+                    let doesMatch ref = explicitDoc && doc ref = targetDoc
+
+                    if List.exists doesMatch refs then
+                        yield el
+                | _ ->
+                    if List.exists ((=) target) refs then
+                        yield el
         }
+        |> Seq.sortBy Element.rangeStart
 
     /// Finds elements referencing `el`.
     /// When `el` is a link, it's resolved to its destination first and then references to the
@@ -199,44 +234,51 @@ module Ref =
         (srcDoc: Doc)
         (el: Element)
         : seq<Doc * Element> =
-        let declToFind =
+        let declsToFind =
             match el with
-            | MLD ld -> Ref.LinkDef(srcDoc, ld) |> Some
-            | H h when Heading.isTitle h.data -> Ref.Doc(srcDoc) |> Some
-            | H h -> Ref.Heading(srcDoc, h) |> Some
+            | MLD ld -> [ Dest.LinkDef(srcDoc, ld) ]
+            | H h when Heading.isTitle h.data -> [ Dest.Doc(srcDoc) ]
+            | H h -> [ Dest.Heading(srcDoc, h) ]
             | link when Element.isLink link ->
                 let linkToDecl = resolveLinks folder srcDoc
-                Map.tryFind link linkToDecl
-            | _ -> None
+                Map.tryFind link linkToDecl |> Option.defaultValue []
+            | _ -> []
 
-        let referencingEls: seq<Doc * Element> =
-            match declToFind with
-            | None -> []
-            | Some (Ref.LinkDef _ as ld) ->
-                let docRefs = resolveLinks folder srcDoc
-                findReferencingElements docRefs ld |> Seq.map (fun el -> srcDoc, el)
-            | Some refToFind ->
+        let resolveDecl includeDecl declToFind =
+            let targetDocs =
+                match declToFind with
+                | Dest.LinkDef _ -> [ srcDoc ]
+                | Dest.Heading _
+                | Dest.Doc _ -> folder.docs |> Map.values |> List.ofSeq
+
+            let referencingEls =
                 seq {
-                    for KeyValue (_, targetDoc) in folder.docs do
+                    for targetDoc in targetDocs do
                         let targetDocRefs = resolveLinks folder targetDoc
 
                         let backRefs =
-                            findReferencingElements targetDocRefs refToFind
+                            findReferencingElements targetDocRefs declToFind
                             |> Seq.map (fun el -> targetDoc, el)
 
                         yield! backRefs
                 }
 
-        if includeDecl then
-            let decl =
-                monad' {
-                    let! el = declToFind >>= element
-                    let! doc = declToFind |>> doc
-                    doc, el
-                }
+            let declEl =
+                if includeDecl then
+                    let decl =
+                        monad' {
+                            let! el = element declToFind
+                            let doc = doc declToFind
+                            doc, el
+                        }
 
-            match decl with
-            | Some (declDoc, declEl) -> Seq.append [ (declDoc, declEl) ] referencingEls
-            | _ -> referencingEls
-        else
-            referencingEls
+                    match decl with
+                    | Some decl -> [ decl ]
+                    | _ -> []
+                else
+                    []
+
+            Seq.append declEl referencingEls
+
+
+        declsToFind |> Seq.collect (resolveDecl includeDecl)

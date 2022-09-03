@@ -155,11 +155,8 @@ of contents of a document.
 
 Marksman by default reads ignore globs from `.gitignore`, `.hgignore`, and
 `.ignore` and doesn't scan directories matching any of the glob patterns.
-
-**NOTE**: Marksman will only read **top-level** ignore files, or in other words
-ignore files at the root of your workspace folder. This is unlike Git which
-supports ignore files inside any project folder. If the lack of support for non
-top-level ignore files affects your workflow do open an issue.
+Marksman will search for and read ignore files in all sub-folders of the
+workspace. similarly to what Git does.
 
 ### Workspace folders and project roots
 

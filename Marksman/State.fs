@@ -90,10 +90,16 @@ module State =
         tryFindFolderEnclosing uri state
         |> Option.defaultWith (fun _ -> failwith $"Expected folder now found: {uri}")
 
-    let tryFindDocument (uri: PathUri) (state: State) : option<Doc> =
+    let tryFindFolderAndDoc (uri: PathUri) (state: State) : option<Folder * Doc> =
         tryFindFolderEnclosing uri state
-        |> Option.map (Folder.tryFindDocByPath uri)
-        |> Option.flatten
+        |> Option.bind (fun folder ->
+            Folder.tryFindDocByPath uri folder
+            |> Option.map (fun doc -> folder, doc))
+
+    let tryFindDoc (uri: PathUri) (state: State) : option<Doc> =
+        match tryFindFolderAndDoc uri state with
+        | None -> None
+        | Some (_, doc) -> Some doc
 
     let updateFoldersFromLsp
         (added: WorkspaceFolder[])
@@ -128,27 +134,10 @@ module State =
           workspace = newWorkspace
           revision = state.revision + 1 }
 
-    let updateDocument (newDocument: Doc) (state: State) : State =
-        let folder = findFolderEnclosing newDocument.path state
-
-        let newDocs = folder.docs |> Map.add newDocument.path newDocument
-
-        let newFolder = { folder with docs = newDocs }
-
+    let updateFolder (newFolder: Folder) (state: State) : State =
         let newWs = Workspace.withFolder newFolder state.workspace
+        { state with workspace = newWs; revision = state.revision + 1 }
 
-        { client = state.client
-          workspace = newWs
-          revision = state.revision + 1 }
-
-
-    let removeDocument (path: PathUri) (state: State) : State =
-        let folder = findFolderEnclosing path state
-
-        let newFolder = Folder.removeDoc path folder
-
-        let newWs = Workspace.withFolder newFolder state.workspace
-
-        { client = state.client
-          workspace = newWs
-          revision = state.revision + 1 }
+    let removeFolder (keyPath: PathUri) (state: State) : State =
+        let newWs = Workspace.withoutFolder keyPath state.workspace
+        { state with workspace = newWs; revision = state.revision + 1 }

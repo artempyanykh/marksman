@@ -26,9 +26,9 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
     let headings = [ 1..7 ] |> List.map (fun n -> (String.replicate n "#"))
 
-    [ 0 .. doc.text.lineMap.NumLines ]
+    [ 0 .. (Doc.text doc).lineMap.NumLines ]
     |> List.collect (fun x ->
-        let line = doc.text.LineContent x
+        let line = (Doc.text doc).LineContent x
 
         let headingLike =
             List.tryFind (fun (h: string) -> line.StartsWith(h + nonBreakingWhitespace)) headings
@@ -62,7 +62,7 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
             [ AmbiguousLink(link, uref, refs) ]
 
 let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
-    let links = Index.links doc.index
+    let links = Doc.index >> Index.links <| doc
     links |> Seq.collect (checkLink folder doc)
 
 let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
@@ -75,7 +75,7 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
                 }
                 |> List.ofSeq
 
-            doc.path, docDiag
+            Doc.path doc, docDiag
     }
 
 let refToHuman (ref: Dest) : string =
@@ -175,7 +175,7 @@ type WorkspaceDiag = Map<PathUri, FolderDiag>
 module WorkspaceDiag =
     let mk (ws: Workspace) : WorkspaceDiag =
         Workspace.folders ws
-        |> Seq.map (fun folder -> folder.root, FolderDiag.mk folder)
+        |> Seq.map (fun folder -> (Folder.keyPath folder), FolderDiag.mk folder)
         |> Map.ofSeq
 
     let empty = Map.empty

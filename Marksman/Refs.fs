@@ -80,7 +80,7 @@ module DocRef =
         | DocRef.Title title -> Folder.filterDocsBySlug (Slug.ofString title) folder
         | DocRef.Url url ->
             let url =
-                tryResolveToRootPath srcDoc.rootPath.LocalPath srcDoc.path.LocalPath url
+                tryResolveToRootPath (Doc.rootPath srcDoc).LocalPath (Doc.path srcDoc).LocalPath url
 
             match url >>= fun url -> Folder.tryFindDocByUrl url folder with
             | Some doc -> [ doc ]
@@ -157,13 +157,13 @@ module Dest =
         | Dest.Doc doc ->
             Doc.title doc
             |> Option.map Node.range
-            |> Option.defaultWith doc.text.FullRange
+            |> Option.defaultWith (Doc.text doc).FullRange
         | Dest.Heading (_, heading) -> heading.range
         | Dest.LinkDef (_, linkDef) -> linkDef.range
 
     let scope: Dest -> Range =
         function
-        | Dest.Doc doc -> doc.text.FullRange()
+        | Dest.Doc doc -> (Doc.text doc).FullRange()
         | Dest.Heading (_, heading) -> heading.data.scope
         | Dest.LinkDef (_, linkDef) -> linkDef.range
 
@@ -174,7 +174,7 @@ module Dest =
     let tryResolveUref (uref: Uref) (srcDoc: Doc) (folder: Folder) : seq<Dest> =
         match uref with
         | Uref.LinkDef label ->
-            let ld = srcDoc.index |> Index.tryFindLinkDef label.text
+            let ld = srcDoc |> Doc.index |> Index.tryFindLinkDef label.text
 
             match ld |>> fun x -> Dest.LinkDef(srcDoc, x) with
             | None -> Seq.empty
@@ -191,7 +191,9 @@ module Dest =
             seq {
                 for doc in matchingDocs do
                     let headings =
-                        doc.index |> Index.filterHeadingBySlug (Slug.ofString heading.text)
+                        doc
+                        |> Doc.index
+                        |> Index.filterHeadingBySlug (Slug.ofString heading.text)
 
                     for h in headings do
                         yield Dest.Heading(doc, h)
@@ -203,7 +205,7 @@ module Dest =
         | None -> Seq.empty
 
     let resolveLinks (folder: Folder) (doc: Doc) : Map<Element, list<Dest>> =
-        let links = Index.links doc.index
+        let links = Index.links (Doc.index doc)
 
         links
         |> Seq.collect (fun link ->
@@ -258,7 +260,7 @@ module Dest =
                 match declToFind with
                 | Dest.LinkDef _ -> [ srcDoc ]
                 | Dest.Heading _
-                | Dest.Doc _ -> folder.docs |> Map.values |> List.ofSeq
+                | Dest.Doc _ -> Folder.docs folder |> List.ofSeq
 
             let referencingEls =
                 seq {

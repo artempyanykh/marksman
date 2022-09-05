@@ -13,7 +13,6 @@ open Marksman.Misc
 open Marksman.Cst
 open Marksman.Index
 
-open Microsoft.Extensions.FileSystemGlobbing
 open Microsoft.FSharp.Core
 
 type Doc =
@@ -23,12 +22,6 @@ type Doc =
       text: Text
       cst: Cst
       index: Index }
-
-    member this.RelPath: string =
-        let docPath = this.path.LocalPath
-        let folderPath = this.rootPath.LocalPath
-
-        Path.GetRelativePath(folderPath, docPath)
 
 module Doc =
     let logger = LogProvider.getLoggerByName "Doc"
@@ -43,6 +36,8 @@ module Doc =
           text = text
           cst = cst
           index = index }
+
+    let text doc = doc.text
 
     let withText newText doc =
         let newCst = parseText newText
@@ -78,13 +73,13 @@ module Doc =
 
         { withText newText doc with version = newVersion }
 
-    let fromLspDocument (root: PathUri) (item: TextDocumentItem) : Doc =
+    let fromLsp (root: PathUri) (item: TextDocumentItem) : Doc =
         let path = PathUri.fromString item.Uri
         let text = mkText item.Text
 
         mk path root (Some item.Version) text
 
-    let load (root: PathUri) (path: PathUri) : option<Doc> =
+    let tryLoad (root: PathUri) (path: PathUri) : option<Doc> =
         try
             let content =
                 using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
@@ -97,14 +92,24 @@ module Doc =
 
     let uri (doc: Doc) : DocumentUri = doc.path.DocumentUri
 
+    let rootPath (doc: Doc) : PathUri = doc.rootPath
+    let path (doc: Doc) : PathUri = doc.path
+
+    let pathFromRoot (doc: Doc) =
+        let docPath = doc.path.LocalPath
+        let folderPath = doc.rootPath.LocalPath
+        Path.GetRelativePath(folderPath, docPath)
+
     let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
 
     let index (doc: Doc) : Index = doc.index
 
+    let cst (doc: Doc) : Cst = doc.cst
+
     let name (doc: Doc) : string =
         match title doc with
         | Some { data = hd } -> Heading.name hd
-        | None -> doc.RelPath |> Path.GetFileNameWithoutExtension
+        | None -> pathFromRoot doc |> Path.GetFileNameWithoutExtension
 
     let slug (doc: Doc) : Slug = name doc |> Slug.ofString
 
@@ -120,15 +125,38 @@ module Doc =
 
     let version (doc: Doc) : option<int> = doc.version
 
-type Folder = { name: string; root: PathUri; docs: Map<PathUri, Doc> }
+type Folder =
+    | MultiFile of name: string * root: PathUri * docs: Map<PathUri, Doc>
+    | SingleFile of Doc
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
+
     let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
 
-    let tryFindDocByPath (uri: PathUri) (folder: Folder) : option<Doc> = Map.tryFind uri folder.docs
+    let singleFile doc = SingleFile doc
 
-    let docs (folder: Folder) : seq<Doc> = seq { for doc in folder.docs |> Map.values -> doc }
+    let multiFile name root docs = MultiFile(name, root, docs)
+
+    let docs: Folder -> seq<Doc> =
+        function
+        | SingleFile doc -> Seq.singleton doc
+        | MultiFile (_, _, docs) -> Map.values docs
+
+    let keyPath: Folder -> PathUri =
+        function
+        | MultiFile (_, root, _) -> root
+        | SingleFile doc -> doc.path
+
+    let rootPath: Folder -> PathUri =
+        function
+        | MultiFile (_, root, _) -> root
+        | SingleFile doc -> doc.rootPath
+
+    let tryFindDocByPath (uri: PathUri) : Folder -> option<Doc> =
+        function
+        | SingleFile doc -> Some doc |> Option.filter (fun x -> x.path = uri)
+        | MultiFile (_, _, docs) -> Map.tryFind uri docs
 
     let private readIgnoreFiles (root: PathUri) : array<string> =
         let lines = ResizeArray()
@@ -152,20 +180,6 @@ module Folder =
 
         lines.ToArray()
 
-    let buildGlobs (patterns: array<string>) : Matcher =
-        let matcher = Matcher().AddInclude("**")
-
-        matcher.AddExcludePatterns([| ".git"; ".hg" |])
-        matcher.AddExcludePatterns(patterns)
-        matcher
-
-    let shouldBeIgnored (ignores: Matcher) (root: string) (fullFilePath: string) : bool =
-        let shouldIgnore = ignores.Match(root, fullFilePath).HasMatches |> not
-        shouldIgnore
-
-    let shouldBeIgnoredByAny (ignoreFns: list<string -> bool>) (fullFilePath: string) : bool =
-        ignoreFns |> List.exists (fun f -> f fullFilePath)
-
     let private loadDocs (root: PathUri) : seq<Doc> =
 
         let rec collect (cur: PathUri) (ignoreFns: list<string -> bool>) =
@@ -184,7 +198,7 @@ module Folder =
                         if not (shouldBeIgnoredByAny ignoreFns file.FullName) then
                             let pathUri = PathUri.fromString file.FullName
 
-                            let document = Doc.load root pathUri
+                            let document = Doc.tryLoad root pathUri
 
                             match document with
                             | Some document -> yield document
@@ -232,7 +246,7 @@ module Folder =
             let documents =
                 loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
 
-            { name = name; root = root; docs = documents } |> Some
+            MultiFile(name = name, root = root, docs = documents) |> Some
         else
             logger.warn (
                 Log.setMessage "Folder path doesn't exist"
@@ -241,39 +255,70 @@ module Folder =
 
             None
 
-    let loadDoc (uri: PathUri) (folder: Folder) : Folder =
-        match Doc.load folder.root uri with
-        | Some doc -> { folder with docs = Map.add uri doc folder.docs }
-        | None -> folder
+    let withDoc (newDoc: Doc) : Folder -> Folder =
+        function
+        | MultiFile (name, root, docs) ->
+            if newDoc.rootPath <> root then
+                failwith
+                    $"Updating a folder with an unrelated doc: folder={root}; doc={newDoc.rootPath}"
 
-    let removeDoc (uri: PathUri) (folder: Folder) : Folder =
-        { folder with docs = Map.remove uri folder.docs }
+            MultiFile(name = name, root = root, docs = Map.add newDoc.path newDoc docs)
+        | SingleFile existingDoc ->
+            if newDoc.path <> existingDoc.path then
+                failwith
+                    $"Updating a singleton folder with an unrelated doc: folder={existingDoc.path}; doc={newDoc.rootPath}"
 
-    let addDoc (doc: Doc) (folder: Folder) : Folder =
-        { folder with docs = Map.add doc.path doc folder.docs }
+            SingleFile newDoc
 
+    let withoutDoc (docPath: PathUri) : Folder -> option<Folder> =
+        function
+        | MultiFile (name, root, docs) ->
+            MultiFile(name = name, root = root, docs = Map.remove docPath docs)
+            |> Some
+        | SingleFile doc ->
+            if doc.path <> docPath then
+                failwith
+                    $"Updating a singleton folder with an unrelated doc: folder={doc.path}; doc={docPath}"
+            else
+                None
+
+    let closeDoc (docPath: PathUri) (folder: Folder) : option<Folder> =
+        match folder with
+        | MultiFile (_, root, _) ->
+            match Doc.tryLoad root docPath with
+            | Some doc -> withDoc doc folder |> Some
+            | _ -> withoutDoc docPath folder
+        | SingleFile doc ->
+            if doc.path <> docPath then
+                failwith
+                    $"Updating a singleton folder with an unrelated doc: folder={doc.path}; doc={docPath}"
+            else
+                None
 
     let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
         let isMatchingDoc doc = Doc.slug doc = slug
 
-        folder.docs |> Map.values |> Seq.filter isMatchingDoc
+        docs folder |> Seq.filter isMatchingDoc
 
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()
 
         let isMatchingDoc (doc: Doc) =
-            let docUrl = doc.RelPath.AbsPathUrlEncode()
+            let docUrl = (Doc.pathFromRoot doc).AbsPathUrlEncode()
             docUrl = urlEncoded
 
-        folder.docs |> Map.values |> Seq.tryFind isMatchingDoc
+        docs folder |> Seq.tryFind isMatchingDoc
 
-    let docCount (folder: Folder) : int = folder.docs.Values.Count
+    let docCount: Folder -> int =
+        function
+        | SingleFile _ -> 1
+        | MultiFile (_, _, docs) -> docs.Values.Count
 
 type Workspace = { folders: Map<PathUri, Folder> }
 
 module Workspace =
     let ofFolders (folders: seq<Folder>) : Workspace =
-        { folders = folders |> Seq.map (fun f -> f.root, f) |> Map.ofSeq }
+        { folders = folders |> Seq.map (fun f -> Folder.keyPath f, f) |> Map.ofSeq }
 
     let folders (workspace: Workspace) : seq<Folder> =
         seq {
@@ -301,12 +346,12 @@ module Workspace =
         { workspace with folders = newFolders }
 
     let withFolder (folder: Folder) (workspace: Workspace) : Workspace =
-        { workspace with folders = Map.add folder.root folder workspace.folders }
+        { workspace with folders = Map.add (Folder.keyPath folder) folder workspace.folders }
 
     let withFolders (folders: seq<Folder>) (workspace: Workspace) : Workspace =
         let newFolders =
             folders
-            |> Seq.fold (fun fs f -> Map.add f.root f fs) workspace.folders
+            |> Seq.fold (fun fs f -> Map.add (Folder.keyPath f) f fs) workspace.folders
 
         { workspace with folders = newFolders }
 

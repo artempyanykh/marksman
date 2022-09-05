@@ -15,46 +15,46 @@ module FolderTests =
         [<Fact>]
         let absGlob_Unix () =
             if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
-                let glob = Folder.buildGlobs ([| "/node_modules" |])
+                let glob = buildGlobs [| "/node_modules" |]
                 let root = "/Users/john/notes"
                 let ignored = "/Users/john/notes/node_modules"
-                Folder.shouldBeIgnored glob root ignored |> Assert.True
+                shouldBeIgnored glob root ignored |> Assert.True
 
                 let notIgnored = "/Users/john/notes/real.md"
-                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+                shouldBeIgnored glob root notIgnored |> Assert.False
 
         [<Fact>]
         let relGlob_Unix () =
             if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
-                let glob = Folder.buildGlobs ([| "a/b" |])
+                let glob = buildGlobs [| "a/b" |]
                 let root = "/Users/john/notes"
                 let ignored = "/Users/john/notes/a/b"
-                Folder.shouldBeIgnored glob root ignored |> Assert.True
+                shouldBeIgnored glob root ignored |> Assert.True
 
                 let notIgnored = "/Users/john/notes/a/real.md"
-                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+                shouldBeIgnored glob root notIgnored |> Assert.False
 
         [<Fact>]
         let absGlob_Win () =
             if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
-                let glob = Folder.buildGlobs ([| "/node_modules" |])
+                let glob = buildGlobs [| "/node_modules" |]
                 let root = "C:\\notes"
                 let ignored = "C:\\notes\\node_modules"
-                Folder.shouldBeIgnored glob root ignored |> Assert.True
+                shouldBeIgnored glob root ignored |> Assert.True
 
                 let notIgnored = "C:\\notes\\real.md"
-                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+                shouldBeIgnored glob root notIgnored |> Assert.False
 
         [<Fact>]
         let relGlob_Win () =
             if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
-                let glob = Folder.buildGlobs ([| "a/b" |])
+                let glob = buildGlobs [| "a/b" |]
                 let root = "C:\\notes"
                 let ignored = "C:\\notes\\a\\b"
-                Folder.shouldBeIgnored glob root ignored |> Assert.True
+                shouldBeIgnored glob root ignored |> Assert.True
 
                 let notIgnored = "C:\\notes\\a\\real.md"
-                Folder.shouldBeIgnored glob root notIgnored |> Assert.False
+                shouldBeIgnored glob root notIgnored |> Assert.False
 
 
 module DocTest =
@@ -77,4 +77,4 @@ module DocTest =
                      Text = "[" } |] }
 
         let updated = Doc.applyLspChange insertChange empty
-        Assert.Equal("[", updated.text.content)
+        Assert.Equal("[", (Doc.text updated).content)

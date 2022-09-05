@@ -3,6 +3,7 @@ module Marksman.Misc
 open System
 open System.Text
 open Ionide.LanguageServerProtocol.Types
+open Microsoft.Extensions.FileSystemGlobbing
 
 let todo what = failwith $"{what} not implemented"
 
@@ -197,6 +198,20 @@ module PathUri =
                 localPathToUriString localPath
 
         { uri = escapedUri; localPath = localPath }
+
+let buildGlobs (patterns: array<string>) : Matcher =
+    let matcher = Matcher().AddInclude("**")
+
+    matcher.AddExcludePatterns([| ".git"; ".hg" |])
+    matcher.AddExcludePatterns(patterns)
+    matcher
+
+let shouldBeIgnored (ignores: Matcher) (root: string) (fullFilePath: string) : bool =
+    let shouldIgnore = ignores.Match(root, fullFilePath).HasMatches |> not
+    shouldIgnore
+
+let shouldBeIgnoredByAny (ignoreFns: list<string -> bool>) (fullFilePath: string) : bool =
+    ignoreFns |> List.exists (fun f -> f fullFilePath)
 
 
 type Position with

@@ -211,7 +211,7 @@ let calcDiagnosticsUpdate
             )
 
             for docUri in allDocs do
-                let existingDoc = prevState |> Option.bind (State.tryFindDocument docUri)
+                let existingDoc = prevState |> Option.bind (State.tryFindDoc docUri)
                 let existingDocVersion = Option.bind Doc.version existingDoc
 
                 let existingDocDiag =
@@ -220,7 +220,7 @@ let calcDiagnosticsUpdate
                     |> Option.map snd
                     |> Option.defaultValue [||]
 
-                let newDoc = State.tryFindDocument docUri newState
+                let newDoc = State.tryFindDoc docUri newState
                 let newDocVersion = Option.bind Doc.version newDoc
 
                 let newDocDiag =
@@ -473,7 +473,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         let folders = readWorkspace workspaceFolders
 
-        let numNotes = folders |> List.sumBy (fun x -> x.docs.Count)
+        let numNotes = folders |> List.sumBy Folder.docCount
 
         logger.debug (
             Log.setMessage "Completed reading workspace folders"
@@ -541,14 +541,13 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let docUri = par.TextDocument.Uri |> PathUri.fromString
 
-            let doc = State.tryFindDocument docUri state
-
             let newState =
-                match doc with
-                | Some doc ->
+                match State.tryFindFolderAndDoc docUri state with
+                | Some (folder, doc) ->
                     let newDoc = Doc.applyLspChange par doc
+                    let newFolder = Folder.withDoc newDoc folder
 
-                    State.updateDocument newDoc state |> Some
+                    State.updateFolder newFolder state |> Some
                 | _ ->
                     logger.warn (
                         Log.setMessage "Document not found"
@@ -569,12 +568,10 @@ type MarksmanServer(client: MarksmanClient) =
             match folder with
             | None -> Mutation.empty
             | Some folder ->
-                let docFromDisk = Doc.load folder.root path
-
                 let newState =
-                    match docFromDisk with
-                    | Some doc -> State.updateDocument doc state
-                    | _ -> State.removeDocument path state
+                    match Folder.closeDoc path folder with
+                    | Some folder -> State.updateFolder folder state
+                    | _ -> State.removeFolder (Folder.keyPath folder) state
 
                 Mutation.state newState
 
@@ -584,14 +581,20 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let path = par.TextDocument.Uri |> PathUri.fromString
 
-            let folder = State.tryFindFolderEnclosing path state
+            let newFolder =
+                match State.tryFindFolderEnclosing path state with
+                | None ->
+                    let singletonRoot =
+                        Path.GetDirectoryName path.LocalPath |> PathUri.fromString
 
-            match folder with
-            | None -> Mutation.empty
-            | Some folder ->
-                let document = Doc.fromLspDocument folder.root par.TextDocument
-                let newState = State.updateDocument document state
-                Mutation.state newState
+                    let doc = Doc.fromLsp singletonRoot par.TextDocument
+                    Folder.singleFile doc
+                | Some folder ->
+                    let doc = Doc.fromLsp (Folder.rootPath folder) par.TextDocument
+                    Folder.withDoc doc folder
+
+            let newState = State.updateFolder newFolder state
+            Mutation.state newState
 
     override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
         withStateExclusive
@@ -615,13 +618,13 @@ type MarksmanServer(client: MarksmanClient) =
                     >> Log.addContext "uri" docUri
                 )
 
-                let folder = State.tryFindFolderEnclosing docUri newState
-
-                match folder with
+                match State.tryFindFolderEnclosing docUri newState with
                 | None -> ()
                 | Some folder ->
-                    match Doc.load folder.root docUri with
-                    | Some doc -> newState <- State.updateDocument doc newState
+                    match Doc.tryLoad (Folder.rootPath folder) docUri with
+                    | Some doc ->
+                        let newFolder = Folder.withDoc doc folder
+                        newState <- State.updateFolder newFolder newState
                     | _ ->
                         logger.warn (
                             Log.setMessage "Couldn't load created document"
@@ -646,7 +649,12 @@ type MarksmanServer(client: MarksmanClient) =
                     >> Log.addContext "uri" uri
                 )
 
-                newState <- State.removeDocument uri newState
+                match State.tryFindFolderAndDoc uri state with
+                | None -> ()
+                | Some (folder, doc) ->
+                    match Folder.withoutDoc (Doc.path doc) folder with
+                    | None -> newState <- State.removeFolder (Folder.keyPath folder) newState
+                    | Some newFolder -> newState <- State.updateFolder newFolder newState
 
             Mutation.state newState
 
@@ -668,7 +676,7 @@ type MarksmanServer(client: MarksmanClient) =
                                     pars.Query.IsSubSequenceOf(Heading.name h))
 
                             let matchingSymbols =
-                                matchingHeadings |> Seq.map (headingToSymbolInfo doc.path)
+                                matchingHeadings |> Seq.map (headingToSymbolInfo (Doc.path doc))
 
                             yield! matchingSymbols
                 }
@@ -685,21 +693,21 @@ type MarksmanServer(client: MarksmanClient) =
 
                 if (State.client state).SupportsHierarchy then
                     let topLevelHeadings =
-                        doc.cst |> Seq.collect (Element.asHeading >> Option.toList)
+                        Doc.cst doc |> Seq.collect (Element.asHeading >> Option.toList)
 
                     topLevelHeadings
                     |> Seq.map (headingToDocumentSymbol (State.client state).IsEmacs)
                     |> Array.ofSeq
                     |> Second
                 else
-                    let allHeadings = Index.headings doc.index
+                    let allHeadings = Doc.index >> Index.headings <| doc
 
                     allHeadings
                     |> Seq.map (headingToSymbolInfo docUri)
                     |> Array.ofSeq
                     |> First
 
-            let response = State.tryFindDocument docUri state |> Option.map getSymbols
+            let response = State.tryFindDoc docUri state |> Option.map getSymbols
 
             LspResult.success response
 
@@ -731,7 +739,7 @@ type MarksmanServer(client: MarksmanClient) =
                 monad {
                     let! folder = State.tryFindFolderEnclosing docUri state
                     let! srcDoc = Folder.tryFindDocByPath docUri folder
-                    let! atPos = Doc.linkAtPos par.Position srcDoc
+                    let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
                     let! uref = Uref.ofElement atPos
 
                     let refs = Dest.tryResolveUref uref srcDoc folder
@@ -739,7 +747,7 @@ type MarksmanServer(client: MarksmanClient) =
                     let locs =
                         refs
                         |> Seq.map (fun ref ->
-                            { Uri = (Dest.doc ref).path.DocumentUri; Range = (Dest.range ref) })
+                            { Uri = ref |> Dest.doc |> Doc.uri; Range = (Dest.range ref) })
                         |> Array.ofSeq
 
                     if locs.Length = 0 then return! None
@@ -758,7 +766,7 @@ type MarksmanServer(client: MarksmanClient) =
                 monad {
                     let! folder = State.tryFindFolderEnclosing docUri state
                     let! srcDoc = Folder.tryFindDocByPath docUri folder
-                    let! atPos = Doc.linkAtPos par.Position srcDoc
+                    let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
                     let! uref = Uref.ofElement atPos
                     // NOTE: Due to ambiguity there may be several sources for hover. Since hover
                     // request requires a single result we return the first. When links are not
@@ -768,7 +776,9 @@ type MarksmanServer(client: MarksmanClient) =
                     let destScope = Dest.scope ref
 
                     let content =
-                        (Dest.doc ref).text.Substring destScope |> markdown |> MarkupContent
+                        (Dest.doc >> Doc.text <| ref).Substring destScope
+                        |> markdown
+                        |> MarkupContent
 
                     let hover = { Contents = content; Range = None }
 
@@ -788,12 +798,12 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder = State.tryFindFolderEnclosing docUri state
                     let! curDoc = Folder.tryFindDocByPath docUri folder
-                    let! atPos = Cst.elementAtPos par.Position curDoc.cst
+                    let! atPos = Cst.elementAtPos par.Position (Doc.cst curDoc)
 
                     let referencingEls =
                         Dest.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
 
-                    let toLoc (doc, el) = { Uri = doc.path.DocumentUri; Range = Element.range el }
+                    let toLoc (doc, el) = { Uri = Doc.uri doc; Range = Element.range el }
 
                     referencingEls |> Seq.map toLoc |> Array.ofSeq
                 }
@@ -849,7 +859,7 @@ type MarksmanServer(client: MarksmanClient) =
                   Edit = Some edit }
 
             let tocAction =
-                State.tryFindDocument docPath state
+                State.tryFindDoc docPath state
                 |> Option.bind CodeActions.tableOfContents
                 |> Option.toArray
                 |> Array.map (fun ca ->

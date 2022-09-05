@@ -20,15 +20,15 @@ let documentEdit range text documentUri : WorkspaceEdit =
 
     { Changes = Some workspaceChanges; DocumentChanges = None }
 
-let tableOfContents (document: Doc) : DocumentAction option =
-    match TableOfContents.mk document.index with
+let tableOfContents (doc: Doc) : DocumentAction option =
+    match TableOfContents.mk (Doc.index doc) with
     | Some toc ->
         let rendered = TableOfContents.render toc
-        let existingRange = TableOfContents.detect document.text
+        let existingRange = TableOfContents.detect (Doc.text doc)
 
         let isSame =
             existingRange
-            |> Option.map document.text.Substring
+            |> Option.map (Doc.text doc).Substring
             |> Option.map (TableOfContents.isSame rendered)
             |> Option.defaultValue false
 
@@ -43,7 +43,7 @@ let tableOfContents (document: Doc) : DocumentAction option =
             let insertionPoint =
                 match existingRange with
                 | Some range -> Replacing range
-                | None -> TableOfContents.insertionPoint document
+                | None -> TableOfContents.insertionPoint doc
 
             logger.trace (
                 Log.setMessage "Determining table of contents insertion point"
@@ -52,7 +52,7 @@ let tableOfContents (document: Doc) : DocumentAction option =
                 >> Log.addContext "text" rendered
             )
 
-            let isEmpty lineNumber = document.text.LineContent(lineNumber).IsWhitespace()
+            let isEmpty lineNumber = (Doc.text doc).LineContent(lineNumber).IsWhitespace()
 
             let emptyLine = NewLine + NewLine
             let lineBreak = NewLine
@@ -81,7 +81,7 @@ let tableOfContents (document: Doc) : DocumentAction option =
                     let newRange = Range.Mk(lineAfterLast, 0, lineAfterLast, 0)
 
                     let before = if isEmpty range.End.Line then "" else lineBreak
-                    let after = if isEmpty (lineAfterLast) then lineBreak else emptyLine
+                    let after = if isEmpty lineAfterLast then lineBreak else emptyLine
 
                     newRange, before, after
 

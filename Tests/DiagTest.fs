@@ -26,7 +26,8 @@ let documentIndex_1 () =
     let doc = FakeDoc.Mk "# T1\n# T2"
 
     let titles =
-        Index.titles doc.index |> Array.map (fun x -> x.data.title.text)
+        Doc.index >> Index.titles <| doc
+        |> Array.map (fun x -> x.data.title.text)
 
     Assert.Equal<string>([ "T1"; "T2" ], titles)
 
@@ -64,11 +65,17 @@ let noDiagOnRealUrls () =
         [ "fake.md", "Link to non-existent document at 'www.bad.md'" ],
         diag
     )
-    
+
 [<Fact>]
 let noDiagOnNonMarkdownFiles () =
     let doc =
-        FakeDoc.Mk([| "# H1"; "## H2"; "[](bad.md)"; "[](another%20bad.md)"; "[](good/folder)" |])
+        FakeDoc.Mk(
+            [| "# H1"
+               "## H2"
+               "[](bad.md)"
+               "[](another%20bad.md)"
+               "[](good/folder)" |]
+        )
 
     let folder = FakeFolder.Mk([ doc ])
     let diag = checkFolder folder |> diagToHuman

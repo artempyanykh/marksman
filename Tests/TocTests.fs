@@ -1,5 +1,6 @@
 module Marksman.TocTests
 
+open Marksman.Workspace
 open Xunit
 
 open Marksman.Helpers
@@ -12,7 +13,7 @@ module DetectToc =
     let detectToc_1 () =
         let doc = FakeDoc.Mk "# T1\n# T2"
 
-        let titles = TableOfContents.detect doc.text
+        let titles = TableOfContents.detect (Doc.text doc)
 
         Assert.Equal(titles, None)
 
@@ -21,7 +22,7 @@ module DetectToc =
         let doc =
             FakeDoc.Mk [| "- [T1][#t1]"; " - [T2][#t2]"; ""; ""; "# T1"; "## T2" |]
 
-        let titles = TableOfContents.detect doc.text
+        let titles = TableOfContents.detect (Doc.text doc)
 
         Assert.Equal(titles, None)
 
@@ -36,11 +37,11 @@ module DetectToc =
                    "# T1"
                    "## T2" |]
 
-        let toc = (TableOfContents.detect doc.text).Value
-        let tocText = doc.text.Substring toc
+        let toc = (TableOfContents.detect (Doc.text doc)).Value
+        let tocText = (Doc.text doc).Substring toc
 
         let expectedTocText =
-            let line num = doc.text.LineContent(num)
+            let line num = (Doc.text doc).LineContent(num)
 
             String.concat System.Environment.NewLine ([| 0..3 |] |> Array.map line)
 
@@ -54,7 +55,7 @@ module CreateToc =
     let createToc () =
         let doc = FakeDoc.Mk [| "# T1"; "## T2" |]
 
-        let titles = TableOfContents.mk doc.index |> Option.get
+        let titles = TableOfContents.mk (Doc.index doc) |> Option.get
 
         let expected = { entries = [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
 
@@ -72,7 +73,7 @@ module CreateToc =
                    "# T1"
                    "## T2" |]
 
-        let titles = TableOfContents.mk doc.index |> Option.get
+        let titles = TableOfContents.mk (Doc.index doc) |> Option.get
 
         let expected = { entries = [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
 
@@ -96,7 +97,7 @@ module InsertToc =
         let doc = FakeDoc.Mk [| "# T1"; "## T2" |]
 
         let insertion = TableOfContents.insertionPoint doc
-        let firstTitleRange = Array.head(doc.index.titles).range
+        let firstTitleRange = Array.head((Doc.index doc).titles).range
 
         Assert.Equal(insertion, After firstTitleRange)
 
@@ -114,7 +115,7 @@ module InsertToc =
 
 
         let insertion = TableOfContents.insertionPoint doc
-        let yamlRange = Option.get(doc.index.yamlFrontMatter).range
+        let yamlRange = Option.get((Doc.index doc).yamlFrontMatter).range
 
         Assert.Equal(insertion, After yamlRange)
 
@@ -132,7 +133,7 @@ module InsertToc =
 
 
         let insertion = TableOfContents.insertionPoint doc
-        let firstTitleRange = Array.head(doc.index.titles).range
+        let firstTitleRange = Array.head((Doc.index doc).titles).range
 
         Assert.Equal(insertion, After firstTitleRange)
 
@@ -143,7 +144,9 @@ module RenderToc =
         let doc = FakeDoc.Mk [| "# T1"; "## T2"; "### T3"; "## T4"; "### T5" |]
 
         let titles =
-            TableOfContents.mk doc.index |> Option.get |> TableOfContents.render
+            TableOfContents.mk (Doc.index doc)
+            |> Option.get
+            |> TableOfContents.render
 
         let expectedLines =
             [| StartMarker
@@ -327,7 +330,7 @@ module DocumentEdit =
         let action = CodeActions.tableOfContents doc
 
         Assert.Equal(None, action)
-        
+
     [<Fact>]
     let upToDate_whitespace_noUpdate () =
         let text =

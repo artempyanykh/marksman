@@ -1,11 +1,11 @@
 module Marksman.Refactor
 
-open System
 open Ionide.LanguageServerProtocol.Types
+
 open Marksman.Workspace
-open Cst
-open Misc
-open Refs
+open Marksman.Cst
+open Marksman.Misc
+open Marksman.Refs
 
 type RenameResult =
     | Edit of WorkspaceEdit
@@ -61,7 +61,7 @@ let renameMarkdownLabelsInDoc newLabel (doc: Doc, els) =
         Seq.collect (renameMarkdownLabel newLabel >> Option.toArray) els
         |> Array.ofSeq
 
-    let lspDoc = { Uri = doc.path.DocumentUri; Version = doc.version }
+    let lspDoc = { Uri = (Doc.uri doc); Version = Doc.version doc }
     { TextDocument = lspDoc; Edits = edits }
 
 let renameHeadingLink (heading: Heading) (newSlug: Slug) (element: Element) : option<TextEdit> =
@@ -91,7 +91,7 @@ let renameHeadingLinksInDoc heading newTitle (doc: Doc, els) =
         Seq.collect (renameHeadingLink heading newSlug >> Option.toArray) els
         |> Array.ofSeq
 
-    let lspDoc = { Uri = doc.path.DocumentUri; Version = doc.version }
+    let lspDoc = { Uri = Doc.uri doc; Version = Doc.version doc }
     { TextDocument = lspDoc; Edits = edits }
 
 let combineDocumentEdits (e1s: array<TextDocumentEdit>) (e2s: array<TextDocumentEdit>) =
@@ -122,7 +122,7 @@ let rename
     (pos: Position)
     (newName: string)
     : RenameResult =
-    match Cst.elementAtPos pos srcDoc.cst with
+    match Cst.elementAtPos pos (Doc.cst srcDoc) with
     | None -> Skip
     | Some (ML link as el) ->
         match MdLink.referenceLabel link.data with
@@ -160,7 +160,7 @@ let rename
             Error $"Not a valid title: {newName}"
         else if heading.title.range.ContainsInclusive pos then
             let headingEdit =
-                let lspDoc = { Uri = srcDoc.path.DocumentUri; Version = srcDoc.version }
+                let lspDoc = { Uri = Doc.uri srcDoc; Version = Doc.version srcDoc }
                 let edit = { Range = heading.title.range; NewText = newName }
                 { TextDocument = lspDoc; Edits = [| edit |] }
 
@@ -182,7 +182,7 @@ let rename
     | _ -> Skip
 
 let renameRange (srcDoc: Doc) (pos: Position) : option<Range> =
-    match Cst.elementAtPos pos srcDoc.cst with
+    match Cst.elementAtPos pos (Doc.cst srcDoc) with
     | None -> None
     | Some (ML link) ->
         match MdLink.referenceLabel link.data with

@@ -201,12 +201,12 @@ let findCompAtPoint (pos: Position) (doc: Doc) : option<Compl> =
 
     match elComp with
     | Some _ -> elComp
-    | None -> compOfText pos doc.text
+    | None -> compOfText pos (Doc.text doc)
 
 let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<CompletionItem> =
     match comp with
     | Compl.WikiTitle (range, needsClosing) ->
-        let input = srcDoc.text.Substring(range)
+        let input = (Doc.text srcDoc).Substring(range)
         let inputSlug = Slug.ofString input
 
         let titleWhenMatch (doc: Doc) =
@@ -218,8 +218,7 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
                 if Slug.isSubSequence inputSlug titleSlug then [ doc, title ] else []
             | None -> []
 
-        let matchingTitles =
-            folder.docs |> Map.values |> Seq.collect titleWhenMatch
+        let matchingTitles = Folder.docs folder |> Seq.collect titleWhenMatch
 
         let toCompletionItem (doc: Doc, title: string) =
             let newText =
@@ -228,7 +227,7 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
             let textEdit = { Range = range; NewText = newText }
 
             { CompletionItem.Create(title) with
-                Detail = Some doc.RelPath
+                Detail = Some(Doc.pathFromRoot doc)
                 TextEdit = Some textEdit
                 FilterText = Some title }
 
@@ -244,16 +243,16 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
                     let docSlug = Slug.ofString (Doc.name doc)
                     docSlug = destDocSlug
 
-                folder.docs |> Map.values |> Seq.tryFind matchTitle
+                Folder.docs folder |> Seq.tryFind matchTitle
 
         match destDoc with
         | None -> [||]
         | Some destDoc ->
-            let input = srcDoc.text.Substring(range)
+            let input = (Doc.text srcDoc).Substring(range)
             let inputSlug = Slug.ofString input
 
             let matchingHeadings =
-                Doc.headings destDoc
+                Doc.index >> Index.headings <| destDoc
                 |> Seq.filter (fun { data = h } -> h.level <> 1)
                 |> Seq.map (fun { data = h } -> Heading.name h)
                 |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
@@ -273,10 +272,12 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
 
             matchingHeadings |> Seq.map toCompletionItem |> Array.ofSeq
     | Compl.LinkReference (range, needsClosing) ->
-        let input = srcDoc.text.Substring(range)
+        let input = (Doc.text srcDoc).Substring(range)
 
         let matchingDefs =
-            Doc.linkDefs srcDoc
+            srcDoc
+            |> Doc.index
+            |> Index.linkDefs
             |> Seq.filter (fun { data = def } -> input.IsSubSequenceOf(def.label.text))
             |> Seq.map Node.data
 
@@ -295,23 +296,25 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
 
         matchingDefs |> Seq.map toCompletionItem |> Array.ofSeq
     | Compl.DocPath (range, needsClosing) ->
-        let input = srcDoc.text.Substring(range)
+        let input = (Doc.text srcDoc).Substring(range)
 
         let isMatching (doc: Doc) =
-            input.IsSubSequenceOf(doc.RelPath)
-            || input.IsSubSequenceOf(doc.RelPath.AbsPathUrlEncode())
+            input.IsSubSequenceOf(Doc.pathFromRoot doc)
+            || input.IsSubSequenceOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
 
-        let matchingDocs = folder.docs |> Map.values |> Seq.filter isMatching
+        let matchingDocs = Folder.docs folder |> Seq.filter isMatching
 
         let toCompletionItem (doc: Doc) =
-            let newText = doc.RelPath.AbsPathUrlEncode()
+            let docRelPath = Doc.pathFromRoot doc
+
+            let newText = docRelPath.AbsPathUrlEncode()
             let newText = if needsClosing then newText + ")" else newText
             let textEdit = { Range = range; NewText = newText }
 
-            { CompletionItem.Create(doc.RelPath) with
+            { CompletionItem.Create(docRelPath) with
                 Detail = Some(Doc.name doc)
                 TextEdit = Some textEdit
-                FilterText = Some doc.RelPath }
+                FilterText = Some docRelPath }
 
         matchingDocs |> Seq.map toCompletionItem |> Array.ofSeq
     | Compl.DocAnchor (destDocUrl, range, needsClosing) ->
@@ -323,11 +326,11 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
             | None -> [| srcDoc |]
 
         let completionsInDoc (destDoc: Doc) : array<CompletionItem> =
-            let input = srcDoc.text.Substring(range)
+            let input = (Doc.text srcDoc).Substring(range)
             let inputSlug = Slug.ofString input
 
             let matchingHeadings =
-                Doc.headings destDoc
+                Doc.index >> Index.headings <| destDoc
                 |> Seq.map (fun { data = h } -> Heading.name h)
                 |> Seq.filter (fun h -> (Slug.ofString h) |> Slug.isSubSequence inputSlug)
                 // There may be several headings with the same name.

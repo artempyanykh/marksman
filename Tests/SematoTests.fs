@@ -21,7 +21,7 @@ Start with [[a-wiki-link]]. Then a [ref-link].
 End with [[wiki-link-no-eol]]"""
 
     let doc = Doc.mk docPath folderPath None (Text.mkText content)
-    let data = Token.ofIndexEncoded doc.index
+    let data = Token.ofIndexEncoded (Doc.index doc)
     Assert.Equal(4 * 5, data.Length)
 
     Assert.Equal<uint32>([| 1u; 11u; 15u; 0u; 0u |], nthToken data 0)

@@ -118,15 +118,14 @@ let folder = FakeFolder.Mk [ doc1; doc2 ]
 
 let stripRefs (refs: seq<Doc * Element>) =
     refs
-    |> Seq.map (fun (doc, el) ->
-        Path.GetFileName(doc.path.DocumentUri), (Element.range el).DebuggerDisplay)
+    |> Seq.map (fun (doc, el) -> Path.GetFileName(Doc.uri doc), (Element.range el).DebuggerDisplay)
     |> Array.ofSeq
 
 module RefsTests =
     [<Fact>]
     let refToLinkDef_atDef () =
         let def =
-            Cst.elementAtPos (Position.Mk(16, 3)) doc2.cst
+            Cst.elementAtPos (Position.Mk(16, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
         let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
@@ -139,7 +138,7 @@ module RefsTests =
     [<Fact>]
     let refToLinkDef_atDef_withDecl () =
         let def =
-            Cst.elementAtPos (Position.Mk(16, 3)) doc2.cst
+            Cst.elementAtPos (Position.Mk(16, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
         let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
@@ -154,7 +153,7 @@ module RefsTests =
     [<Fact>]
     let refToLinkDef_atLink () =
         let def =
-            Cst.elementAtPos (Position.Mk(8, 4)) doc2.cst
+            Cst.elementAtPos (Position.Mk(8, 4)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
         let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
@@ -167,7 +166,7 @@ module RefsTests =
     [<Fact>]
     let refToLinkDef_atLink_withDecl () =
         let def =
-            Cst.elementAtPos (Position.Mk(8, 4)) doc2.cst
+            Cst.elementAtPos (Position.Mk(8, 4)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
         let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
@@ -182,7 +181,7 @@ module RefsTests =
     [<Fact>]
     let refToDoc_atTitle () =
         let title =
-            Cst.elementAtPos (Position.Mk(0, 2)) doc1.cst
+            Cst.elementAtPos (Position.Mk(0, 2)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
         let refs = Dest.findElementRefs false folder doc1 title |> stripRefs
@@ -197,7 +196,7 @@ module RefsTests =
     [<Fact>]
     let refToDoc_atTitle_withDecl () =
         let title =
-            Cst.elementAtPos (Position.Mk(0, 2)) doc1.cst
+            Cst.elementAtPos (Position.Mk(0, 2)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
         let refs = Dest.findElementRefs true folder doc1 title |> stripRefs
@@ -213,7 +212,7 @@ module RefsTests =
     [<Fact>]
     let refToDoc_atLink () =
         let wl =
-            Cst.elementAtPos (Position.Mk(4, 4)) doc1.cst
+            Cst.elementAtPos (Position.Mk(4, 4)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
         let refs = Dest.findElementRefs false folder doc1 wl |> stripRefs
@@ -226,7 +225,7 @@ module RefsTests =
     [<Fact>]
     let refToDoc_atLink_withDecl () =
         let wl =
-            Cst.elementAtPos (Position.Mk(4, 4)) doc1.cst
+            Cst.elementAtPos (Position.Mk(4, 4)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
         let refs = Dest.findElementRefs true folder doc1 wl |> stripRefs
@@ -237,5 +236,3 @@ module RefsTests =
             [ "(doc2.md, (10,0)-(10,9))"
               "(doc1.md, (4,0)-(4,16))"
               "(doc2.md, (6,0)-(6,11))" ]
-
-// TODO: add tests for title refs

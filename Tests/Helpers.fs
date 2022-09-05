@@ -24,7 +24,7 @@ let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<str
     lines.ShouldMatchInlineSnapshot(snapshot)
 
 let applyDocumentAction (doc: Doc) (action: DocumentAction) : string =
-    let (before, after) = doc.text.Cutout(action.edit)
+    let (before, after) = (Doc.text doc).Cutout(action.edit)
 
     before + action.newText + after
 
@@ -56,9 +56,7 @@ type FakeDoc =
 type FakeFolder =
     class
         static member Mk(docs: seq<Doc>) : Folder =
-            let docsMap = docs |> Seq.map (fun d -> d.path, d) |> Map.ofSeq
+            let docsMap = docs |> Seq.map (fun d -> Doc.path d, d) |> Map.ofSeq
 
-            { name = "dummy"
-              root = PathUri.fromString dummyRootUri
-              docs = docsMap }
+            Folder.multiFile "dummy" (PathUri.fromString dummyRootUri) docsMap
     end

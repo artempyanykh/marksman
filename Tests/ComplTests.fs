@@ -292,7 +292,7 @@ module Candidates =
                    "#B"
                    "## H2"
                    "[](/doc%202.md#)" |] // 6
-                //  012345678901234567890
+        //  012345678901234567890
         )
 
     let doc2 =
@@ -302,15 +302,15 @@ module Candidates =
 
     [<Fact>]
     let noDupsOnAchor_intraFile () =
-        let cand = findCandidates (Position.Mk(1, 3)) doc1.path folder
+        let cand = findCandidates (Position.Mk(1, 3)) (Doc.path doc1) folder
         checkSnapshot cand
 
     [<Fact>]
     let noDupsOnAchor_crossFile () =
-        let cand = findCandidates (Position.Mk(1, 3)) doc1.path folder
+        let cand = findCandidates (Position.Mk(1, 3)) (Doc.path doc1) folder
         checkSnapshot cand
-        
+
     [<Fact>]
     let fileWithSpaces_anchor () =
-        let cand = findCandidates (Position.Mk(6, 15)) doc1.path folder
+        let cand = findCandidates (Position.Mk(6, 15)) (Doc.path doc1) folder
         checkSnapshot cand

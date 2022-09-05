@@ -1,13 +1,13 @@
 module Marksman.Toc
 
+open Ionide.LanguageServerProtocol.Types
+open Ionide.LanguageServerProtocol.Logging
+
 open Marksman.Misc
 open Marksman.Index
 open Marksman.Cst
 open Marksman.Text
-open Ionide.LanguageServerProtocol.Types
-open Ionide.LanguageServerProtocol.Logging
-
-open type System.Environment
+open Marksman.Workspace
 
 [<Literal>]
 let StartMarker = """<!--toc:start-->"""
@@ -55,12 +55,14 @@ module TableOfContents =
         else
             Some { entries = Array.map Entry.fromHeading headings }
 
-    let insertionPoint (doc: Workspace.Doc) : InsertionPoint =
-        match (Array.toList doc.index.titles) with
+    let insertionPoint (doc: Doc) : InsertionPoint =
+        let index = Doc.index doc
+
+        match (Array.toList index.titles) with
         // if there's only a single title
         | [ singleTitle ] -> After singleTitle.range
         | _ ->
-            match doc.index.yamlFrontMatter with
+            match index.yamlFrontMatter with
             | None -> DocumentBeginning
             | Some yml -> After yml.range
 
@@ -107,7 +109,7 @@ module TableOfContents =
                     else
                         go (i + 1) BeforeMarker
                 // if we are in collecting mode, just expand the selection
-                | Collecting (range) ->
+                | Collecting range ->
                     let toThisLine = expandToThisLine range
 
                     if isEndMarker then

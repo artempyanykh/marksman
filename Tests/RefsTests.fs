@@ -13,8 +13,11 @@ open Marksman.Refs
 module DocRefTests =
     [<Fact>]
     let relPath_1 () =
-        let folder = dummyRootPath [ "rootFolder" ]
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+        let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> PathUri.ofString
 
         let actual =
             DocRef.tryResolveToRootPath folder docPath "../doc.md" |> Option.get
@@ -23,8 +26,10 @@ module DocRefTests =
 
     [<Fact>]
     let relPath_2 () =
-        let folder = dummyRootPath [ "rootFolder" ]
-        let docPath = dummyRootPath [ "rootFolder"; "doc1.md" ]
+        let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "doc1.md" ] |> PathUri.ofString
 
         let actual =
             DocRef.tryResolveToRootPath folder docPath "./doc2.md" |> Option.get
@@ -33,16 +38,21 @@ module DocRefTests =
 
     [<Fact>]
     let relPath_non_exist () =
-        let folder = dummyRootPath [ "rootFolder" ]
-        let docPath = dummyRootPath [ "rootFolder"; "doc1.md" ]
+        let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "doc1.md" ] |> PathUri.ofString
 
         let actual = DocRef.tryResolveToRootPath folder docPath "../doc2.md"
         Assert.Equal(None, actual)
 
     [<Fact>]
     let rootPath () =
-        let folder = dummyRootPath [ "rootFolder" ]
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+        let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> PathUri.ofString
 
         let actual =
             DocRef.tryResolveToRootPath folder docPath "/doc.md" |> Option.get
@@ -51,8 +61,11 @@ module DocRefTests =
 
     [<Fact>]
     let url_no_schema_FP () =
-        let folder = dummyRootPath [ "rootFolder" ]
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+        let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> PathUri.ofString
 
         let actual =
             DocRef.tryResolveToRootPath folder docPath "www.google.com"
@@ -62,8 +75,11 @@ module DocRefTests =
 
     [<Fact>]
     let url_schema () =
-        let folder = dummyRootPath [ "rootFolder" ]
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+        let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> PathUri.ofString
 
         let actual =
             DocRef.tryResolveToRootPath folder docPath "http://www.google.com"

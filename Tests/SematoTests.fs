@@ -6,12 +6,13 @@ open Marksman.Workspace
 open Marksman.Semato
 open Xunit
 
-let folderPath = PathUri.fromString (dummyRootPath [ "folder" ])
+let folderPath = (dummyRootPath [ "folder" ]) |> RootPath.ofString
+
 let nthToken (data: array<uint32>) n = data[n * 5 .. n * 5 + 4]
 
 [<Fact>]
 let testEncoding () =
-    let docPath = dummyRootPath [ "folder"; "doc1.md" ] |> PathUri.fromString
+    let docPath = dummyRootPath [ "folder"; "doc1.md" ] |> PathUri.ofString
 
     let content =
         """# Title

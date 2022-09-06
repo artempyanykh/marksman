@@ -7,10 +7,26 @@ open Marksman.Cst
 open Marksman.Index
 open Marksman.Text
 
+[<Sealed>]
+type FolderId =
+    interface System.IComparable
+
+module FolderId =
+    val ofPath: PathUri -> FolderId
+
+[<Sealed>]
+type RootPath =
+    interface System.IComparable
+
+module RootPath =
+    val ofPath: PathUri -> RootPath
+    val ofString: string -> RootPath
+    val path: RootPath -> PathUri
+
 type Doc
 
 module Doc =
-    val rootPath: Doc -> PathUri
+    val rootPath: Doc -> RootPath
     val path: Doc -> PathUri
     val pathFromRoot: Doc -> string
     val text: Doc -> Text
@@ -21,25 +37,25 @@ module Doc =
     val index: Doc -> Index
     val uri: Doc -> DocumentUri
 
-    val tryLoad: root: PathUri -> path: PathUri -> option<Doc>
+    val tryLoad: root: RootPath -> path: PathUri -> option<Doc>
 
-    val mk: path: PathUri -> rootPath: PathUri -> version: option<int> -> Text -> Doc
-    val fromLsp: root: PathUri -> TextDocumentItem -> Doc
+    val mk: path: PathUri -> rootPath: RootPath -> version: option<int> -> Text -> Doc
+    val fromLsp: root: RootPath -> TextDocumentItem -> Doc
     val applyLspChange: DidChangeTextDocumentParams -> Doc -> Doc
 
 type Folder
 
 module Folder =
-    val keyPath: Folder -> PathUri
-    val rootPath: Folder -> PathUri
+    val id: Folder -> FolderId
+    val rootPath: Folder -> RootPath
 
     val docs: Folder -> seq<Doc>
     val docCount: Folder -> int
 
-    val tryLoad: name: string -> root: PathUri -> option<Folder>
+    val tryLoad: name: string -> root: RootPath -> option<Folder>
 
     val singleFile: Doc -> Folder
-    val multiFile: name: string -> root: PathUri -> docs: Map<PathUri, Doc> -> Folder
+    val multiFile: name: string -> root: RootPath -> docs: Map<PathUri, Doc> -> Folder
 
     val withDoc: Doc -> Folder -> Folder
     val withoutDoc: PathUri -> Folder -> option<Folder>
@@ -59,7 +75,7 @@ module Workspace =
     val withFolders: seq<Folder> -> Workspace -> Workspace
     val ofFolders: seq<Folder> -> Workspace
 
-    val withoutFolder: PathUri -> Workspace -> Workspace
-    val withoutFolders: seq<PathUri> -> Workspace -> Workspace
+    val withoutFolder: FolderId -> Workspace -> Workspace
+    val withoutFolders: seq<FolderId> -> Workspace -> Workspace
 
     val tryFindFolderEnclosing: PathUri -> Workspace -> option<Folder>

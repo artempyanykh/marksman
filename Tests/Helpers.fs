@@ -6,7 +6,7 @@ open Marksman.Misc
 open Marksman.Workspace
 open Marksman.CodeActions
 
-let pathToUri path = $"file://{path}"
+let pathToUri (path: string) = $"file://{path}"
 
 let dummyRoot =
     if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
@@ -24,7 +24,7 @@ let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<str
     lines.ShouldMatchInlineSnapshot(snapshot)
 
 let applyDocumentAction (doc: Doc) (action: DocumentAction) : string =
-    let (before, after) = (Doc.text doc).Cutout(action.edit)
+    let before, after = (Doc.text doc).Cutout(action.edit)
 
     before + action.newText + after
 
@@ -46,7 +46,8 @@ type FakeDoc =
             let path = dummyRootPath pathComp
             let pathUri = pathToUri path
             let rootUri = dummyRoot |> pathToUri
-            Doc.mk (PathUri.fromString pathUri) (PathUri.fromString rootUri) None text
+
+            Doc.mk (PathUri.ofString pathUri) (RootPath.ofString rootUri) None text
 
         static member Mk(contentLines: array<string>, ?path: string) : Doc =
             let content = String.concat System.Environment.NewLine contentLines
@@ -58,5 +59,5 @@ type FakeFolder =
         static member Mk(docs: seq<Doc>) : Folder =
             let docsMap = docs |> Seq.map (fun d -> Doc.path d, d) |> Map.ofSeq
 
-            Folder.multiFile "dummy" (PathUri.fromString dummyRootUri) docsMap
+            Folder.multiFile "dummy" (RootPath.ofString dummyRootUri) docsMap
     end

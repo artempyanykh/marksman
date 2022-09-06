@@ -170,12 +170,12 @@ module FolderDiag =
             uri, lspDiags)
         |> Array.ofSeq
 
-type WorkspaceDiag = Map<PathUri, FolderDiag>
+type WorkspaceDiag = Map<FolderId, FolderDiag>
 
 module WorkspaceDiag =
     let mk (ws: Workspace) : WorkspaceDiag =
         Workspace.folders ws
-        |> Seq.map (fun folder -> (Folder.keyPath folder), FolderDiag.mk folder)
+        |> Seq.map (fun folder -> (Folder.id folder), FolderDiag.mk folder)
         |> Map.ofSeq
 
     let empty = Map.empty

@@ -20,11 +20,11 @@ open Marksman.Index
 open Marksman.Toc
 open Marksman.Refs
 
-let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
+let extractWorkspaceFolders (par: InitializeParams) : Map<string, RootPath> =
     match par.WorkspaceFolders with
     | Some folders ->
         folders
-        |> Array.map (fun { Name = name; Uri = uri } -> name, PathUri.fromString uri)
+        |> Array.map (fun { Name = name; Uri = uri } -> name, RootPath.ofString uri)
         |> Map.ofArray
     | _ ->
         let rootPath = par.RootUri |> Option.orElse par.RootPath
@@ -34,13 +34,13 @@ let extractWorkspaceFolders (par: InitializeParams) : Map<string, PathUri> =
             // No folders are configured. The client can still add folders later using a notification.
             Map.empty
         | Some rootPath ->
-            let rootUri = PathUri.fromString rootPath
+            let rootUri = PathUri.ofString rootPath
 
             let rootName = Path.GetFileName(rootUri.LocalPath)
 
-            Map.ofList [ rootName, rootUri ]
+            Map.ofList [ rootName, RootPath.ofPath rootUri ]
 
-let readWorkspace (roots: Map<string, PathUri>) : list<Folder> =
+let readWorkspace (roots: Map<string, RootPath>) : list<Folder> =
     seq {
         for KeyValue (name, root) in roots do
             match Folder.tryLoad name root with
@@ -539,7 +539,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =
         withStateExclusive
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let docUri = par.TextDocument.Uri |> PathUri.ofString
 
             let newState =
                 match State.tryFindFolderAndDoc docUri state with
@@ -562,7 +562,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDidClose(par: DidCloseTextDocumentParams) =
         withStateExclusive
         <| fun state ->
-            let path = par.TextDocument.Uri |> PathUri.fromString
+            let path = par.TextDocument.Uri |> PathUri.ofString
             let folder = State.tryFindFolderEnclosing path state
 
             match folder with
@@ -571,7 +571,7 @@ type MarksmanServer(client: MarksmanClient) =
                 let newState =
                     match Folder.closeDoc path folder with
                     | Some folder -> State.updateFolder folder state
-                    | _ -> State.removeFolder (Folder.keyPath folder) state
+                    | _ -> State.removeFolder (Folder.id folder) state
 
                 Mutation.state newState
 
@@ -579,13 +579,13 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDidOpen(par: DidOpenTextDocumentParams) =
         withStateExclusive
         <| fun state ->
-            let path = par.TextDocument.Uri |> PathUri.fromString
+            let path = par.TextDocument.Uri |> PathUri.ofString
 
             let newFolder =
                 match State.tryFindFolderEnclosing path state with
                 | None ->
                     let singletonRoot =
-                        Path.GetDirectoryName path.LocalPath |> PathUri.fromString
+                        Path.GetDirectoryName path.LocalPath |> RootPath.ofString
 
                     let doc = Doc.fromLsp singletonRoot par.TextDocument
                     Folder.singleFile doc
@@ -608,7 +608,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.WorkspaceDidCreateFiles(par: CreateFilesParams) =
         withStateExclusive
         <| fun state ->
-            let docUris = par.Files |> Array.map (fun fc -> PathUri.fromString fc.Uri)
+            let docUris = par.Files |> Array.map (fun fc -> PathUri.ofString fc.Uri)
 
             let mutable newState = state
 
@@ -640,8 +640,7 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let mutable newState = state
 
-            let deletedUris =
-                par.Files |> Array.map (fun x -> PathUri.fromString x.Uri)
+            let deletedUris = par.Files |> Array.map (fun x -> PathUri.ofString x.Uri)
 
             for uri in deletedUris do
                 logger.trace (
@@ -653,7 +652,7 @@ type MarksmanServer(client: MarksmanClient) =
                 | None -> ()
                 | Some (folder, doc) ->
                     match Folder.withoutDoc (Doc.path doc) folder with
-                    | None -> newState <- State.removeFolder (Folder.keyPath folder) newState
+                    | None -> newState <- State.removeFolder (Folder.id folder) newState
                     | Some newFolder -> newState <- State.updateFolder newFolder newState
 
             Mutation.state newState
@@ -687,7 +686,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let docUri = par.TextDocument.Uri |> PathUri.ofString
 
             let getSymbols (doc: Doc) =
 
@@ -717,7 +716,7 @@ type MarksmanServer(client: MarksmanClient) =
             logger.trace (Log.setMessage "Completion request start")
 
             let pos = par.Position
-            let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let docUri = par.TextDocument.Uri |> PathUri.ofString
 
             let candidates =
                 monad' {
@@ -733,7 +732,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDefinition(par: TextDocumentPositionParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let docUri = par.TextDocument.Uri |> PathUri.ofString
 
             let goto =
                 monad {
@@ -760,7 +759,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentHover(par: TextDocumentPositionParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let docUri = par.TextDocument.Uri |> PathUri.ofString
 
             let hover =
                 monad {
@@ -792,7 +791,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentReferences(par: ReferenceParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.fromString
+            let docUri = par.TextDocument.Uri |> PathUri.ofString
 
             let locs =
                 monad' {
@@ -815,7 +814,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentSemanticTokensFull(par: SemanticTokensParams) =
         withState
         <| fun state ->
-            let docPath = par.TextDocument.Uri |> PathUri.fromString
+            let docPath = par.TextDocument.Uri |> PathUri.ofString
 
             let tokens =
                 monad' {
@@ -830,7 +829,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentSemanticTokensRange(par: SemanticTokensRangeParams) =
         withState
         <| fun state ->
-            let docPath = par.TextDocument.Uri |> PathUri.fromString
+            let docPath = par.TextDocument.Uri |> PathUri.ofString
             let range = par.Range
 
             let tokens =
@@ -846,7 +845,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentCodeAction(opts: CodeActionParams) =
         withStateExclusive
         <| fun state ->
-            let docPath = opts.TextDocument.Uri |> PathUri.fromString
+            let docPath = opts.TextDocument.Uri |> PathUri.ofString
 
             let codeAction title edit =
                 { Title = title
@@ -877,7 +876,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentRename(pars) =
         withStateExclusive
         <| fun state ->
-            let docPath = pars.TextDocument.Uri |> PathUri.fromString
+            let docPath = pars.TextDocument.Uri |> PathUri.ofString
 
             let edit: option<LspResult<option<WorkspaceEdit>>> =
                 monad' {
@@ -902,7 +901,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentPrepareRename(pars) =
         withStateExclusive
         <| fun state ->
-            let docPath = pars.TextDocument.Uri |> PathUri.fromString
+            let docPath = pars.TextDocument.Uri |> PathUri.ofString
 
             let renameRange =
                 monad' {

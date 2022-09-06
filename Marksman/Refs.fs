@@ -35,8 +35,8 @@ module DocRef =
                 None
 
     let tryResolveToRootPath
-        (folderPath: string)
-        (srcDocPath: string)
+        (folderPath: RootPath)
+        (srcDocPath: PathUri)
         (url: string)
         : option<string> =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
@@ -46,17 +46,19 @@ module DocRef =
         else
             try
                 let srcDirComponents =
-                    Path.GetDirectoryName(srcDocPath).Split(Path.DirectorySeparatorChar)
+                    Path
+                        .GetDirectoryName(srcDocPath.LocalPath)
+                        .Split(Path.DirectorySeparatorChar)
 
                 // Make sure to retain the root component of the path
-                if srcDocPath.StartsWith('/') && srcDirComponents[0] = "" then
+                if srcDocPath.LocalPath.StartsWith('/') && srcDirComponents[0] = "" then
                     srcDirComponents[0] <- "/"
 
                 let urlComponents = url.AbsPathUrlEncodedToRelPath().Split('\\', '/')
                 let allComponents = Array.append srcDirComponents urlComponents
                 let targetPath = Path.Combine(allComponents)
-                let targetPathNormalized = (PathUri.fromString targetPath).LocalPath
-                let folderPathNormalized = (PathUri.fromString folderPath).LocalPath
+                let targetPathNormalized = (PathUri.ofString targetPath).LocalPath
+                let folderPathNormalized = (RootPath.path folderPath).LocalPath
 
                 let rooted =
                     if targetPathNormalized.StartsWith(folderPathNormalized) then
@@ -79,8 +81,7 @@ module DocRef =
         match docRef with
         | DocRef.Title title -> Folder.filterDocsBySlug (Slug.ofString title) folder
         | DocRef.Url url ->
-            let url =
-                tryResolveToRootPath (Doc.rootPath srcDoc).LocalPath (Doc.path srcDoc).LocalPath url
+            let url = tryResolveToRootPath (Doc.rootPath srcDoc) (Doc.path srcDoc) url
 
             match url >>= fun url -> Folder.tryFindDocByUrl url folder with
             | Some doc -> [ doc ]

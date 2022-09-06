@@ -112,12 +112,14 @@ module State =
             >> Log.addContext "numRemoved" removed.Length
         )
 
-        let removedUris = removed |> Array.map (fun f -> PathUri.fromString f.Uri)
+        let removedUris =
+            removed
+            |> Array.map (fun f -> PathUri.ofString f.Uri |> FolderId.ofPath)
 
         let addedFolders =
             seq {
                 for f in added do
-                    let rootUri = PathUri.fromString f.Uri
+                    let rootUri = RootPath.ofString f.Uri
 
                     let folder = Folder.tryLoad f.Name rootUri
 
@@ -138,6 +140,6 @@ module State =
         let newWs = Workspace.withFolder newFolder state.workspace
         { state with workspace = newWs; revision = state.revision + 1 }
 
-    let removeFolder (keyPath: PathUri) (state: State) : State =
+    let removeFolder (keyPath: FolderId) (state: State) : State =
         let newWs = Workspace.withoutFolder keyPath state.workspace
         { state with workspace = newWs; revision = state.revision + 1 }

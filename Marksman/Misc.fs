@@ -175,7 +175,7 @@ let localPathToUriString (filePath: string) : string =
         "file:///" + uri.ToString().TrimStart('/')
 
 module PathUri =
-    let fromString (str: string) : PathUri =
+    let ofString (str: string) : PathUri =
         let unescaped = Uri.UnescapeDataString(str)
         let uri = Uri(unescaped)
         let localPath = uri.LocalPath

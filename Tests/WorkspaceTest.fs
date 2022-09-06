@@ -63,11 +63,7 @@ module DocTest =
         let dummyPath = (dummyRootPath [ "dummy.md" ])
 
         let empty =
-            Doc.mk
-                (PathUri.fromString dummyPath)
-                (PathUri.fromString dummyRoot)
-                None
-                (Text.mkText "")
+            Doc.mk (PathUri.ofString dummyPath) (RootPath.ofString dummyRoot) None (Text.mkText "")
 
         let insertChange =
             { TextDocument = { Uri = pathToUri dummyPath; Version = Some 1 }

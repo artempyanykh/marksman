@@ -15,9 +15,22 @@ open Marksman.Index
 
 open Microsoft.FSharp.Core
 
+type FolderId = FolderId of PathUri
+
+module FolderId =
+    let ofPath path = FolderId path
+    let path (FolderId p) = p
+
+type RootPath = RootPath of PathUri
+
+module RootPath =
+    let ofPath path = RootPath path
+    let ofString s = ofPath (PathUri.ofString s)
+    let path (RootPath p) = p
+
 type Doc =
     { path: PathUri
-      rootPath: PathUri
+      rootPath: RootPath
       version: option<int>
       text: Text
       cst: Cst
@@ -73,13 +86,13 @@ module Doc =
 
         { withText newText doc with version = newVersion }
 
-    let fromLsp (root: PathUri) (item: TextDocumentItem) : Doc =
-        let path = PathUri.fromString item.Uri
+    let fromLsp (root: RootPath) (item: TextDocumentItem) : Doc =
+        let path = PathUri.ofString item.Uri
         let text = mkText item.Text
 
         mk path root (Some item.Version) text
 
-    let tryLoad (root: PathUri) (path: PathUri) : option<Doc> =
+    let tryLoad (root: RootPath) (path: PathUri) : option<Doc> =
         try
             let content =
                 using (new StreamReader(path.LocalPath)) (fun f -> f.ReadToEnd())
@@ -92,12 +105,12 @@ module Doc =
 
     let uri (doc: Doc) : DocumentUri = doc.path.DocumentUri
 
-    let rootPath (doc: Doc) : PathUri = doc.rootPath
+    let rootPath (doc: Doc) : RootPath = doc.rootPath
     let path (doc: Doc) : PathUri = doc.path
 
     let pathFromRoot (doc: Doc) =
         let docPath = doc.path.LocalPath
-        let folderPath = doc.rootPath.LocalPath
+        let folderPath = (RootPath.path doc.rootPath).LocalPath
         Path.GetRelativePath(folderPath, docPath)
 
     let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
@@ -126,7 +139,7 @@ module Doc =
     let version (doc: Doc) : option<int> = doc.version
 
 type Folder =
-    | MultiFile of name: string * root: PathUri * docs: Map<PathUri, Doc>
+    | MultiFile of name: string * root: RootPath * docs: Map<PathUri, Doc>
     | SingleFile of Doc
 
 module Folder =
@@ -143,12 +156,12 @@ module Folder =
         | SingleFile doc -> Seq.singleton doc
         | MultiFile (_, _, docs) -> Map.values docs
 
-    let keyPath: Folder -> PathUri =
+    let id: Folder -> FolderId =
         function
-        | MultiFile (_, root, _) -> root
-        | SingleFile doc -> doc.path
+        | MultiFile (_, root, _) -> root |> RootPath.path |> FolderId.ofPath
+        | SingleFile doc -> doc.path |> FolderId.ofPath
 
-    let rootPath: Folder -> PathUri =
+    let rootPath: Folder -> RootPath =
         function
         | MultiFile (_, root, _) -> root
         | SingleFile doc -> doc.rootPath
@@ -180,7 +193,7 @@ module Folder =
 
         lines.ToArray()
 
-    let private loadDocs (root: PathUri) : seq<Doc> =
+    let private loadDocs (root: RootPath) : seq<Doc> =
 
         let rec collect (cur: PathUri) (ignoreFns: list<string -> bool>) =
             let ignores = readIgnoreFiles cur |> buildGlobs
@@ -196,7 +209,7 @@ module Folder =
                 seq {
                     for file in files do
                         if not (shouldBeIgnoredByAny ignoreFns file.FullName) then
-                            let pathUri = PathUri.fromString file.FullName
+                            let pathUri = PathUri.ofString file.FullName
 
                             let document = Doc.tryLoad root pathUri
 
@@ -211,7 +224,7 @@ module Folder =
 
                     for dir in dirs do
                         if not (shouldBeIgnoredByAny ignoreFns dir.FullName) then
-                            yield! collect (PathUri.fromString dir.FullName) ignoreFns
+                            yield! collect (PathUri.ofString dir.FullName) ignoreFns
                         else
                             logger.trace (
                                 Log.setMessage "Skipping ignored directory"
@@ -236,12 +249,12 @@ module Folder =
 
                 Seq.empty
 
-        collect root []
+        collect (RootPath.path root) []
 
-    let tryLoad (name: string) (root: PathUri) : option<Folder> =
+    let tryLoad (name: string) (root: RootPath) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
 
-        if Directory.Exists(root.LocalPath) then
+        if Directory.Exists((RootPath.path root).LocalPath) then
 
             let documents =
                 loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
@@ -314,11 +327,11 @@ module Folder =
         | SingleFile _ -> 1
         | MultiFile (_, _, docs) -> docs.Values.Count
 
-type Workspace = { folders: Map<PathUri, Folder> }
+type Workspace = { folders: Map<FolderId, Folder> }
 
 module Workspace =
     let ofFolders (folders: seq<Folder>) : Workspace =
-        { folders = folders |> Seq.map (fun f -> Folder.keyPath f, f) |> Map.ofSeq }
+        { folders = folders |> Seq.map (fun f -> Folder.id f, f) |> Map.ofSeq }
 
     let folders (workspace: Workspace) : seq<Folder> =
         seq {
@@ -326,34 +339,28 @@ module Workspace =
                 yield f
         }
 
-    let tryFindFolderByPath (root: PathUri) (workspace: Workspace) : option<Folder> =
-        Map.tryFind root workspace.folders
-
     let tryFindFolderEnclosing (innerPath: PathUri) (workspace: Workspace) : option<Folder> =
         workspace.folders
-        |> Map.tryPick (fun root folder ->
-            if innerPath.LocalPath.StartsWith(root.LocalPath) then
+        |> Map.tryPick (fun keyPath folder ->
+            if innerPath.LocalPath.StartsWith((FolderId.path keyPath).LocalPath) then
                 Some folder
             else
                 None)
 
-    let withoutFolder (root: PathUri) (workspace: Workspace) : Workspace =
-        { workspace with folders = Map.remove root workspace.folders }
+    let withoutFolder (keyPath: FolderId) (workspace: Workspace) : Workspace =
+        { workspace with folders = Map.remove keyPath workspace.folders }
 
-    let withoutFolders (roots: seq<PathUri>) (workspace: Workspace) : Workspace =
+    let withoutFolders (roots: seq<FolderId>) (workspace: Workspace) : Workspace =
         let newFolders = roots |> Seq.fold (flip Map.remove) workspace.folders
 
         { workspace with folders = newFolders }
 
     let withFolder (folder: Folder) (workspace: Workspace) : Workspace =
-        { workspace with folders = Map.add (Folder.keyPath folder) folder workspace.folders }
+        // TODO: evict single-file folders when an enclosing folder is added
+        { workspace with folders = Map.add (Folder.id folder) folder workspace.folders }
 
     let withFolders (folders: seq<Folder>) (workspace: Workspace) : Workspace =
-        let newFolders =
-            folders
-            |> Seq.fold (fun fs f -> Map.add (Folder.keyPath f) f fs) workspace.folders
-
-        { workspace with folders = newFolders }
+        Seq.fold (flip withFolder) workspace folders
 
     let docCount (workspace: Workspace) : int =
         workspace.folders.Values |> Seq.sumBy Folder.docCount

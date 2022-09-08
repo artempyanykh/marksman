@@ -355,9 +355,29 @@ module Workspace =
 
         { workspace with folders = newFolders }
 
-    let withFolder (folder: Folder) (workspace: Workspace) : Workspace =
-        // TODO: evict single-file folders when an enclosing folder is added
-        { workspace with folders = Map.add (Folder.id folder) folder workspace.folders }
+    let withFolder (newFolder: Folder) (workspace: Workspace) : Workspace =
+        let updatedFolders =
+            match newFolder with
+            | SingleFile _ -> Map.add (Folder.id newFolder) newFolder workspace.folders
+            | MultiFile (_, root, _) ->
+                let newRoot = (RootPath.path root).LocalPath
+
+                let isEnclosed _ existingFolder =
+                    match existingFolder with
+                    | MultiFile _ -> false
+                    | SingleFile _ ->
+                        let existingRoot =
+                            (Folder.rootPath existingFolder |> RootPath.path).LocalPath
+
+                        existingRoot.StartsWith(newRoot)
+
+                let isNotEnclosed id existingFolder = not (isEnclosed id existingFolder)
+
+                workspace.folders
+                |> Map.filter isNotEnclosed
+                |> Map.add (Folder.id newFolder) newFolder
+
+        { workspace with folders = updatedFolders }
 
     let withFolders (folders: seq<Folder>) (workspace: Workspace) : Workspace =
         Seq.fold (flip withFolder) workspace folders

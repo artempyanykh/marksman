@@ -18,6 +18,8 @@ let dummyRootUri = pathToUri dummyRoot
 
 let dummyRootPath pathComps = dummyRoot + (pathComps |> String.concat "/")
 
+let pathComps (path: string) = path.TrimStart('/').Split("/") |> List.ofArray
+
 let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<string>) =
     let lines = Seq.map (fun x -> (fmt x).Lines()) things |> Seq.concat
 
@@ -39,13 +41,12 @@ let stripMarginTrim (str: string) = stripMargin (str.Trim())
 
 type FakeDoc =
     class
-        static member Mk(content: string, ?path: string) : Doc =
+        static member Mk(content: string, ?path: string, ?root: string) : Doc =
             let text = Text.mkText content
             let path = defaultArg path "fake.md"
-            let pathComp = path.TrimStart('/').Split("/") |> List.ofArray
-            let path = dummyRootPath pathComp
-            let pathUri = pathToUri path
-            let rootUri = dummyRoot |> pathToUri
+            let pathUri = pathToUri (dummyRootPath (pathComps path))
+            let root = Option.map pathComps root |> Option.defaultValue []
+            let rootUri = dummyRootPath root |> pathToUri
 
             Doc.mk (PathUri.ofString pathUri) (RootPath.ofString rootUri) None text
 

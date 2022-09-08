@@ -42,6 +42,13 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
             [ NonBreakableWhitespace(whitespaceRange) ])
 
+let isCrossFileLink uref =
+    match uref with
+    | Uref.Doc _ -> true
+    | Uref.Heading(doc = Some _) -> true
+    | Uref.Heading(doc = None) -> false
+    | Uref.LinkDef _ -> false
+
 let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
     let uref = Uref.ofElement link
 
@@ -50,7 +57,9 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
     | Some uref ->
         let refs = Dest.tryResolveUref uref doc folder |> Array.ofSeq
 
-        if refs.Length = 1 then
+        if Folder.isSingleFile folder && isCrossFileLink uref then
+            []
+        else if refs.Length = 1 then
             []
         else if refs.Length = 0 then
             match link with

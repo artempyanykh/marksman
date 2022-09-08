@@ -149,6 +149,11 @@ module Folder =
 
     let singleFile doc = SingleFile doc
 
+    let isSingleFile =
+        function
+        | SingleFile _ -> true
+        | MultiFile _ -> false
+
     let multiFile name root docs = MultiFile(name, root, docs)
 
     let docs: Folder -> seq<Doc> =

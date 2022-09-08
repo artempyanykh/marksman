@@ -56,6 +56,7 @@ module Folder =
 
     val singleFile: Doc -> Folder
     val multiFile: name: string -> root: RootPath -> docs: Map<PathUri, Doc> -> Folder
+    val isSingleFile: Folder -> bool
 
     val withDoc: Doc -> Folder -> Folder
     val withoutDoc: PathUri -> Folder -> option<Folder>

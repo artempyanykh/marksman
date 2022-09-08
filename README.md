@@ -158,20 +158,27 @@ Marksman by default reads ignore globs from `.gitignore`, `.hgignore`, and
 Marksman will search for and read ignore files in all sub-folders of the
 workspace. similarly to what Git does.
 
-### Workspace folders and project roots
+### Workspace folders, project roots, and single-file mode
 
 The LSP specification is designed to work with projects rather than individual
-files<sup>[4](#fn4)</sup>. How a root folder of a project is found varies
-between editors, but usually it's either
-1. a root of the version control system (applicable to all languages),
-2. a folder with `.marksman.toml` marker file (specific to Marksman integrations).
+files<sup>[4](#fn4)</sup>. Marksman has a custom **single-file mode** that
+provides a *subset* of language features for markdown files open outside of any
+project. This works well for small one-off edits or when opening random
+markdown files. However, when you have several interconnected documents do
+consider setting up a project folder for them for an improved experience. 
 
-Therefore, in case Marksman doesn't provide Markdown language assist for your
-files and you don't understand why, you can either:
+How a folder (aka project, aka root) is found varies between editors, but
+usually it's either
+1. a root of a VCS repository (applicable to all languages),
+2. a folder with `.marksman.toml` marker file (specific to Marksman
+   integrations).
+
+When Marksman doesn't provide cross-file language assist for your files and you
+don't understand why, you can either:
 1. check your project into version control, or
 2. create a `.marksman.toml` at the root folder of your project, or
-3. refer to your editor/LSP client documentation regarding how project root is
-   defined.
+3. refer to your editor/LSP client documentation regarding how a project root
+   is defined.
 
 ## Where's `zeta-note` and where's Rust?
 

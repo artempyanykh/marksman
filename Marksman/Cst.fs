@@ -133,9 +133,20 @@ module MdLink =
         | MdLink.RS label -> Some label
         | MdLink.IL _ -> None
 
-type MdLinkDef = { label: TextNode; url: TextNode; title: option<TextNode> }
+type MdLinkDef = private { label: TextNode; url: TextNode; title: option<TextNode> }
 
 module MdLinkDef =
+    let mk label url title = { label = label; url = url; title = title }
+
+    let normalizedLabel t = LinkLabel.ofString (Node.text t.label)
+
+    let label t = t.label
+    let labelContent t = Node.text t.label
+
+    let titleContent t = t.title |> Option.map Node.text
+
+    let urlContent t = Node.text t.url
+
     let fmt (mld: MdLinkDef) =
         let fmtLabel = Node.fmtText mld.label
         let fmtUrl = Node.fmtText mld.url

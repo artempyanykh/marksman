@@ -52,7 +52,7 @@ let renameMarkdownLabel (newLabel: string) (element: Element) : option<TextEdit>
     | ML link ->
         MdLink.referenceLabel link.data
         |> Option.map (fun label -> { Range = label.range; NewText = newLabel })
-    | MLD { data = def } -> Some { Range = def.label.range; NewText = newLabel }
+    | MLD { data = def } -> Some { Range = (MdLinkDef.label def).range; NewText = newLabel }
     | _ -> None
 
 
@@ -144,7 +144,7 @@ let rename
     | Some (MLD { data = def } as el) ->
         if not (isValidLabel newName) then
             Error $"Not a valid label name: {newName}"
-        else if def.label.range.ContainsInclusive pos then
+        else if (MdLinkDef.label def).range.ContainsInclusive pos then
             let refs = Dest.findElementRefs true folder srcDoc el
             let byDoc = refs |> groupByFirst
 
@@ -189,8 +189,8 @@ let renameRange (srcDoc: Doc) (pos: Position) : option<Range> =
         | None -> None
         | Some label -> if label.range.ContainsInclusive pos then Some label.range else None
     | Some (MLD { data = def }) ->
-        if def.label.range.ContainsInclusive pos then
-            Some def.label.range
+        if (MdLinkDef.label def).range.ContainsInclusive pos then
+            Some (MdLinkDef.label def).range
         else
             None
     | Some (H { data = heading }) ->

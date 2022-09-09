@@ -78,9 +78,13 @@ module Index =
 
     let linkDefs index = index.linkDefs
 
-    let tryFindLinkDef label index =
+    let tryFindLinkDef (label: LinkLabel) index =
         index.linkDefs
-        |> Array.tryFind (fun { data = ld } -> ld.label.text = label)
+        |> Array.tryFind (fun { data = ld } -> (MdLinkDef.normalizedLabel ld) = label)
+
+    let filterLinkDefs (pred: LinkLabel -> bool) index =
+        index.linkDefs
+        |> Seq.filter (fun { data = ld } -> pred (MdLinkDef.normalizedLabel ld))
 
     let headingsBySlug index = index.headingsBySlug
 

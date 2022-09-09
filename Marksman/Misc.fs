@@ -2,6 +2,7 @@ module Marksman.Misc
 
 open System
 open System.Text
+open System.Text.RegularExpressions
 open Ionide.LanguageServerProtocol.Types
 open Microsoft.Extensions.FileSystemGlobbing
 
@@ -237,3 +238,15 @@ type Range with
     static member Mk(start: Position, end_: Position) : Range = { Start = start; End = end_ }
 
     member this.ContainsInclusive(pos: Position) : bool = this.Start <= pos && pos <= this.End
+
+type LinkLabel = private LinkLabel of string
+
+module LinkLabel =
+    let private consecutiveWhitespacePattern = Regex(@"\s+")
+
+    let ofString (s: string) =
+        let normCase = s.Normalize().ToLowerInvariant().Trim()
+        let normWs = consecutiveWhitespacePattern.Replace(normCase, " ")
+        LinkLabel normWs
+
+    let isSubSequenceOf (LinkLabel other) (LinkLabel this) = other.IsSubSequenceOf(this)

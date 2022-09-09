@@ -113,3 +113,15 @@ module PathUriTests =
         let uri = "file:///e%3A/notes"
         let puri = PathUri.ofString path
         Assert.Equal(uri, puri.DocumentUri)
+
+module LinkLabelTest =
+    [<Fact>]
+    let caseSensitivity () = Assert.Equal(LinkLabel.ofString "hello", LinkLabel.ofString "HELLO")
+
+    [<Fact>]
+    let consecutiveWhitespace () =
+        Assert.Equal(LinkLabel.ofString "H e ll o", LinkLabel.ofString "H  e    ll  o")
+
+    [<Fact>]
+    let surroundingWhitespace () =
+        Assert.Equal(LinkLabel.ofString "abc", LinkLabel.ofString "  abc ")

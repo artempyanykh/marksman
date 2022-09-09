@@ -130,9 +130,8 @@ module Doc =
 
     let linkDefs (doc: Doc) : array<Node<MdLinkDef>> = Index.linkDefs doc.index
 
-    let linkDefByLabel (label: string) (doc: Doc) : option<Node<MdLinkDef>> =
-        linkDefs doc
-        |> Seq.tryFind (fun { data = def } -> def.label.text = label)
+    let linkDefMatching (sub: LinkLabel) (doc: Doc) : seq<Node<MdLinkDef>> =
+        Index.filterLinkDefs (LinkLabel.isSubSequenceOf sub) doc.index
 
     let linkAtPos (pos: Position) (doc: Doc) : option<Element> = Index.linkAtPos pos doc.index
 

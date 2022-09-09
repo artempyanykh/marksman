@@ -288,9 +288,7 @@ module Markdown =
                         let titleSpan = linkDef.TitleSpan
                         Node.mkText title (sourceSpanToRange text titleSpan) |> Some
 
-                let def =
-                    { label = label; url = url; title = title }
-                    |> Node.mk defText defRange
+                let def = MdLinkDef.mk label url title |> Node.mk defText defRange
 
                 elements.Add(MLD def)
 

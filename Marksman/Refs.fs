@@ -175,7 +175,10 @@ module Dest =
     let tryResolveUref (uref: Uref) (srcDoc: Doc) (folder: Folder) : seq<Dest> =
         match uref with
         | Uref.LinkDef label ->
-            let ld = srcDoc |> Doc.index |> Index.tryFindLinkDef label.text
+            let ld =
+                srcDoc
+                |> Doc.index
+                |> Index.tryFindLinkDef (LinkLabel.ofString label.text)
 
             match ld |>> fun x -> Dest.LinkDef(srcDoc, x) with
             | None -> Seq.empty

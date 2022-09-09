@@ -275,24 +275,24 @@ let findCandidatesInDoc (comp: Compl) (srcDoc: Doc) (folder: Folder) : array<Com
         let input = (Doc.text srcDoc).Substring(range)
 
         let matchingDefs =
-            srcDoc
-            |> Doc.index
-            |> Index.linkDefs
-            |> Seq.filter (fun { data = def } -> input.IsSubSequenceOf(def.label.text))
+            Index.filterLinkDefs
+                (LinkLabel.isSubSequenceOf (LinkLabel.ofString input))
+                (Doc.index srcDoc)
             |> Seq.map Node.data
 
         let toCompletionItem def =
-            let newText = def.label.text
+            let linkDefLabel = MdLinkDef.labelContent def
+            let newText = linkDefLabel
 
             let newText = if needsClosing then newText + "]" else newText
 
             let textEdit = { Range = range; NewText = newText }
 
-            { CompletionItem.Create(def.label.text) with
-                Detail = def.title |> Option.map Node.text
-                Documentation = def.url |> Node.text |> Documentation.String |> Some
+            { CompletionItem.Create(linkDefLabel) with
+                Detail = MdLinkDef.titleContent def
+                Documentation = MdLinkDef.urlContent def |> Documentation.String |> Some
                 TextEdit = Some textEdit
-                FilterText = Some def.label.text }
+                FilterText = Some linkDefLabel }
 
         matchingDefs |> Seq.map toCompletionItem |> Array.ofSeq
     | Compl.DocPath (range, needsClosing) ->

@@ -88,7 +88,7 @@ module Index =
 
     let headingsBySlug index = index.headingsBySlug
 
-    let headings index = index.headingsBySlug |> Map.values |> Seq.concat
+    let headings index = index.headings
 
     let filterHeadingBySlug slug index =
         index.headingsBySlug |> Map.tryFind slug |> Option.defaultValue []

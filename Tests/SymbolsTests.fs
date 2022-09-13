@@ -9,11 +9,11 @@ open Marksman.Helpers
 module DocSymbols =
     let fakeDoc =
         FakeDoc.Mk(
-            [| "# A" //
-               "## B"
-               "### C"
+            [| "# E" //
                "## D"
-               "# E" |]
+               "### B"
+               "## C"
+               "# A" |]
         )
 
     [<Fact>]
@@ -26,4 +26,4 @@ module DocSymbols =
             | _ -> failwith "Unexpected symbol type"
             |> Array.map (fun x -> x.Name)
 
-        Assert.Equal<string>([| "H1: A"; "H2: B"; "H3: C"; "H2: D"; "H1: E" |], symNames)
+        Assert.Equal<string>([| "H1: E"; "H2: D"; "H3: B"; "H2: C"; "H1: A" |], symNames)

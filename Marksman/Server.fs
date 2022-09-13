@@ -17,7 +17,6 @@ open Marksman.Misc
 open Marksman.Workspace
 open Marksman.State
 open Marksman.Index
-open Marksman.Toc
 open Marksman.Refs
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, RootPath> =
@@ -114,57 +113,6 @@ let mkServerCaps (par: InitializeParams) : ServerCapabilities =
                   Range = Some true
                   Full = { Delta = Some false } |> U2.Second |> Some }
         RenameProvider = renameOptions }
-
-let headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation =
-    let name = Heading.name h.data
-    let name = $"H{h.data.level}: {name}"
-    let kind = SymbolKind.String
-
-    let location = { Uri = docUri.DocumentUri; Range = h.range }
-
-    let sym =
-        { Name = name
-          Kind = kind
-          Location = location
-          ContainerName = None }
-
-    sym
-
-let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
-    let name = Heading.name h.data
-    let kind = SymbolKind.String
-    let range = h.data.scope
-    let selectionRange = h.range
-
-    let children =
-        h.data.children
-        |> Element.pickHeadings
-        |> Array.map (headingToDocumentSymbol isEmacs)
-
-    let children =
-        if Array.isEmpty children then
-            None
-        else if isEmacs then
-            // Emacs' imenu with consult/counsel/etc. doesn't allow selecting intermediate
-            // nodes that have children. As a workaround we add a '.' this node.
-            let thisHeading =
-                { Name = "."
-                  Detail = None
-                  Kind = kind
-                  Range = selectionRange
-                  SelectionRange = selectionRange
-                  Children = None }
-
-            Some(Array.append [| thisHeading |] children)
-        else
-            Some children
-
-    { Name = name
-      Detail = None
-      Kind = kind
-      Range = range
-      SelectionRange = selectionRange
-      Children = children }
 
 type MarksmanStatusParams = { state: string; docCount: int }
 
@@ -662,25 +610,7 @@ type MarksmanServer(client: MarksmanClient) =
         withState
         <| fun state ->
             let ws = State.workspace state
-
-            let symbols =
-                seq {
-                    for folder in Workspace.folders ws do
-                        for doc in Folder.docs folder do
-                            let headings = Doc.index doc |> Index.headings
-
-                            let matchingHeadings =
-                                headings
-                                |> Seq.filter (fun { data = h } ->
-                                    pars.Query.IsSubSequenceOf(Heading.name h))
-
-                            let matchingSymbols =
-                                matchingHeadings |> Seq.map (headingToSymbolInfo (Doc.path doc))
-
-                            yield! matchingSymbols
-                }
-                |> Array.ofSeq
-
+            let symbols = Symbols.workspaceSymbols pars.Query ws
             LspResult.success (Some symbols)
 
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
@@ -688,26 +618,12 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let docUri = par.TextDocument.Uri |> PathUri.ofString
 
-            let getSymbols (doc: Doc) =
+            let client = (State.client state)
 
-                if (State.client state).SupportsHierarchy then
-                    let topLevelHeadings =
-                        Doc.cst doc |> Seq.collect (Element.asHeading >> Option.toList)
-
-                    topLevelHeadings
-                    |> Seq.map (headingToDocumentSymbol (State.client state).IsEmacs)
-                    |> Array.ofSeq
-                    |> Second
-                else
-                    let allHeadings = Doc.index >> Index.headings <| doc
-
-                    allHeadings
-                    |> Seq.map (headingToSymbolInfo docUri)
-                    |> Array.ofSeq
-                    |> First
+            let getSymbols =
+                Symbols.docSymbols client.SupportsHierarchy client.IsEmacs
 
             let response = State.tryFindDoc docUri state |> Option.map getSymbols
-
             LspResult.success response
 
     override this.TextDocumentCompletion(par: CompletionParams) =

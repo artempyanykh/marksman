@@ -19,6 +19,7 @@
         <Compile Include="TocTests.fs" />
         <Compile Include="RefsTests.fs" />
         <Compile Include="RefactorTests.fs" />
+        <Compile Include="SymbolsTests.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

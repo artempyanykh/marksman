@@ -43,7 +43,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 * VSCode via [Marksman VSCode][mn-vscode].
 * Neovim:
-    * via [nvim-lsp-installer][nvim-marksman-lsp-installer] (automatic server installation),
+    * via [mason.nvim][mason-nvim] (automatic server installation) (Requires [mason-lspconfig.nvim][mason-nvim-lsp-config])
     * via [nvim-lspconfig][nvim-marksman],
     * via [CoC-marksman][coc-marksman].
 * Emacs: 
@@ -217,7 +217,8 @@ LSP but it's not a part of the spec at least until and including v3.17.
 [original-zn]: https://github.com/artempyanykh/zeta-note
 
 [nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#marksman
-[nvim-marksman-lsp-installer]: https://github.com/williamboman/nvim-lsp-installer
+[mason-nvim]: https://github.com/williamboman/mason.nvim
+[mason-nvim-lsp-config]: https://github.com/williamboman/mason-lspconfig.nvim
 
 [lsp-main]: https://microsoft.github.io/language-server-protocol/
 

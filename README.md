@@ -65,20 +65,6 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
       (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))      
       (add-hook 'markdown-mode-hook #'eglot-ensure)
       ````
-* [Helix][helix-editor] requires configuration (unless
-  [helix#3499][helix-marksman-pr] gets merged); add the following to your
-  `~/.config/helix/languages.toml`:
-
-  ```toml
-  [[language]]
-  name = "markdown"
-  scope = "source.md"
-  injection-regex = "md|markdown"
-  file-types = ["md"]
-  roots = [".marksman.toml"]
-  language-server = { command = "marksman", args=["server"] }
-  indent = { tab-width = 2, unit = "  " }
-  ```
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
   installation).
 

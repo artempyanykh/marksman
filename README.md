@@ -65,7 +65,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
       (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))      
       (add-hook 'markdown-mode-hook #'eglot-ensure)
       ````
-* [Helix](https://helix-editor.com/) works out of the box if the binary is somewhere in your `PATH`
+* [Helix](https://helix-editor.com/) supports Marksman out of the box. However, you need add `marksman` binary to your `PATH` manually.
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
   installation).
 

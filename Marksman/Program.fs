@@ -56,8 +56,13 @@ let startLSP (args: int * bool) : int =
     let requestHandlings = Server.defaultRequestHandlings ()
 
     let result =
-        Server.start requestHandlings input output MS.MarksmanClient (fun client ->
-            new MS.MarksmanServer(client))
+        Server.start
+            requestHandlings
+            input
+            output
+            MS.MarksmanClient
+            (fun client -> new MS.MarksmanServer(client))
+            Server.defaultRpc
 
     logger.trace (Log.setMessage "Stopped Marksman LSP server")
 

@@ -12,6 +12,7 @@ module Server =
   open Newtonsoft.Json
   open Ionide.LanguageServerProtocol.JsonUtils
   open Newtonsoft.Json.Linq
+  open StreamJsonRpc
 
   let logger = LogProvider.getLoggerByName "LSP Server"
 
@@ -77,24 +78,28 @@ module Server =
     | ErrorExitWithoutShutdown = 1
     | ErrorStreamClosed = 2
 
-  let startWithSetup<'client when 'client :> Ionide.LanguageServerProtocol.LspClient>
+
+  /// The default RPC logic shipped with this library. All this does is mark LocalRpcExceptions as non-fatal
+  let defaultRpc (handler: IJsonRpcMessageHandler) =
+    { new JsonRpc(handler) with
+        member this.IsFatalException(ex: Exception) =
+          match ex with
+          | :? LocalRpcException -> false
+          | _ -> true }
+
+  let startWithSetup<'client when 'client :> Ionide.LanguageServerProtocol.ILspClient>
     (setupRequestHandlings: 'client -> Map<string, Delegate>)
     (input: Stream)
     (output: Stream)
     (clientCreator: (ClientNotificationSender * ClientRequestSender) -> 'client)
+    (customizeRpc: IJsonRpcMessageHandler -> JsonRpc)
     =
 
     use jsonRpcHandler = new HeaderDelimitedMessageHandler(output, input, jsonRpcFormatter)
     // Without overriding isFatalException, JsonRpc serializes exceptions and sends them to the client.
     // This is particularly bad for notifications such as textDocument/didChange which don't require a response,
     // and thus any exception that happens during e.g. text sync gets swallowed.
-    use jsonRpc =
-      { new JsonRpc(jsonRpcHandler) with
-          member this.IsFatalException(ex: Exception) =
-              match ex with
-              | :? LocalRpcException -> false
-              | _ -> true
-      }
+    use jsonRpc = customizeRpc jsonRpcHandler
 
     /// When the server wants to send a notification to the client
     let sendServerNotification (rpcMethod: string) (notificationObj: obj) : AsyncLspResult<unit> =
@@ -178,10 +183,10 @@ module Server =
     | false, true -> LspCloseReason.ErrorExitWithoutShutdown
     | _ -> LspCloseReason.ErrorStreamClosed
 
-  type ServerRequestHandling<'server when 'server :> Ionide.LanguageServerProtocol.LspServer> =
+  type ServerRequestHandling<'server when 'server :> Ionide.LanguageServerProtocol.ILspServer> =
     { Run: 'server -> Delegate }
 
-  let serverRequestHandling<'server, 'param, 'result when 'server :> Ionide.LanguageServerProtocol.LspServer>
+  let serverRequestHandling<'server, 'param, 'result when 'server :> Ionide.LanguageServerProtocol.ILspServer>
     (run: 'server -> 'param -> AsyncLspResult<'result>)
     : ServerRequestHandling<'server> =
     { Run = fun s -> requestHandling (run s) }
@@ -247,7 +252,7 @@ module Server =
       "exit", requestHandling (fun s () -> s.Exit() |> notificationSuccess) ]
     |> Map.ofList
 
-  let start<'client, 'server when 'client :> Ionide.LanguageServerProtocol.LspClient and 'server :> Ionide.LanguageServerProtocol.LspServer>
+  let start<'client, 'server when 'client :> Ionide.LanguageServerProtocol.ILspClient and 'server :> Ionide.LanguageServerProtocol.ILspServer>
     (requestHandlings: Map<string, ServerRequestHandling<'server>>)
     (input: Stream)
     (output: Stream)

@@ -1721,7 +1721,7 @@ type Diagnostic =
 
     /// A human-readable string describing the source of this
     /// diagnostic, e.g. 'typescript' or 'super lint'.
-    Source: string
+    Source: string option
 
     /// The diagnostic's message.
     Message: string
@@ -1938,29 +1938,25 @@ type ColorPresentation =
     /// An optional array of additional text edits that are applied when
     /// selecting this color presentation. Edits must not overlap with the main edit nor with themselves.
     AdditionalTextEdits: TextEdit [] option }
-  
-  /// The reason why code actions were requested.
-  /// @since 3.17.0
-  type CodeActionTriggerKind =
-      /// Code actions were explicitly requested by the user or by an extension.
-      | Invoked = 1
-      /// Code actions were requested automatically.
-      /// This typically happens when current selection in a file changes, but can
-      /// also be triggered when file content changes.
-      | Automatic = 2
-  
+
+type CodeActionKind = string
+
+type CodeActionTriggerKind =
+/// Code actions were explicitly requested by the user or by an extension.
+| Invoked = 1
+/// Code actions were requested automatically.
+/// This typically happens when current selection in a file changes, but can also be triggered when file content changes.
+| Automatic = 2
+
 /// Contains additional diagnostic information about the context in which
 /// a code action is run.
 type CodeActionContext =
-  { /// An array of diagnostics An array of diagnostics known on the client side overlapping the range
-    /// provided to the `textDocument/codeAction` request.
+  { /// An array of diagnostics.
     Diagnostics: Diagnostic []
     /// Requested kind of actions to return.
     /// Actions not of this kind are filtered out by the client before being
     /// shown. So servers can omit computing them.
-    /// 
-    /// Known kinds are specified in CodeActionKind module.
-    Only: string [] option
+    Only: CodeActionKind [] option
     /// The reason why code actions were requested.
     /// @since 3.17.0
     TriggerKind: CodeActionTriggerKind option }

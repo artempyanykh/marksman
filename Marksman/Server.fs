@@ -775,7 +775,7 @@ type MarksmanServer(client: MarksmanClient) =
 
             let tocAction =
                 State.tryFindDoc docPath state
-                |> Option.bind CodeActions.tableOfContents
+                |> Option.bind (CodeActions.tableOfContents opts.Range opts.Context)
                 |> Option.toArray
                 |> Array.map (fun ca ->
                     let wsEdit =

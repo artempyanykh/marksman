@@ -20,7 +20,7 @@ let documentEdit range text documentUri : WorkspaceEdit =
 
     { Changes = Some workspaceChanges; DocumentChanges = None }
 
-let tableOfContents (doc: Doc) : DocumentAction option =
+let tableOfContentsInner (doc: Doc) : DocumentAction option =
     match TableOfContents.mk (Doc.index doc) with
     | Some toc ->
         let rendered = TableOfContents.render toc
@@ -91,3 +91,11 @@ let tableOfContents (doc: Doc) : DocumentAction option =
             Some { name = name; newText = text; edit = editRange }
 
     | _ -> None
+
+
+let tableOfContents
+    (_range: Range)
+    (_context: CodeActionContext)
+    (doc: Doc)
+    : DocumentAction option =
+    tableOfContentsInner doc

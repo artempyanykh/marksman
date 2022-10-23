@@ -180,7 +180,7 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContents doc |> Option.get
+        let action = CodeActions.tableOfContentsInner doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
@@ -221,7 +221,7 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContents doc |> Option.get
+        let action = CodeActions.tableOfContentsInner doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
@@ -261,7 +261,7 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContents doc |> Option.get
+        let action = CodeActions.tableOfContentsInner doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
@@ -299,7 +299,7 @@ module DocumentEdit =
                     |# T2"
             )
 
-        let action = CodeActions.tableOfContents doc |> Option.get
+        let action = CodeActions.tableOfContentsInner doc |> Option.get
         let modifiedText = applyDocumentAction doc action
 
         let expected =
@@ -327,7 +327,7 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContents doc
+        let action = CodeActions.tableOfContentsInner doc
 
         Assert.Equal(None, action)
 
@@ -345,6 +345,6 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContents doc
+        let action = CodeActions.tableOfContentsInner doc
 
         Assert.Equal(None, action)

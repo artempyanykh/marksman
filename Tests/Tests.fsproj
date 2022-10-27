@@ -20,7 +20,9 @@
         <Compile Include="RefsTests.fs" />
         <Compile Include="RefactorTests.fs" />
         <Compile Include="SymbolsTests.fs" />
+        <Compile Include="ConfigTests.fs" />
         <Compile Include="Program.fs" />
+        <Content Include="default.marksman.toml" />
     </ItemGroup>
 
     <ItemGroup>

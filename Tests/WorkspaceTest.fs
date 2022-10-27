@@ -22,9 +22,43 @@ module FolderTests =
 
                 let notIgnored = "/Users/john/notes/real.md"
                 shouldBeIgnored glob root notIgnored |> Assert.False
+                
+        [<Fact>]
+        let relGlob_Unix_1 () =
+            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
+                let glob = buildGlobs [| "node_modules/" |]
+                let root = "/Users/john/notes"
+                let ignored = "/Users/john/notes/node_modules"
+                shouldBeIgnored glob root ignored |> Assert.True
+                
+                let ignored = "/Users/john/notes/node_modules/"
+                shouldBeIgnored glob root ignored |> Assert.True
+                
+                let ignored = "/Users/john/notes/node_modules/foo.md"
+                shouldBeIgnored glob root ignored |> Assert.True
+
+                let notIgnored = "/Users/john/notes/real.md"
+                shouldBeIgnored glob root notIgnored |> Assert.False
+                
+        [<Fact>]
+        let relGlob_Unix_2 () =
+            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
+                let glob = buildGlobs [| "node_modules/" |]
+                let root = "/Users/john/notes"
+                let ignored = "/Users/john/notes/sub/node_modules"
+                shouldBeIgnored glob root ignored |> Assert.True
+                
+                let ignored = "/Users/john/notes/sub/node_modules/"
+                shouldBeIgnored glob root ignored |> Assert.True
+                
+                let ignored = "/Users/john/notes/sub/node_modules/foo.md"
+                shouldBeIgnored glob root ignored |> Assert.True
+
+                let notIgnored = "/Users/john/notes/sub/real.md"
+                shouldBeIgnored glob root notIgnored |> Assert.False
 
         [<Fact>]
-        let relGlob_Unix () =
+        let relGlob_Unix_3 () =
             if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
                 let glob = buildGlobs [| "a/b" |]
                 let root = "/Users/john/notes"

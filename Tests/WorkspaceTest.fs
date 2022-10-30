@@ -1,6 +1,5 @@
 module Marksman.WorkspaceTest
 
-open System.Runtime.InteropServices
 open Ionide.LanguageServerProtocol.Types
 
 open Xunit
@@ -10,93 +9,13 @@ open Marksman.Workspace
 
 open Marksman.Helpers
 
-module FolderTests =
-    module ShouldBeIgnoredTests =
-        [<Fact>]
-        let absGlob_Unix () =
-            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
-                let glob = buildGlobs [| "/node_modules" |]
-                let root = "/Users/john/notes"
-                let ignored = "/Users/john/notes/node_modules"
-                shouldBeIgnored glob root ignored |> Assert.True
+module FolderTest =
+    [<Fact>]
+    let rooPath_singleFile () =
+        let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a")
+        let f1 = Folder.singleFile d1
 
-                let notIgnored = "/Users/john/notes/real.md"
-                shouldBeIgnored glob root notIgnored |> Assert.False
-                
-        [<Fact>]
-        let relGlob_Unix_1 () =
-            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
-                let glob = buildGlobs [| "node_modules/" |]
-                let root = "/Users/john/notes"
-                let ignored = "/Users/john/notes/node_modules"
-                shouldBeIgnored glob root ignored |> Assert.True
-                
-                let ignored = "/Users/john/notes/node_modules/"
-                shouldBeIgnored glob root ignored |> Assert.True
-                
-                let ignored = "/Users/john/notes/node_modules/foo.md"
-                shouldBeIgnored glob root ignored |> Assert.True
-
-                let notIgnored = "/Users/john/notes/real.md"
-                shouldBeIgnored glob root notIgnored |> Assert.False
-                
-        [<Fact>]
-        let relGlob_Unix_2 () =
-            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
-                let glob = buildGlobs [| "node_modules/" |]
-                let root = "/Users/john/notes"
-                let ignored = "/Users/john/notes/sub/node_modules"
-                shouldBeIgnored glob root ignored |> Assert.True
-                
-                let ignored = "/Users/john/notes/sub/node_modules/"
-                shouldBeIgnored glob root ignored |> Assert.True
-                
-                let ignored = "/Users/john/notes/sub/node_modules/foo.md"
-                shouldBeIgnored glob root ignored |> Assert.True
-
-                let notIgnored = "/Users/john/notes/sub/real.md"
-                shouldBeIgnored glob root notIgnored |> Assert.False
-
-        [<Fact>]
-        let relGlob_Unix_3 () =
-            if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
-                let glob = buildGlobs [| "a/b" |]
-                let root = "/Users/john/notes"
-                let ignored = "/Users/john/notes/a/b"
-                shouldBeIgnored glob root ignored |> Assert.True
-
-                let notIgnored = "/Users/john/notes/a/real.md"
-                shouldBeIgnored glob root notIgnored |> Assert.False
-
-        [<Fact>]
-        let absGlob_Win () =
-            if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
-                let glob = buildGlobs [| "/node_modules" |]
-                let root = "C:\\notes"
-                let ignored = "C:\\notes\\node_modules"
-                shouldBeIgnored glob root ignored |> Assert.True
-
-                let notIgnored = "C:\\notes\\real.md"
-                shouldBeIgnored glob root notIgnored |> Assert.False
-
-        [<Fact>]
-        let relGlob_Win () =
-            if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
-                let glob = buildGlobs [| "a/b" |]
-                let root = "C:\\notes"
-                let ignored = "C:\\notes\\a\\b"
-                shouldBeIgnored glob root ignored |> Assert.True
-
-                let notIgnored = "C:\\notes\\a\\real.md"
-                shouldBeIgnored glob root notIgnored |> Assert.False
-
-        [<Fact>]
-        let rooPath_singleFile () =
-            let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a")
-            let f1 = Folder.singleFile d1
-
-            Assert.Equal(dummyRootPath [ "a" ] |> RootPath.ofString, Folder.rootPath f1)
-
+        Assert.Equal(dummyRootPath [ "a" ] |> RootPath.ofString, Folder.rootPath f1)
 
 module DocTest =
     [<Fact>]

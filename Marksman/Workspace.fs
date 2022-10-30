@@ -7,6 +7,7 @@ open Ionide.LanguageServerProtocol.Logging
 
 open FSharpPlus.Operators
 
+open Marksman.GitIgnore
 open Marksman.Parser
 open Marksman.Text
 open Marksman.Misc
@@ -199,10 +200,11 @@ module Folder =
 
     let private loadDocs (root: RootPath) : seq<Doc> =
 
-        let rec collect (cur: PathUri) (ignoreFns: list<string -> bool>) =
-            let ignores = readIgnoreFiles cur |> buildGlobs
-            let ignoreFn = shouldBeIgnored ignores cur.LocalPath
-            let ignoreFns = ignoreFn :: ignoreFns
+        let rec collect (cur: PathUri) (ignoreMatchers: list<GlobMatcher>) =
+            let ignoreMatchers =
+                match readIgnoreFiles cur with
+                | [||] -> ignoreMatchers
+                | pats -> GlobMatcher.mk cur.LocalPath pats :: ignoreMatchers
 
             let di = DirectoryInfo(cur.LocalPath)
 
@@ -212,7 +214,7 @@ module Folder =
 
                 seq {
                     for file in files do
-                        if not (shouldBeIgnoredByAny ignoreFns file.FullName) then
+                        if not (GlobMatcher.ignoresAny ignoreMatchers file.FullName) then
                             let pathUri = PathUri.ofString file.FullName
 
                             let document = Doc.tryLoad root pathUri
@@ -227,8 +229,8 @@ module Folder =
                             )
 
                     for dir in dirs do
-                        if not (shouldBeIgnoredByAny ignoreFns dir.FullName) then
-                            yield! collect (PathUri.ofString dir.FullName) ignoreFns
+                        if not (GlobMatcher.ignoresAny ignoreMatchers dir.FullName) then
+                            yield! collect (PathUri.ofString dir.FullName) ignoreMatchers
                         else
                             logger.trace (
                                 Log.setMessage "Skipping ignored directory"
@@ -253,7 +255,7 @@ module Folder =
 
                 Seq.empty
 
-        collect (RootPath.path root) []
+        collect (RootPath.path root) [ GlobMatcher.mkDefault (RootPath.path root).LocalPath ]
 
     let tryLoad (name: string) (root: RootPath) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)

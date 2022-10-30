@@ -1,45 +1,56 @@
-module Marksman.GitGlob
+module Marksman.GitIgnore
 
-type MsMatcher = Microsoft.Extensions.FileSystemGlobbing.Matcher
+open System.IO
+open GlobExpressions
 
-type Glob =
-    | Include of string
-    | Exclude of string
+type GlobPattern =
+    | Include of Glob
+    | Exclude of Glob
 
-let patternToMsPattern (pat: string) : string =
+let patternToGlob (pat: string) : array<Glob> =
     let firstSlashIdx = pat.IndexOf('/')
     let isAbsolute = firstSlashIdx <> pat.Length - 1
     let isDir = pat[pat.Length - 1] = '/'
+    let pat = if pat.StartsWith("/") then pat.Substring(1) else pat
     let pat = if isAbsolute then pat else "**/" + pat
-    let pat = if isDir then pat.Substring(0, pat.Length - 2) else pat
-    pat
 
+    if isDir then
+        [| Glob(pat + "**"); Glob(pat.Substring(0, pat.Length - 1)) |]
+    else
+        [| Glob(pat) |]
 
-let patternToGlob (pat: string) : option<Glob> =
+let mkGlobPattern (pat: string) : array<GlobPattern> =
     if pat.StartsWith("#") then
-        None
+        [||]
     else if pat.StartsWith("!") then
         let pat = pat.Substring(1)
-        Include(patternToMsPattern pat) |> Some
+        patternToGlob pat |> Array.map Include
     else
-        Exclude(patternToMsPattern pat) |> Some
+        patternToGlob pat |> Array.map Exclude
 
-type GlobMatcher = { root: string; matcher: MsMatcher }
+type GlobMatcher = { root: string; patterns: array<GlobPattern> }
 
 module GlobMatcher =
-    open Microsoft.Extensions.FileSystemGlobbing
 
     let mk (root: string) (lines: array<string>) : GlobMatcher =
-        let globs =
-            lines
-            |> Array.collect (fun line -> patternToGlob line |> Option.toArray)
+        let patterns = lines |> Array.collect mkGlobPattern
 
-        let matcher = MsMatcher().AddInclude("**/*")
-        matcher.AddExcludePatterns([| ".git"; ".hg" |])
+        { root = root; patterns = patterns }
 
-        for glob in globs do
-            match glob with
-            | Exclude pat -> matcher.AddExclude(pat) |> ignore
-            | Include pat -> matcher.AddInclude(pat) |> ignore
+    let mkDefault (root: string) : GlobMatcher = mk root [| ".git"; ".hg" |]
 
-        { root = root; matcher = matcher }
+    let ignores (matcher: GlobMatcher) (path: string) : bool =
+        let relPath = Path.GetRelativePath(matcher.root, path)
+
+        let checkGlob g =
+            match g with
+            | Include glob -> if glob.IsMatch(relPath) then Some false else None
+            | Exclude glob -> if glob.IsMatch(relPath) then Some true else None
+
+        match matcher.patterns |> Seq.map checkGlob |> Seq.tryFind Option.isSome with
+        | None -> false
+        | Some (Some r) -> r
+        | Some None -> failwith "Unreachable: GlobMatcher.ignores"
+
+    let ignoresAny (matchers: seq<GlobMatcher>) (path: string) : bool =
+        Seq.exists (fun m -> ignores m path) matchers

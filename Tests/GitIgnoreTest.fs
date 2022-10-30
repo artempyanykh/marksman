@@ -6,6 +6,9 @@ open Xunit
 open Marksman.GitIgnore
 
 [<Fact>]
+let patternToGlob_Empty () = Assert.Equal<GlobExpressions.Glob>([||], patternToGlob "")
+
+[<Fact>]
 let absGlob_Unix () =
     if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
         let root = "/Users/john/notes"
@@ -15,7 +18,7 @@ let absGlob_Unix () =
 
         let notIgnored = "/Users/john/notes/real.md"
         GlobMatcher.ignores glob notIgnored |> Assert.False
-        
+
 [<Fact>]
 let relGlob_Unix_1 () =
     if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
@@ -23,16 +26,16 @@ let relGlob_Unix_1 () =
         let glob = GlobMatcher.mk root [| "node_modules/" |]
         let ignored = "/Users/john/notes/node_modules"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "/Users/john/notes/node_modules/"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "/Users/john/notes/node_modules/foo.md"
         GlobMatcher.ignores glob ignored |> Assert.True
 
         let notIgnored = "/Users/john/notes/real.md"
         GlobMatcher.ignores glob notIgnored |> Assert.False
-        
+
 [<Fact>]
 let relGlob_Unix_2 () =
     if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
@@ -40,10 +43,10 @@ let relGlob_Unix_2 () =
         let glob = GlobMatcher.mk root [| "node_modules/" |]
         let ignored = "/Users/john/notes/sub/node_modules"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "/Users/john/notes/sub/node_modules/"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "/Users/john/notes/sub/node_modules/foo.md"
         GlobMatcher.ignores glob ignored |> Assert.True
 
@@ -71,38 +74,38 @@ let absGlob_Win () =
 
         let notIgnored = "C:\\notes\\real.md"
         GlobMatcher.ignores glob notIgnored |> Assert.False
-        
-        
+
+
 [<Fact>]
 let relGlob_Win_1 () =
     if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
         let root = "C:\\notes"
         let glob = GlobMatcher.mk root [| "node_modules/" |]
-        
+
         let ignored = "C:\\notes\\node_modules"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "C:\\notes\\node_modules\\"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "C:\\notes\\node_modules\\foo.md"
         GlobMatcher.ignores glob ignored |> Assert.True
 
         let notIgnored = "C:\\notes\\real.md"
         GlobMatcher.ignores glob notIgnored |> Assert.False
-        
+
 [<Fact>]
 let relGlob_Win_2 () =
     if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
         let root = "C:\\notes"
         let glob = GlobMatcher.mk root [| "node_modules/" |]
-        
+
         let ignored = "C:\\notes\\sub\\node_modules"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "C:\\notes\\sub\\node_modules\\"
         GlobMatcher.ignores glob ignored |> Assert.True
-        
+
         let ignored = "C:\\notes\\sub\\node_modules\\foo.md"
         GlobMatcher.ignores glob ignored |> Assert.True
 

@@ -1,23 +1,28 @@
 module Marksman.GitIgnore
 
+open System
 open System.IO
 open GlobExpressions
+open Marksman.Misc
 
 type GlobPattern =
     | Include of Glob
     | Exclude of Glob
 
 let patternToGlob (pat: string) : array<Glob> =
-    let firstSlashIdx = pat.IndexOf('/')
-    let isAbsolute = firstSlashIdx <> pat.Length - 1
-    let isDir = pat[pat.Length - 1] = '/'
-    let pat = if pat.StartsWith("/") then pat.Substring(1) else pat
-    let pat = if isAbsolute then pat else "**/" + pat
-
-    if isDir then
-        [| Glob(pat + "**"); Glob(pat.Substring(0, pat.Length - 1)) |]
+    if String.IsNullOrWhiteSpace(pat) then
+        [||]
     else
-        [| Glob(pat) |]
+        let firstSlashIdx = pat.IndexOf('/')
+        let isAbsolute = firstSlashIdx <> pat.Length - 1
+        let isDir = pat[pat.Length - 1] = '/'
+        let pat = if pat.StartsWith("/") then pat.Substring(1) else pat
+        let pat = if isAbsolute then pat else "**/" + pat
+
+        if isDir then
+            [| Glob(pat + "**"); Glob(pat.Substring(0, pat.Length - 1)) |]
+        else
+            [| Glob(pat) |]
 
 let mkGlobPattern (pat: string) : array<GlobPattern> =
     if pat.StartsWith("#") then

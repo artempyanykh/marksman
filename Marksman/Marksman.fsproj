@@ -24,6 +24,7 @@
     </Target>
     <ItemGroup>
         <Compile Include="Misc.fs"/>
+        <Compile Include="GitIgnore.fs"/>
         <Compile Include="Config.fs"/>
         <Compile Include="Text.fs"/>
         <Compile Include="Cst.fs"/>

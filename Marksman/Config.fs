@@ -3,19 +3,28 @@ module Marksman.Config
 open System.IO
 open Tomlyn
 
-type TocConfig() =
-    member val Enable = true with get, set
+type TocConfig = { enable: bool }
+type CodeActionConfig = { toc: TocConfig }
+type Config = { codeAction: CodeActionConfig }
 
-type CodeActionConfig() =
-    member val Toc = TocConfig() with get, set
+module Serde =
+    type TocConfig() =
+        member val Enable: bool = true with get, set
+        member this.Build() = { enable = this.Enable }
 
-type Config() =
-    member val CodeAction = CodeActionConfig() with get, set
+    type CodeActionConfig() =
+        member val Toc = TocConfig() with get, set
+        member this.Build() = { toc = this.Toc.Build() }
+
+    type Config() =
+        member val CodeAction = CodeActionConfig() with get, set
+        member this.Build() = { codeAction = this.CodeAction.Build() }
+
 
 let tryParse (content: string) =
-    let isOk, toml, _diag = Toml.TryToModel<Config>(content)
+    let isOk, toml, _diag = Toml.TryToModel<Serde.Config>(content)
 
-    if not isOk then None else Some toml
+    if not isOk then None else Some(toml.Build())
 
 let read (filepath: string) =
     try

@@ -9,7 +9,9 @@ let testParse_0 () =
 """
 
     let actual = Config.tryParse content
-    let expected = { Config.codeAction = { toc = { enable = true } } }
+
+    let expected = { Config.codeAction = None }
+
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
@@ -20,7 +22,7 @@ let testParse_1 () =
 """
 
     let actual = Config.tryParse content
-    let expected = { Config.codeAction = { toc = { enable = true } } }
+    let expected = { Config.codeAction = Some { toc = None } }
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
@@ -32,5 +34,8 @@ toc.enable = false
 """
 
     let actual = Config.tryParse content
-    let expected = { Config.codeAction = { toc = { enable = false } } }
+
+    let expected =
+        { Config.codeAction = Some { toc = Some { enable = Some false } } }
+
     Assert.Equal(Some expected, actual)

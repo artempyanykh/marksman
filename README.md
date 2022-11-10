@@ -82,6 +82,17 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 3. Place the binary somewhere in your `PATH`.
     * XDG recommends using `$HOME/.local/bin/` (make sure this folder is in your `PATH`).
 
+**NOTE**: If you're on MacOS and are getting a popup about:
+
+> “marksman” can’t be opened because Apple cannot check it for malicious software
+
+Then you can run the following command to bypass it and let Mac know that it's
+fine.
+
+```sh
+xattr -d com.apple.quarantine ~/bin/marksman
+```
+
 ### Option 2: build from source
 
 0. Install [Dotnet SDK](https://dotnet.microsoft.com/en-us/download) for your OS.

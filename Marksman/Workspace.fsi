@@ -3,6 +3,7 @@ module Marksman.Workspace
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
+open Marksman.Config
 open Marksman.Cst
 open Marksman.Index
 open Marksman.Text
@@ -55,7 +56,7 @@ module Folder =
     val tryLoad: name: string -> root: RootPath -> option<Folder>
 
     val singleFile: Doc -> Folder
-    val multiFile: name: string -> root: RootPath -> docs: Map<PathUri, Doc> -> Folder
+    val multiFile: name: string -> root: RootPath -> docs: Map<PathUri, Doc> -> config: option<Config> -> Folder
     val isSingleFile: Folder -> bool
 
     val withDoc: Doc -> Folder -> Folder

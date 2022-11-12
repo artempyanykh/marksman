@@ -39,26 +39,43 @@ let private getFromTable<'R>
     | [] -> failwith "Cannot query a table with an empty path"
     | path -> go table revContext path
 
-let lookupAsOpt =
+let private lookupAsOpt =
     function
     | Ok found -> Ok(Some found)
     | Error (NotFound _) -> Ok None
     | Error err -> Error err
 
-let getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, LookupError> =
+let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, LookupError> =
     getFromTable table revSeenPath remPath |> lookupAsOpt
 
-type TocConfig = { enable: option<bool> }
-type CodeActionConfig = { toc: option<TocConfig> }
-type Config = { codeAction: option<CodeActionConfig> }
+type TocConfig =
+    { enable: option<bool> }
+    static member Default = { enable = Some true }
+    member this.EnableOrDefault() = this.enable |> Option.defaultValue true
 
-let tocOfTable (context: list<string>) (table: TomlTable) : LookupResult<TocConfig> =
+module TocConfig =
+    let private merge hi low = hi.enable |> Option.orElse low.enable
+
+type CodeActionConfig =
+    { toc: option<TocConfig> }
+    static member Default = { toc = Some TocConfig.Default }
+    member this.TocOrDefault() = this.toc |> Option.defaultValue TocConfig.Default
+
+module CodeActionConfig =
+    let private merge hi low = { toc = hi.toc |> Option.orElse low.toc }
+
+type Config =
+    { codeAction: option<CodeActionConfig> }
+    member this.CodeActionOrDefault() =
+        this.codeAction |> Option.defaultValue CodeActionConfig.Default
+
+let private tocOfTable (context: list<string>) (table: TomlTable) : LookupResult<TocConfig> =
     monad' {
         let! enable = getFromTableOpt<bool> table context [ "enable" ]
         { enable = enable }
     }
 
-let caOfTable (context: list<string>) (table: TomlTable) : LookupResult<CodeActionConfig> =
+let private caOfTable (context: list<string>) (table: TomlTable) : LookupResult<CodeActionConfig> =
     monad' {
         let! toc =
             getFromTable<TomlTable> table context [ "toc" ]
@@ -68,7 +85,7 @@ let caOfTable (context: list<string>) (table: TomlTable) : LookupResult<CodeActi
         { toc = toc }
     }
 
-let configOfTable (context: list<string>) (table: TomlTable) : LookupResult<Config> =
+let private configOfTable (context: list<string>) (table: TomlTable) : LookupResult<Config> =
     monad {
         let! ca =
             getFromTable<TomlTable> table [] [ "code_action" ]
@@ -78,16 +95,27 @@ let configOfTable (context: list<string>) (table: TomlTable) : LookupResult<Conf
         { codeAction = ca }
     }
 
-let tryParse (content: string) =
-    let table = Toml.ToModel(content)
+module Config =
+    let merge hi low = { codeAction = hi.codeAction |> Option.orElse low.codeAction }
 
-    match configOfTable [] table with
-    | Ok parsed -> Some parsed
-    | _ -> None
+    let tryParse (content: string) =
+        let table = Toml.ToModel(content)
 
-let read (filepath: string) =
-    try
-        let content = using (new StreamReader(filepath)) (fun f -> f.ReadToEnd())
-        tryParse content
-    with :? FileNotFoundException ->
-        None
+        match configOfTable [] table with
+        | Ok parsed -> Some parsed
+        | _ -> None
+
+    let read (filepath: string) =
+        try
+            let content = using (new StreamReader(filepath)) (fun f -> f.ReadToEnd())
+            tryParse content
+        with :? FileNotFoundException ->
+            None
+
+    let private marksman = "marksman"
+
+    let userConfigDir =
+        Path.Join(
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
+            marksman
+        )

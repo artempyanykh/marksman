@@ -2,6 +2,8 @@ module Marksman.ConfigTests
 
 open Xunit
 
+open Marksman.Config
+
 [<Fact>]
 let testParse_0 () =
     let content =
@@ -10,7 +12,7 @@ let testParse_0 () =
 
     let actual = Config.tryParse content
 
-    let expected = { Config.codeAction = None }
+    let expected = { codeAction = None }
 
     Assert.Equal(Some expected, actual)
 
@@ -22,7 +24,7 @@ let testParse_1 () =
 """
 
     let actual = Config.tryParse content
-    let expected = { Config.codeAction = Some { toc = None } }
+    let expected = { codeAction = Some { toc = None } }
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
@@ -36,6 +38,6 @@ toc.enable = false
     let actual = Config.tryParse content
 
     let expected =
-        { Config.codeAction = Some { toc = Some { enable = Some false } } }
+        { codeAction = Some { toc = Some { enable = Some false } } }
 
     Assert.Equal(Some expected, actual)

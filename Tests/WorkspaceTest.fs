@@ -46,7 +46,7 @@ module WorkspaceTest =
         let ws = Workspace.ofFolders [ f1; f2 ]
 
         let f0Path = dummyRootPath [ "a" ] |> PathUri.ofString
-        let f0 = Folder.multiFile "f0" (RootPath.ofPath f0Path) Map.empty
+        let f0 = Folder.multiFile "f0" (RootPath.ofPath f0Path) Map.empty None
 
         let updWs = Workspace.withFolder f0 ws
 

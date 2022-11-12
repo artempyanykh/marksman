@@ -8,6 +8,7 @@ open Ionide.LanguageServerProtocol.Logging
 open FSharpPlus.Operators
 
 open Marksman.GitIgnore
+open Marksman.Config
 open Marksman.Parser
 open Marksman.Text
 open Marksman.Misc
@@ -138,8 +139,14 @@ module Doc =
 
     let version (doc: Doc) : option<int> = doc.version
 
+type MultiFile =
+    { name: string
+      root: RootPath
+      docs: Map<PathUri, Doc>
+      config: option<Config> }
+
 type Folder =
-    | MultiFile of name: string * root: RootPath * docs: Map<PathUri, Doc>
+    | MultiFile of MultiFile
     | SingleFile of Doc
 
 module Folder =
@@ -154,27 +161,28 @@ module Folder =
         | SingleFile _ -> true
         | MultiFile _ -> false
 
-    let multiFile name root docs = MultiFile(name, root, docs)
+    let multiFile name root docs config =
+        MultiFile({ name = name; root = root; docs = docs; config = config })
 
     let docs: Folder -> seq<Doc> =
         function
         | SingleFile doc -> Seq.singleton doc
-        | MultiFile (_, _, docs) -> Map.values docs
+        | MultiFile { docs = docs } -> Map.values docs
 
     let id: Folder -> FolderId =
         function
-        | MultiFile (_, root, _) -> root |> RootPath.path |> FolderId.ofPath
+        | MultiFile { root = root } -> root |> RootPath.path |> FolderId.ofPath
         | SingleFile doc -> doc.path |> FolderId.ofPath
 
     let rootPath: Folder -> RootPath =
         function
-        | MultiFile (_, root, _) -> root
+        | MultiFile { root = root } -> root
         | SingleFile doc -> doc.rootPath
 
     let tryFindDocByPath (uri: PathUri) : Folder -> option<Doc> =
         function
         | SingleFile doc -> Some doc |> Option.filter (fun x -> x.path = uri)
-        | MultiFile (_, _, docs) -> Map.tryFind uri docs
+        | MultiFile { docs = docs } -> Map.tryFind uri docs
 
     let private readIgnoreFiles (root: PathUri) : array<string> =
         let lines = ResizeArray()
@@ -257,6 +265,28 @@ module Folder =
 
         collect (RootPath.path root) [ GlobMatcher.mkDefault (RootPath.path root).LocalPath ]
 
+    let private tryLoadFolderConfig (root: RootPath) : option<Config> =
+        let folderConfigPath =
+            Path.Join((RootPath.path root).LocalPath, ".marksman.toml")
+
+        if File.Exists(folderConfigPath) then
+            logger.trace (
+                Log.setMessage "Found folder config"
+                >> Log.addContext "config" folderConfigPath
+            )
+
+            let config = Config.read folderConfigPath
+
+            if Option.isNone config then
+                logger.error (
+                    Log.setMessage "Malformed folder config, skipping"
+                    >> Log.addContext "config" folderConfigPath
+                )
+
+            config
+        else
+            None
+
     let tryLoad (name: string) (root: RootPath) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
 
@@ -265,7 +295,10 @@ module Folder =
             let documents =
                 loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
 
-            MultiFile(name = name, root = root, docs = documents) |> Some
+            let config = tryLoadFolderConfig root
+
+            MultiFile { name = name; root = root; docs = documents; config = config }
+            |> Some
         else
             logger.warn (
                 Log.setMessage "Folder path doesn't exist"
@@ -276,12 +309,12 @@ module Folder =
 
     let withDoc (newDoc: Doc) : Folder -> Folder =
         function
-        | MultiFile (name, root, docs) ->
-            if newDoc.rootPath <> root then
+        | MultiFile folder ->
+            if newDoc.rootPath <> folder.root then
                 failwith
-                    $"Updating a folder with an unrelated doc: folder={root}; doc={newDoc.rootPath}"
+                    $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.rootPath}"
 
-            MultiFile(name = name, root = root, docs = Map.add newDoc.path newDoc docs)
+            MultiFile { folder with docs = Map.add newDoc.path newDoc folder.docs }
         | SingleFile existingDoc ->
             if newDoc.path <> existingDoc.path then
                 failwith
@@ -291,8 +324,8 @@ module Folder =
 
     let withoutDoc (docPath: PathUri) : Folder -> option<Folder> =
         function
-        | MultiFile (name, root, docs) ->
-            MultiFile(name = name, root = root, docs = Map.remove docPath docs)
+        | MultiFile folder ->
+            MultiFile { folder with docs = Map.remove docPath folder.docs }
             |> Some
         | SingleFile doc ->
             if doc.path <> docPath then
@@ -303,7 +336,7 @@ module Folder =
 
     let closeDoc (docPath: PathUri) (folder: Folder) : option<Folder> =
         match folder with
-        | MultiFile (_, root, _) ->
+        | MultiFile { root = root } ->
             match Doc.tryLoad root docPath with
             | Some doc -> withDoc doc folder |> Some
             | _ -> withoutDoc docPath folder
@@ -331,7 +364,7 @@ module Folder =
     let docCount: Folder -> int =
         function
         | SingleFile _ -> 1
-        | MultiFile (_, _, docs) -> docs.Values.Count
+        | MultiFile { docs = docs } -> docs.Values.Count
 
 type Workspace = { folders: Map<FolderId, Folder> }
 
@@ -365,7 +398,7 @@ module Workspace =
         let updatedFolders =
             match newFolder with
             | SingleFile _ -> Map.add (Folder.id newFolder) newFolder workspace.folders
-            | MultiFile (_, root, _) ->
+            | MultiFile { root = root } ->
                 let newRoot = (RootPath.path root).LocalPath
 
                 let isEnclosed _ existingFolder =

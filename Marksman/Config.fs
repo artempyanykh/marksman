@@ -50,6 +50,7 @@ let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, L
 
 type TocConfig =
     { enable: option<bool> }
+
     static member Default = { enable = Some true }
     member this.EnableOrDefault() = this.enable |> Option.defaultValue true
 
@@ -58,6 +59,7 @@ module TocConfig =
 
 type CodeActionConfig =
     { toc: option<TocConfig> }
+
     static member Default = { toc = Some TocConfig.Default }
     member this.TocOrDefault() = this.toc |> Option.defaultValue TocConfig.Default
 
@@ -66,6 +68,7 @@ module CodeActionConfig =
 
 type Config =
     { codeAction: option<CodeActionConfig> }
+
     member this.CodeActionOrDefault() =
         this.codeAction |> Option.defaultValue CodeActionConfig.Default
 

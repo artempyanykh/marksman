@@ -60,5 +60,5 @@ type FakeFolder =
         static member Mk(docs: seq<Doc>) : Folder =
             let docsMap = docs |> Seq.map (fun d -> Doc.path d, d) |> Map.ofSeq
 
-            Folder.multiFile "dummy" (RootPath.ofString dummyRootUri) docsMap
+            Folder.multiFile "dummy" (RootPath.ofString dummyRootUri) docsMap None
     end

@@ -801,20 +801,27 @@ type MarksmanServer(client: MarksmanClient) =
                   Disabled = None
                   Edit = Some edit }
 
-            let tocAction =
-                State.tryFindDoc docPath state
-                |> Option.bind (CodeActions.tableOfContents opts.Range opts.Context)
-                |> Option.toArray
-                |> Array.map (fun ca ->
-                    let wsEdit =
-                        (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
+            match State.tryFindFolderAndDoc docPath state with
+            | None -> Mutation.output (LspResult.success None)
+            | Some (folder, doc) ->
+                let config = Folder.configOrDefault folder
 
-                    codeAction ca.name wsEdit)
+                let tocAction =
+                    if config.CaTocEnable() then
+                        CodeActions.tableOfContents opts.Range opts.Context doc
+                        |> Option.toArray
+                        |> Array.map (fun ca ->
+                            let wsEdit =
+                                (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
 
-            let codeActions: TextDocumentCodeActionResult =
-                tocAction |> Array.map U2.Second
+                            codeAction ca.name wsEdit)
+                    else
+                        [||]
 
-            Mutation.output (LspResult.success (Some codeActions))
+                let codeActions: TextDocumentCodeActionResult =
+                    tocAction |> Array.map U2.Second
+
+                Mutation.output (LspResult.success (Some codeActions))
 
 
     override this.TextDocumentRename(pars) =

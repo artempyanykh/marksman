@@ -23,7 +23,10 @@
         <Compile Include="ConfigTests.fs" />
         <Compile Include="GitIgnoreTest.fs" />
         <Compile Include="Program.fs" />
-        <Content Include="default.marksman.toml" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <EmbeddedResource Include="default.marksman.toml" LogicalName="default.marksman.toml" />
     </ItemGroup>
 
     <ItemGroup>

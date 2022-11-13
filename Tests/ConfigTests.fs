@@ -1,5 +1,7 @@
 module Marksman.ConfigTests
 
+open System.IO
+open System.Reflection
 open Xunit
 
 open Marksman.Config
@@ -43,8 +45,17 @@ toc.enable = false
 
 [<Fact>]
 let testParse_broken_0 () =
-    let content = """
+    let content =
+        """
 blah
 """
+
     let actual = Config.tryParse content
     Assert.Equal(None, actual)
+
+[<Fact>]
+let testDefault () =
+    let content = Assembly.GetExecutingAssembly().GetManifestResourceStream("default.marksman.toml")
+    let content = using (new StreamReader(content)) (fun f -> f.ReadToEnd())
+    let parsed = Config.tryParse content
+    Assert.Equal(Some Config.Default, parsed)

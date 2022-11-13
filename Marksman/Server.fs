@@ -20,100 +20,135 @@ open Marksman.Refs
 open Marksman.State
 open Marksman.Workspace
 
-let extractWorkspaceFolders (par: InitializeParams) : Map<string, RootPath> =
-    match par.WorkspaceFolders with
-    | Some folders ->
-        folders
-        |> Array.map (fun { Name = name; Uri = uri } -> name, RootPath.ofString uri)
-        |> Map.ofArray
-    | _ ->
-        let rootPath = par.RootUri |> Option.orElse par.RootPath
+module ServerUtil =
+    let logger = LogProvider.getLoggerByName "ServerUtil"
 
-        match rootPath with
-        | None ->
-            // No folders are configured. The client can still add folders later using a notification.
-            Map.empty
-        | Some rootPath ->
-            let rootUri = PathUri.ofString rootPath
+    let private isRealWorkspaceFolder (root: string) : bool =
+        if Directory.Exists(root) then
+            let markerFiles = [| ".marksman.toml" |]
+            let markerDirs = [| ".git"; ".hg"; ".svn" |]
 
-            let rootName = Path.GetFileName(rootUri.LocalPath)
+            let hasMarkerFile () =
+                Array.exists (fun marker -> File.Exists(Path.Join(root, marker))) markerFiles
 
-            Map.ofList [ rootName, RootPath.ofPath rootUri ]
+            let hasMarkerDir () =
+                Array.exists (fun marker -> Directory.Exists(Path.Join(root, marker))) markerDirs
 
-let readWorkspace (roots: Map<string, RootPath>) : list<Folder> =
-    seq {
-        for KeyValue (name, root) in roots do
-            match Folder.tryLoad name root with
-            | Some folder -> yield folder
-            | _ -> ()
-    }
-    |> List.ofSeq
-
-let mkServerCaps (par: InitializeParams) : ServerCapabilities =
-    let workspaceFoldersCaps =
-        { Supported = Some true; ChangeNotifications = Some true }
-
-    let markdownFilePattern =
-        { Glob = "**/*.md"
-          Matches = Some FileOperationPatternKind.File
-          Options = Some { FileOperationPatternOptions.Default with IgnoreCase = Some true } }
-
-    let markdownFileRegistration =
-        { Filters = [| { Scheme = None; Pattern = markdownFilePattern } |] }
-
-    let workspaceFileCaps =
-        { WorkspaceFileOperationsServerCapabilities.Default with
-            DidCreate = Some markdownFileRegistration
-            DidDelete = Some markdownFileRegistration
-            // VSCode behaves weirdly when communicating file renames, so let's turn this off.
-            // Anyway, when the file is renamed VSCode sends
-            // - didClose on the old name, and
-            // - didOpen on the new one
-            // which is enough to keep the state in sync.
-            DidRename = None }
-
-    let workspaceCaps =
-        { WorkspaceServerCapabilities.Default with
-            WorkspaceFolders = Some workspaceFoldersCaps
-            FileOperations = Some workspaceFileCaps }
-
-    let textSyncCaps =
-        { TextDocumentSyncOptions.Default with
-            OpenClose = Some true
-            Change = Some TextDocumentSyncKind.Incremental }
-
-
-    let clientDesc = ClientDescription.ofParams par
-
-    let codeActionOptions =
-        { CodeActionKinds = None; ResolveProvider = Some false }
-
-    let renameOptions =
-        if clientDesc.SupportsPrepareRename then
-            { PrepareProvider = Some true } |> U2.Second |> Some
+            hasMarkerDir () || hasMarkerFile ()
         else
-            Some(U2.First true)
+            false
 
-    { ServerCapabilities.Default with
-        Workspace = Some workspaceCaps
-        WorkspaceSymbolProvider = Some(not clientDesc.IsVSCode)
-        TextDocumentSync = Some textSyncCaps
-        DocumentSymbolProvider = Some(not clientDesc.IsVSCode)
-        CompletionProvider =
-            Some
-                { TriggerCharacters = Some [| '['; '#'; '(' |]
-                  ResolveProvider = None
-                  AllCommitCharacters = None }
-        DefinitionProvider = Some true
-        HoverProvider = Some true
-        ReferencesProvider = Some true
-        CodeActionProvider = Some codeActionOptions
-        SemanticTokensProvider =
-            Some
-                { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
-                  Range = Some true
-                  Full = { Delta = Some false } |> U2.Second |> Some }
-        RenameProvider = renameOptions }
+    // Remove this and related logic when https://github.com/helix-editor/helix/issues/4436 is resolved.
+    let checkWorkspaceFolderWithWarn (root: PathUri) : bool =
+        if isRealWorkspaceFolder root.LocalPath then
+            true
+        else
+            logger.warn (
+                Log.setMessage "Workspace folder is bogus"
+                >> Log.addContext "root" root
+            )
+
+            false
+
+    let extractWorkspaceFolders (par: InitializeParams) : Map<string, RootPath> =
+        match par.WorkspaceFolders with
+        | Some folders ->
+            folders
+            |> Array.map (fun { Name = name; Uri = uri } -> name, RootPath.ofString uri)
+            |> Array.filter (fun (_, rootPath) ->
+                checkWorkspaceFolderWithWarn (RootPath.path rootPath))
+            |> Map.ofArray
+        | _ ->
+            let rootPath = par.RootUri |> Option.orElse par.RootPath
+
+            match rootPath with
+            | None ->
+                // No folders are configured. The client can still add folders later using a notification.
+                Map.empty
+            | Some rootPath ->
+                let rootUri = PathUri.ofString rootPath
+
+                if checkWorkspaceFolderWithWarn rootUri then
+                    let rootName = Path.GetFileName(rootUri.LocalPath)
+
+                    Map.ofList [ rootName, RootPath.ofPath rootUri ]
+                else
+                    Map.empty
+
+    let readWorkspace (roots: Map<string, RootPath>) : list<Folder> =
+        seq {
+            for KeyValue (name, root) in roots do
+                match Folder.tryLoad name root with
+                | Some folder -> yield folder
+                | _ -> ()
+        }
+        |> List.ofSeq
+
+    let mkServerCaps (par: InitializeParams) : ServerCapabilities =
+        let workspaceFoldersCaps =
+            { Supported = Some true; ChangeNotifications = Some true }
+
+        let markdownFilePattern =
+            { Glob = "**/*.md"
+              Matches = Some FileOperationPatternKind.File
+              Options = Some { FileOperationPatternOptions.Default with IgnoreCase = Some true } }
+
+        let markdownFileRegistration =
+            { Filters = [| { Scheme = None; Pattern = markdownFilePattern } |] }
+
+        let workspaceFileCaps =
+            { WorkspaceFileOperationsServerCapabilities.Default with
+                DidCreate = Some markdownFileRegistration
+                DidDelete = Some markdownFileRegistration
+                // VSCode behaves weirdly when communicating file renames, so let's turn this off.
+                // Anyway, when the file is renamed VSCode sends
+                // - didClose on the old name, and
+                // - didOpen on the new one
+                // which is enough to keep the state in sync.
+                DidRename = None }
+
+        let workspaceCaps =
+            { WorkspaceServerCapabilities.Default with
+                WorkspaceFolders = Some workspaceFoldersCaps
+                FileOperations = Some workspaceFileCaps }
+
+        let textSyncCaps =
+            { TextDocumentSyncOptions.Default with
+                OpenClose = Some true
+                Change = Some TextDocumentSyncKind.Incremental }
+
+
+        let clientDesc = ClientDescription.ofParams par
+
+        let codeActionOptions =
+            { CodeActionKinds = None; ResolveProvider = Some false }
+
+        let renameOptions =
+            if clientDesc.SupportsPrepareRename then
+                { PrepareProvider = Some true } |> U2.Second |> Some
+            else
+                Some(U2.First true)
+
+        { ServerCapabilities.Default with
+            Workspace = Some workspaceCaps
+            WorkspaceSymbolProvider = Some(not clientDesc.IsVSCode)
+            TextDocumentSync = Some textSyncCaps
+            DocumentSymbolProvider = Some(not clientDesc.IsVSCode)
+            CompletionProvider =
+                Some
+                    { TriggerCharacters = Some [| '['; '#'; '(' |]
+                      ResolveProvider = None
+                      AllCommitCharacters = None }
+            DefinitionProvider = Some true
+            HoverProvider = Some true
+            ReferencesProvider = Some true
+            CodeActionProvider = Some codeActionOptions
+            SemanticTokensProvider =
+                Some
+                    { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
+                      Range = Some true
+                      Full = { Delta = Some false } |> U2.Second |> Some }
+            RenameProvider = renameOptions }
 
 type MarksmanStatusParams = { state: string; docCount: int }
 
@@ -437,14 +472,14 @@ type MarksmanServer(client: MarksmanClient) =
             None
 
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
-        let workspaceFolders = extractWorkspaceFolders par
+        let workspaceFolders = ServerUtil.extractWorkspaceFolders par
 
         logger.debug (
             Log.setMessage "Obtained workspace folders"
             >> Log.addContext "workspace" workspaceFolders
         )
 
-        let folders = readWorkspace workspaceFolders
+        let folders = ServerUtil.readWorkspace workspaceFolders
 
         let numNotes = folders |> List.sumBy Folder.docCount
 
@@ -462,7 +497,7 @@ type MarksmanServer(client: MarksmanClient) =
 
         stateManager <- Some(new StateManager(initState))
 
-        let serverCaps = mkServerCaps par
+        let serverCaps = ServerUtil.mkServerCaps par
 
         let initResult =
             { InitializeResult.Default with Capabilities = serverCaps }

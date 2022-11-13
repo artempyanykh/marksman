@@ -84,13 +84,13 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 **NOTE**: If you're on MacOS and are getting a popup about:
 
-> “marksman” can’t be opened because Apple cannot check it for malicious software
+> “marksman” can’t be opened because Apple cannot check it for malicious software...
 
 Then you can run the following command to bypass it and let Mac know that it's
-fine.
+fine:
 
 ```sh
-xattr -d com.apple.quarantine ~/bin/marksman
+xattr -d com.apple.quarantine <path-to-marksman-bin>
 ```
 
 ### Option 2: build from source

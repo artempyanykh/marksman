@@ -58,6 +58,11 @@ type Config =
 
     static member Default = { caTocEnable = Some true }
 
+    member this.CaTocEnable() =
+        this.caTocEnable
+        |> Option.orElse (Config.Default.caTocEnable)
+        |> Option.get
+
 let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]

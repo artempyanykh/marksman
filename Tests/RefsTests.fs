@@ -126,8 +126,11 @@ let doc2 =
                "[[doc-1]]" // 12
                "[[doc-1#dup]]" // 13
                "[lbl1](/doc1.md)" // 14
-               "" // 15
-               "[d2-link-1]: some-url" |] // 16
+               "[^fn1]" // 15
+               "" // 16
+               "[d2-link-1]: some-url" // 17
+               "" // 18
+               "[^fn1]: This is footnote" |] // 19
     )
 
 let folder = FakeFolder.Mk [ doc1; doc2 ]
@@ -141,7 +144,7 @@ module RefsTests =
     [<Fact>]
     let refToLinkDef_atDef () =
         let def =
-            Cst.elementAtPos (Position.Mk(16, 3)) (Doc.cst doc2)
+            Cst.elementAtPos (Position.Mk(17, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
         let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
@@ -154,7 +157,7 @@ module RefsTests =
     [<Fact>]
     let refToLinkDef_atDef_withDecl () =
         let def =
-            Cst.elementAtPos (Position.Mk(16, 3)) (Doc.cst doc2)
+            Cst.elementAtPos (Position.Mk(17, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
         let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
@@ -162,7 +165,7 @@ module RefsTests =
         checkInlineSnapshot
             (fun x -> x.ToString())
             refs
-            [ "(doc2.md, (16,0)-(16,21))"
+            [ "(doc2.md, (17,0)-(17,21))"
               "(doc2.md, (4,0)-(4,11))"
               "(doc2.md, (8,0)-(8,11))" ]
 
@@ -190,9 +193,22 @@ module RefsTests =
         checkInlineSnapshot
             (fun x -> x.ToString())
             refs
-            [ "(doc2.md, (16,0)-(16,21))"
+            [ "(doc2.md, (17,0)-(17,21))"
               "(doc2.md, (4,0)-(4,11))"
               "(doc2.md, (8,0)-(8,11))" ]
+
+    [<Fact(Skip="Footnote parsing not implemented")>]
+    let refToFootnote_atLink () =
+        let fnLink =
+            Cst.elementAtPos (Position.Mk(15, 2)) (Doc.cst doc2)
+            |> Option.defaultWith (fun _ -> failwith "No def")
+
+        let refs = Dest.findElementRefs true folder doc2 fnLink |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (19,0)-(19,16))"; "(doc2.md, (15,0)-(15,6))" ]
 
     [<Fact>]
     let refToDoc_atTitle () =

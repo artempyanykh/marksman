@@ -125,7 +125,7 @@ generally most features should work equaly in all editors.
 
 - ✅ Document symbols from headings.
 - ✅ Workspace symbols from headings.
-  * Query matching is subsequence-based, that is `lsp` will match both `LSP` and `Low Seimic Profile`.
+  * Query matching is subsequence-based, that is `lsp` will match both `LSP` and `Low Seismic Profile`.
 - ✅ Completion for links (inline, reference, wiki).
 - ✅ Hover prevew for links.
 - ✅ "Go to definition" for links.
@@ -141,6 +141,9 @@ generally most features should work equaly in all editors.
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.
 - 🗓  Support for Jupyter notebooks.
+
+### Configuration
+See [Configuration](docs/configuration.md) docs for more details.
 
 ### Code actions
 

@@ -293,6 +293,19 @@ module MdLinkTest =
               "MLD: [ref]: https://some.url @ (2,0)-(2,23)"
               "  label=ref @ (2,1)-(2,4); url=https://some.url @ (2,7)-(2,23); title=∅" ]
 
+module FootnoteTests =
+    [<Fact(Skip="Footnote parsing not implemented")>]
+    let footnote_1 () =
+        let text = "[^1]\n\n[^1]: Single line footnote"
+        let document = scrapeString text
+
+        checkInlineSnapshot
+            document
+            [ "ML: [^1] @ (0,0)-(0,4)"
+              "  RS: label=^1 @ (0,1)-(0,3)"
+              "MLD: [^1]: Footnote @ (2,0)-(2,14)"
+              "  label=^1 @ (2,1)-(2,3); url=Footnote @ (2,6)-(2,14); title=∅" ]
+
 module DocUrlTests =
     let mkTextNode str = Node.mkText str (Range.Mk(0, 0, 0, str.Length))
 

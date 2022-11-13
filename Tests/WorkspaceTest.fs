@@ -6,6 +6,7 @@ open Xunit
 
 open Marksman.Misc
 open Marksman.Workspace
+open Marksman.Config
 
 open Marksman.Helpers
 
@@ -13,7 +14,7 @@ module FolderTest =
     [<Fact>]
     let rooPath_singleFile () =
         let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a")
-        let f1 = Folder.singleFile d1
+        let f1 = Folder.singleFile d1 None
 
         Assert.Equal(dummyRootPath [ "a" ] |> RootPath.ofString, Folder.rootPath f1)
 
@@ -39,11 +40,11 @@ module WorkspaceTest =
     [<Fact>]
     let folderAdded_evictSingleFile () =
         let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a/b")
-        let f1 = Folder.singleFile d1
+        let f1 = Folder.singleFile d1 None
         let d2 = FakeDoc.Mk(content = "", path = "c/d2.md", root = "c")
-        let f2 = Folder.singleFile d2
+        let f2 = Folder.singleFile d2 None
 
-        let ws = Workspace.ofFolders [ f1; f2 ]
+        let ws = Workspace.ofFolders None [ f1; f2 ]
 
         let f0Path = dummyRootPath [ "a" ] |> PathUri.ofString
         let f0 = Folder.multiFile "f0" (RootPath.ofPath f0Path) Map.empty None
@@ -53,3 +54,65 @@ module WorkspaceTest =
         let ids = Workspace.folders updWs |> Seq.map Folder.id |> List.ofSeq
 
         Assert.Equal<FolderId>([ Folder.id f0; Folder.id f2 ], ids)
+
+    [<Fact>]
+    let folderConfig_noUserConfig () =
+        let fConfig = Some { Config.Default with caTocEnable = Some false }
+        let fPath = dummyRootPath [ "a" ] |> PathUri.ofString
+
+        // Multi-file
+        let f = (Folder.multiFile "f0" (RootPath.ofPath fPath) Map.empty fConfig)
+        let ws = Workspace.ofFolders None [ f ]
+        let f = (Workspace.folders ws) |> Seq.head
+        let updatedConfig = Folder.config f
+
+        Assert.Equal(fConfig, updatedConfig)
+
+        // Single-file
+        let f = (Folder.singleFile (FakeDoc.Mk("")) fConfig)
+        let ws = Workspace.ofFolders None [ f ]
+        let f = (Workspace.folders ws) |> Seq.head
+        let updatedConfig = Folder.config f
+        Assert.Equal(fConfig, updatedConfig)
+
+    [<Fact>]
+    let folderConfig_userConfig () =
+        let wsConfig = Some { Config.Default with caTocEnable = Some false }
+        let fPath = dummyRootPath [ "a" ] |> PathUri.ofString
+
+        // Multi-file
+        let f = (Folder.multiFile "f0" (RootPath.ofPath fPath) Map.empty None)
+        let ws = Workspace.ofFolders wsConfig [ f ]
+        let f = (Workspace.folders ws) |> Seq.head
+        let updatedConfig = Folder.config f
+
+        Assert.Equal(wsConfig, updatedConfig)
+
+        // Single-file
+        let f = (Folder.singleFile (FakeDoc.Mk("")) None)
+        let ws = Workspace.ofFolders wsConfig [ f ]
+        let f = (Workspace.folders ws) |> Seq.head
+        let updatedConfig = Folder.config f
+        Assert.Equal(wsConfig, updatedConfig)
+
+    [<Fact>]
+    let folderConfig_userConfig_folderAdd () =
+        let wsConfig = Some { Config.Default with caTocEnable = Some false }
+        let fPath = dummyRootPath [ "a" ] |> PathUri.ofString
+
+        // Multi-file
+        let ws = Workspace.ofFolders wsConfig []
+        let f = (Folder.multiFile "f0" (RootPath.ofPath fPath) Map.empty None)
+        let ws = Workspace.withFolder f ws
+        let f = (Workspace.folders ws) |> Seq.head
+        let updatedConfig = Folder.config f
+
+        Assert.Equal(wsConfig, updatedConfig)
+
+        // Single-file
+        let ws = Workspace.ofFolders wsConfig []
+        let f = (Folder.singleFile (FakeDoc.Mk("")) None)
+        let ws = Workspace.withFolder f ws
+        let f = (Workspace.folders ws) |> Seq.head
+        let updatedConfig = Folder.config f
+        Assert.Equal(wsConfig, updatedConfig)

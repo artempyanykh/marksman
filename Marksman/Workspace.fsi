@@ -50,12 +50,16 @@ module Folder =
     val id: Folder -> FolderId
     val rootPath: Folder -> RootPath
 
+    val config: Folder -> option<Config>
+    val configOrDefault: Folder -> Config
+    val withConfig: option<Config> -> Folder -> Folder
+
     val docs: Folder -> seq<Doc>
     val docCount: Folder -> int
 
     val tryLoad: name: string -> root: RootPath -> option<Folder>
 
-    val singleFile: Doc -> Folder
+    val singleFile: doc: Doc -> config: option<Config> -> Folder
     val multiFile: name: string -> root: RootPath -> docs: Map<PathUri, Doc> -> config: option<Config> -> Folder
     val isSingleFile: Folder -> bool
 
@@ -72,10 +76,11 @@ type Workspace
 module Workspace =
     val folders: Workspace -> seq<Folder>
     val docCount: Workspace -> int
+    val userConfig: Workspace -> option<Config>
 
+    val ofFolders: userConfig: option<Config> -> seq<Folder> -> Workspace
     val withFolder: Folder -> Workspace -> Workspace
     val withFolders: seq<Folder> -> Workspace -> Workspace
-    val ofFolders: seq<Folder> -> Workspace
 
     val withoutFolder: FolderId -> Workspace -> Workspace
     val withoutFolders: seq<FolderId> -> Workspace -> Workspace

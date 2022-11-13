@@ -145,16 +145,18 @@ type MultiFile =
       docs: Map<PathUri, Doc>
       config: option<Config> }
 
+type SingleFile = { doc: Doc; config: option<Config> }
+
 type Folder =
     | MultiFile of MultiFile
-    | SingleFile of Doc
+    | SingleFile of SingleFile
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
     let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
 
-    let singleFile doc = SingleFile doc
+    let singleFile doc config = SingleFile { doc = doc; config = config }
 
     let isSingleFile =
         function
@@ -164,24 +166,37 @@ module Folder =
     let multiFile name root docs config =
         MultiFile({ name = name; root = root; docs = docs; config = config })
 
+
+    let config =
+        function
+        | SingleFile { config = config } -> config
+        | MultiFile { config = config } -> config
+
+    let configOrDefault folder = config folder |> Option.defaultValue Config.Default
+
+    let withConfig config =
+        function
+        | SingleFile folder -> SingleFile { folder with config = config }
+        | MultiFile folder -> MultiFile { folder with config = config }
+
     let docs: Folder -> seq<Doc> =
         function
-        | SingleFile doc -> Seq.singleton doc
+        | SingleFile { doc = doc } -> Seq.singleton doc
         | MultiFile { docs = docs } -> Map.values docs
 
     let id: Folder -> FolderId =
         function
         | MultiFile { root = root } -> root |> RootPath.path |> FolderId.ofPath
-        | SingleFile doc -> doc.path |> FolderId.ofPath
+        | SingleFile { doc = doc } -> doc.path |> FolderId.ofPath
 
     let rootPath: Folder -> RootPath =
         function
         | MultiFile { root = root } -> root
-        | SingleFile doc -> doc.rootPath
+        | SingleFile { doc = doc } -> doc.rootPath
 
     let tryFindDocByPath (uri: PathUri) : Folder -> option<Doc> =
         function
-        | SingleFile doc -> Some doc |> Option.filter (fun x -> x.path = uri)
+        | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> x.path = uri)
         | MultiFile { docs = docs } -> Map.tryFind uri docs
 
     let private readIgnoreFiles (root: PathUri) : array<string> =
@@ -285,6 +300,11 @@ module Folder =
 
             config
         else
+            logger.trace (
+                Log.setMessage "No folder config found"
+                >> Log.addContext "path" folderConfigPath
+            )
+
             None
 
     let tryLoad (name: string) (root: RootPath) : option<Folder> =
@@ -315,19 +335,19 @@ module Folder =
                     $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.rootPath}"
 
             MultiFile { folder with docs = Map.add newDoc.path newDoc folder.docs }
-        | SingleFile existingDoc ->
+        | SingleFile ({ doc = existingDoc } as folder) ->
             if newDoc.path <> existingDoc.path then
                 failwith
                     $"Updating a singleton folder with an unrelated doc: folder={existingDoc.path}; doc={newDoc.rootPath}"
 
-            SingleFile newDoc
+            SingleFile { folder with doc = newDoc }
 
     let withoutDoc (docPath: PathUri) : Folder -> option<Folder> =
         function
         | MultiFile folder ->
             MultiFile { folder with docs = Map.remove docPath folder.docs }
             |> Some
-        | SingleFile doc ->
+        | SingleFile { doc = doc } ->
             if doc.path <> docPath then
                 failwith
                     $"Updating a singleton folder with an unrelated doc: folder={doc.path}; doc={docPath}"
@@ -340,7 +360,7 @@ module Folder =
             match Doc.tryLoad root docPath with
             | Some doc -> withDoc doc folder |> Some
             | _ -> withoutDoc docPath folder
-        | SingleFile doc ->
+        | SingleFile { doc = doc } ->
             if doc.path <> docPath then
                 failwith
                     $"Updating a singleton folder with an unrelated doc: folder={doc.path}; doc={docPath}"
@@ -366,17 +386,33 @@ module Folder =
         | SingleFile _ -> 1
         | MultiFile { docs = docs } -> docs.Values.Count
 
-type Workspace = { folders: Map<FolderId, Folder> }
+type Workspace = { config: option<Config>; folders: Map<FolderId, Folder> }
 
 module Workspace =
-    let ofFolders (folders: seq<Folder>) : Workspace =
-        { folders = folders |> Seq.map (fun f -> Folder.id f, f) |> Map.ofSeq }
+    let mergeFolderConfig userConfig folder =
+        let merged =
+            match userConfig with
+            | None -> Folder.config folder
+            | Some userConfig ->
+                match (Folder.config folder) with
+                | None -> Some userConfig
+                | Some folderConfig -> Some(Config.merge folderConfig userConfig)
+
+        Folder.withConfig merged folder
+
+    let ofFolders (userConfig: option<Config>) (folders: seq<Folder>) : Workspace =
+        let folders = folders |> Seq.map (mergeFolderConfig userConfig)
+
+        { config = userConfig
+          folders = folders |> Seq.map (fun f -> Folder.id f, f) |> Map.ofSeq }
 
     let folders (workspace: Workspace) : seq<Folder> =
         seq {
             for KeyValue (_, f) in workspace.folders do
                 yield f
         }
+
+    let userConfig { Workspace.config = config } = config
 
     let tryFindFolderEnclosing (innerPath: PathUri) (workspace: Workspace) : option<Folder> =
         workspace.folders
@@ -395,6 +431,8 @@ module Workspace =
         { workspace with folders = newFolders }
 
     let withFolder (newFolder: Folder) (workspace: Workspace) : Workspace =
+        let newFolder = mergeFolderConfig workspace.config newFolder
+
         let updatedFolders =
             match newFolder with
             | SingleFile _ -> Map.add (Folder.id newFolder) newFolder workspace.folders

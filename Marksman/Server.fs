@@ -11,13 +11,14 @@ open Ionide.LanguageServerProtocol.Server
 open Ionide.LanguageServerProtocol.Logging
 open FSharpPlus.GenericBuilders
 
+open Marksman.Config
 open Marksman.Cst
 open Marksman.Diag
-open Marksman.Misc
-open Marksman.Workspace
-open Marksman.State
 open Marksman.Index
+open Marksman.Misc
 open Marksman.Refs
+open Marksman.State
+open Marksman.Workspace
 
 let extractWorkspaceFolders (par: InitializeParams) : Map<string, RootPath> =
     match par.WorkspaceFolders with
@@ -411,6 +412,30 @@ type MarksmanServer(client: MarksmanClient) =
 
     let logger = LogProvider.getLoggerByName "MarksmanServer"
 
+    let tryLoadUserConfig () : option<Config> =
+        if File.Exists(Config.userConfigFile) then
+            logger.trace (
+                Log.setMessage "Found user config"
+                >> Log.addContext "config" Config.userConfigFile
+            )
+
+            let config = Config.read Config.userConfigFile
+
+            if Option.isNone config then
+                logger.error (
+                    Log.setMessage "Malformed user config, skipping"
+                    >> Log.addContext "config" Config.userConfigFile
+                )
+
+            config
+        else
+            logger.trace (
+                Log.setMessage "No user config found"
+                >> Log.addContext "path" Config.userConfigFile
+            )
+
+            None
+
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
         let workspaceFolders = extractWorkspaceFolders par
 
@@ -430,8 +455,10 @@ type MarksmanServer(client: MarksmanClient) =
         )
 
         let clientDesc = ClientDescription.ofParams par
+        let userConfig = tryLoadUserConfig ()
 
-        let initState = State.mk clientDesc (Workspace.ofFolders folders)
+        let initState =
+            State.mk clientDesc (Workspace.ofFolders userConfig folders)
 
         stateManager <- Some(new StateManager(initState))
 
@@ -536,7 +563,8 @@ type MarksmanServer(client: MarksmanClient) =
                         Path.GetDirectoryName path.LocalPath |> RootPath.ofString
 
                     let doc = Doc.fromLsp singletonRoot par.TextDocument
-                    Folder.singleFile doc
+                    let userConfig = (State.workspace state) |> Workspace.userConfig
+                    Folder.singleFile doc userConfig
                 | Some folder ->
                     let doc = Doc.fromLsp (Folder.rootPath folder) par.TextDocument
                     Folder.withDoc doc folder

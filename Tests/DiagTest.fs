@@ -95,7 +95,7 @@ let noCrossFileDiagOnSingleFileFolders () =
                "[bad-ref][bad-ref]" |]
         )
 
-    let folder = Folder.singleFile doc
+    let folder = Folder.singleFile doc None
     let diag = checkFolder folder |> diagToHuman
 
     Assert.Equal<string * string>(

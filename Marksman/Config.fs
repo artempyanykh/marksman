@@ -1,6 +1,7 @@
 module Marksman.Config
 
 open System.IO
+open Ionide.LanguageServerProtocol.Logging
 open Tomlyn
 open Tomlyn.Model
 
@@ -48,65 +49,39 @@ let private lookupAsOpt =
 let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, LookupError> =
     getFromTable table revSeenPath remPath |> lookupAsOpt
 
-type TocConfig =
-    { enable: option<bool> }
-
-    static member Default = { enable = Some true }
-    member this.EnableOrDefault() = this.enable |> Option.defaultValue true
-
-module TocConfig =
-    let private merge hi low = hi.enable |> Option.orElse low.enable
-
-type CodeActionConfig =
-    { toc: option<TocConfig> }
-
-    static member Default = { toc = Some TocConfig.Default }
-    member this.TocOrDefault() = this.toc |> Option.defaultValue TocConfig.Default
-
-module CodeActionConfig =
-    let private merge hi low = { toc = hi.toc |> Option.orElse low.toc }
-
+/// Configuration knobs for the Marksman LSP.
+///
+/// Note: all config options are laid out flat to make working with the config
+/// without lenses manageable.
 type Config =
-    { codeAction: option<CodeActionConfig> }
+    { caTocEnable: option<bool> }
 
-    member this.CodeActionOrDefault() =
-        this.codeAction |> Option.defaultValue CodeActionConfig.Default
+    static member Default = { caTocEnable = Some true }
 
-let private tocOfTable (context: list<string>) (table: TomlTable) : LookupResult<TocConfig> =
-    monad' {
-        let! enable = getFromTableOpt<bool> table context [ "enable" ]
-        { enable = enable }
-    }
-
-let private caOfTable (context: list<string>) (table: TomlTable) : LookupResult<CodeActionConfig> =
-    monad' {
-        let! toc =
-            getFromTable<TomlTable> table context [ "toc" ]
-            |> Result.bind (tocOfTable ("toc" :: context))
-            |> lookupAsOpt
-
-        { toc = toc }
-    }
-
-let private configOfTable (context: list<string>) (table: TomlTable) : LookupResult<Config> =
+let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
-        let! ca =
-            getFromTable<TomlTable> table [] [ "code_action" ]
-            |> Result.bind (caOfTable ("code_action" :: context))
-            |> lookupAsOpt
+        let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
 
-        { codeAction = ca }
+        { caTocEnable = caTocEnable }
     }
 
 module Config =
-    let merge hi low = { codeAction = hi.codeAction |> Option.orElse low.codeAction }
+    let logger = LogProvider.getLoggerByName "Config"
+
+    let merge hi low = { caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable }
 
     let tryParse (content: string) =
-        let table = Toml.ToModel(content)
+        let ok, table, _ = Toml.TryToModel(content)
 
-        match configOfTable [] table with
-        | Ok parsed -> Some parsed
-        | _ -> None
+        if ok then
+            logger.trace (Log.setMessage "Parsing as TOML was successful")
+
+            match configOfTable table with
+            | Ok parsed -> Some parsed
+            | _ -> None
+        else
+            logger.trace (Log.setMessage "Parsing as TOML failed")
+            None
 
     let read (filepath: string) =
         try
@@ -122,3 +97,5 @@ module Config =
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
             marksman
         )
+
+    let userConfigFile = Path.Join(userConfigDir, "config.toml")

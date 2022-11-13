@@ -12,7 +12,7 @@ let testParse_0 () =
 
     let actual = Config.tryParse content
 
-    let expected = { codeAction = None }
+    let expected = { caTocEnable = None }
 
     Assert.Equal(Some expected, actual)
 
@@ -24,7 +24,7 @@ let testParse_1 () =
 """
 
     let actual = Config.tryParse content
-    let expected = { codeAction = Some { toc = None } }
+    let expected = { caTocEnable = None }
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
@@ -37,7 +37,14 @@ toc.enable = false
 
     let actual = Config.tryParse content
 
-    let expected =
-        { codeAction = Some { toc = Some { enable = Some false } } }
+    let expected = { caTocEnable = Some false }
 
     Assert.Equal(Some expected, actual)
+
+[<Fact>]
+let testParse_broken_0 () =
+    let content = """
+blah
+"""
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)

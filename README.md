@@ -119,7 +119,7 @@ generally most features should work equaly in all editors.
 - **Rename refactor for headings and reference links**:
   ![Rename Refactor](assets/readme/gifs/rename.gif)
 
-## Features and plans
+## Features
 
 ✅ - done; 🗓 - planned.
 
@@ -147,8 +147,11 @@ See [Configuration](docs/configuration.md) docs for more details.
 
 ### Code actions
 
-**Table of Contents**: Marksman has a code action to create and update a table
-of contents of a document.
+Code actions usually can be enabled/disabled via a configuration option. See
+[configuration](#configuration) for more details.
+
+#### Table of Contents
+Marksman has a code action to create and update a table of contents of a document.
 
 ![Table of Contents](assets/readme/gifs/toc.gif)
 

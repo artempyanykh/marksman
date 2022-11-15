@@ -76,7 +76,8 @@ module Config =
     let merge hi low = { caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable }
 
     let tryParse (content: string) =
-        let ok, table, _ = Toml.TryToModel(content)
+        let mutable table, diag = null, null
+        let ok = Toml.TryToModel(content, &table, &diag)
 
         if ok then
             logger.trace (Log.setMessage "Parsing as TOML was successful")

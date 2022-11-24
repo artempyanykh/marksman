@@ -89,33 +89,33 @@ let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, L
 /// without lenses manageable.
 type Config =
     { caTocEnable: option<bool>
-      coreMarkdownExtensions: option<array<string>> }
+      coreMarkdownFileExtensions: option<array<string>> }
 
     static member Default =
         { caTocEnable = Some true
-          coreMarkdownExtensions = Some [| "md"; "markdown" |] }
+          coreMarkdownFileExtensions = Some [| "md"; "markdown" |] }
 
-    static member Empty = { caTocEnable = None; coreMarkdownExtensions = None }
+    static member Empty = { caTocEnable = None; coreMarkdownFileExtensions = None }
 
     member this.CaTocEnable() =
         this.caTocEnable
         |> Option.orElse Config.Default.caTocEnable
         |> Option.get
 
-    member this.CoreMarkdownExtensions() =
-        this.coreMarkdownExtensions
-        |> Option.orElse Config.Default.coreMarkdownExtensions
+    member this.CoreMarkdownFileExtensions() =
+        this.coreMarkdownFileExtensions
+        |> Option.orElse Config.Default.coreMarkdownFileExtensions
         |> Option.get
 
 let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
 
-        let! coreMarkdownExtensions =
-            getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "extensions" ]
+        let! coreMarkdownFileExtensions =
+            getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "file_extensions" ]
 
         { caTocEnable = caTocEnable
-          coreMarkdownExtensions = coreMarkdownExtensions }
+          coreMarkdownFileExtensions = coreMarkdownFileExtensions }
     }
 
 module Config =
@@ -123,8 +123,9 @@ module Config =
 
     let merge hi low =
         { caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
-          coreMarkdownExtensions =
-            hi.coreMarkdownExtensions |> Option.orElse low.coreMarkdownExtensions }
+          coreMarkdownFileExtensions =
+            hi.coreMarkdownFileExtensions
+            |> Option.orElse low.coreMarkdownFileExtensions }
 
     let tryParse (content: string) =
         let mutable table, diag = null, null

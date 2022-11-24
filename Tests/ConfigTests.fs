@@ -58,7 +58,7 @@ let testParse_broken_1 () =
     let content =
         """
 [core]
-markdown.extensions = [1, 2]
+markdown.file_extensions = [1, 2]
 """
 
     let actual = Config.tryParse content
@@ -69,7 +69,7 @@ let testParse_broken_2 () =
     let content =
         """
 [core]
-markdown.extensions = [["md"], "markdown"]
+markdown.file_extensions = [["md"], "markdown"]
 """
 
     let actual = Config.tryParse content
@@ -80,7 +80,7 @@ let testParse_broken_3 () =
     let content =
         """
 [core]
-markdown.extensions = [["md"], ["markdown"]]
+markdown.file_extensions = [["md"], ["markdown"]]
 """
 
     let actual = Config.tryParse content

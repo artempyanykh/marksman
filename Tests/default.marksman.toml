@@ -3,7 +3,7 @@
 # Only override what is needed.
 
 [core]
-markdown.extensions = ["md", "markdown"]
+markdown.file_extensions = ["md", "markdown"]
 
 [code_action]
 toc.enable = true # Enable/disable "Table of Contents" code action

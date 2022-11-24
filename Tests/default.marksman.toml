@@ -2,5 +2,8 @@
 # You do not need to duplicate all the values in your own user or project config.
 # Only override what is needed.
 
+[core]
+markdown.extensions = ["md", "markdown"]
+
 [code_action]
 toc.enable = true # Enable/disable "Table of Contents" code action

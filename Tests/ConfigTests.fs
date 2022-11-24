@@ -14,7 +14,7 @@ let testParse_0 () =
 
     let actual = Config.tryParse content
 
-    let expected = { caTocEnable = None }
+    let expected = Config.Empty
 
     Assert.Equal(Some expected, actual)
 
@@ -26,7 +26,7 @@ let testParse_1 () =
 """
 
     let actual = Config.tryParse content
-    let expected = { caTocEnable = None }
+    let expected = Config.Empty
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
@@ -39,7 +39,7 @@ toc.enable = false
 
     let actual = Config.tryParse content
 
-    let expected = { caTocEnable = Some false }
+    let expected = { Config.Empty with caTocEnable = Some false }
 
     Assert.Equal(Some expected, actual)
 
@@ -52,10 +52,47 @@ blah
 
     let actual = Config.tryParse content
     Assert.Equal(None, actual)
+    
+[<Fact>]
+let testParse_broken_1 () =
+    let content =
+        """
+[core]
+markdown.extensions = [1, 2]
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
+    
+[<Fact>]
+let testParse_broken_2 () =
+    let content =
+        """
+[core]
+markdown.extensions = [["md"], "markdown"]
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
+    
+[<Fact>]
+let testParse_broken_3 () =
+    let content =
+        """
+[core]
+markdown.extensions = [["md"], ["markdown"]]
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
 
 [<Fact>]
 let testDefault () =
-    let content = Assembly.GetExecutingAssembly().GetManifestResourceStream("default.marksman.toml")
+    let content =
+        Assembly
+            .GetExecutingAssembly()
+            .GetManifestResourceStream("default.marksman.toml")
+
     let content = using (new StreamReader(content)) (fun f -> f.ReadToEnd())
     let parsed = Config.tryParse content
     Assert.Equal(Some Config.Default, parsed)

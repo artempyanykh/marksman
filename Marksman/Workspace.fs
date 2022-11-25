@@ -221,8 +221,7 @@ module Folder =
 
         lines.ToArray()
 
-    let private loadDocs (root: RootPath) : seq<Doc> =
-
+    let private loadDocs (configuredExts: array<string>) (root: RootPath) : seq<Doc> =
         let rec collect (cur: PathUri) (ignoreMatchers: list<GlobMatcher>) =
             let ignoreMatchers =
                 match readIgnoreFiles cur with
@@ -232,12 +231,15 @@ module Folder =
             let di = DirectoryInfo(cur.LocalPath)
 
             try
-                let files = di.GetFiles("*.md")
+                let files = di.GetFiles()
                 let dirs = di.GetDirectories()
 
                 seq {
                     for file in files do
-                        if not (GlobMatcher.ignoresAny ignoreMatchers file.FullName) then
+                        if
+                            (isMarkdownFile configuredExts file.FullName)
+                            && not (GlobMatcher.ignoresAny ignoreMatchers file.FullName)
+                        then
                             let pathUri = PathUri.ofString file.FullName
 
                             let document = Doc.tryLoad root pathUri
@@ -307,17 +309,25 @@ module Folder =
 
             None
 
-    let tryLoad (name: string) (root: RootPath) : option<Folder> =
+    let tryLoad (userConfig: option<Config>) (name: string) (root: RootPath) : option<Folder> =
         logger.trace (Log.setMessage "Loading folder documents" >> Log.addContext "uri" root)
 
         if Directory.Exists((RootPath.path root).LocalPath) then
 
+            let folderConfig = tryLoadFolderConfig root
+            let folderConfig = Config.mergeOpt folderConfig userConfig
+
+            let configuredExts =
+                (Option.defaultValue Config.Default folderConfig)
+                    .CoreMarkdownFileExtensions()
+
             let documents =
-                loadDocs root |> Seq.map (fun doc -> doc.path, doc) |> Map.ofSeq
+                loadDocs configuredExts root
+                |> Seq.map (fun doc -> doc.path, doc)
+                |> Map.ofSeq
 
-            let config = tryLoadFolderConfig root
 
-            MultiFile { name = name; root = root; docs = documents; config = config }
+            MultiFile { name = name; root = root; docs = documents; config = folderConfig }
             |> Some
         else
             logger.warn (
@@ -389,15 +399,9 @@ module Folder =
 type Workspace = { config: option<Config>; folders: Map<FolderId, Folder> }
 
 module Workspace =
+    // TODO(arr): reconsider the need for this function (when we load folders we require userConfig)
     let mergeFolderConfig userConfig folder =
-        let merged =
-            match userConfig with
-            | None -> Folder.config folder
-            | Some userConfig ->
-                match (Folder.config folder) with
-                | None -> Some userConfig
-                | Some folderConfig -> Some(Config.merge folderConfig userConfig)
-
+        let merged = Config.mergeOpt (Folder.config folder) userConfig
         Folder.withConfig merged folder
 
     let ofFolders (userConfig: option<Config>) (folders: seq<Folder>) : Workspace =

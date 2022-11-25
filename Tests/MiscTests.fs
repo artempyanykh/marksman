@@ -61,8 +61,7 @@ module StringExtensionsTests =
         Assert.Equal("/file.md".AbsPathUrlEncodedToRelPath(), "file.md")
 
     [<Fact>]
-    let abspath_urlencode_2 () =
-        Assert.Equal("/file.md", "/file.md".AbsPathUrlEncode())
+    let abspath_urlencode_2 () = Assert.Equal("/file.md", "/file.md".AbsPathUrlEncode())
 
     [<Fact>]
     let abspath_urlencode_3 () =
@@ -73,20 +72,22 @@ module StringExtensionsTests =
     let abspath_urlencode_4 () =
         Assert.Equal("/file%23name.md", "file#name.md".AbsPathUrlEncode())
         Assert.Equal("/file%23name.md".AbsPathUrlEncodedToRelPath(), "file#name.md")
-        
+
     [<Fact>]
     let abspath_urlencode_5 () =
         Assert.Equal("/folder%20name/file%20name.md", "folder name/file name.md".AbsPathUrlEncode())
-        Assert.Equal("/folder%20name/file%20name.md".AbsPathUrlEncodedToRelPath(), "folder name/file name.md")
-        
+
+        Assert.Equal(
+            "/folder%20name/file%20name.md".AbsPathUrlEncodedToRelPath(),
+            "folder name/file name.md"
+        )
+
     [<Fact>]
-    let trimSuffix_1 () =
-        Assert.Equal("foo", "foobar".TrimSuffix("bar"))
-        
+    let trimSuffix_1 () = Assert.Equal("foo", "foobar".TrimSuffix("bar"))
+
     [<Fact>]
-    let trimSuffix_2 () =
-        Assert.Equal("foobar", "foobar".TrimSuffix("baz"))
-    
+    let trimSuffix_2 () = Assert.Equal("foobar", "foobar".TrimSuffix("baz"))
+
 module PathUriTests =
     [<Fact>]
     let testWinPathFromUri () =
@@ -125,3 +126,8 @@ module LinkLabelTest =
     [<Fact>]
     let surroundingWhitespace () =
         Assert.Equal(LinkLabel.ofString "abc", LinkLabel.ofString "  abc ")
+
+module WatchGlobTest =
+    [<Fact>]
+    let test1 () =
+        Assert.Equal("**/*.{md,markdown,mdx}", mkWatchGlob [| "md"; "markdown"; "mdx" |])

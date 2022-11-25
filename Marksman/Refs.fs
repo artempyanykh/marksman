@@ -19,15 +19,12 @@ type DocRef =
     | Url of url: string
 
 module DocRef =
-    let ofUrl url : option<DocRef> =
+    let ofUrl (configuredExts: seq<string>) url : option<DocRef> =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
             None
         else
             try
-                let ext = Path.GetExtension url
-                let ext = ext.ToLowerInvariant()
-
-                if ext = ".md" || ext = ".markdown" || ext = ".mdx" then
+                if isMarkdownFile configuredExts url then
                     Some(DocRef.Url url)
                 else
                     None
@@ -98,7 +95,7 @@ type Uref =
     | LinkDef of TextNode
 
 module Uref =
-    let ofElement (el: Element) : option<Uref> =
+    let ofElement (configuredExts: array<string>) (el: Element) : option<Uref> =
         match el with
         | WL wl ->
             match wl.data.doc, wl.data.heading with
@@ -113,9 +110,9 @@ module Uref =
 
                 match docUrl.url, docUrl.anchor with
                 | Some url, Some anchor ->
-                    DocRef.ofUrl url.text
+                    DocRef.ofUrl configuredExts url.text
                     |> Option.map (fun url -> Uref.Heading(Some(url), anchor))
-                | Some url, None -> DocRef.ofUrl url.text |> Option.map Uref.Doc
+                | Some url, None -> DocRef.ofUrl configuredExts url.text |> Option.map Uref.Doc
                 | None, Some anchor -> Uref.Heading(None, anchor) |> Some
                 | None, None -> None
             | MdLink.IL (_, None, _) -> None
@@ -204,7 +201,10 @@ module Dest =
             }
 
     let tryResolveElement (folder: Folder) (doc: Doc) (element: Element) : seq<Dest> =
-        match Uref.ofElement element with
+        let configuredExts =
+            (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+
+        match Uref.ofElement configuredExts element with
         | Some uref -> tryResolveUref uref doc folder
         | None -> Seq.empty
 
@@ -218,6 +218,7 @@ module Dest =
         |> Map.ofSeq
 
     let private findReferencingElements
+        (configuredExts: array<string>)
         (refMap: Map<Element, list<Dest>>)
         (target: Dest)
         : seq<Element> =
@@ -225,7 +226,7 @@ module Dest =
             for KeyValue (el, refs) in refMap do
                 match target with
                 | Dest.Doc targetDoc ->
-                    let curUref = Uref.ofElement el
+                    let curUref = Uref.ofElement configuredExts el
 
                     let explicitDoc =
                         curUref |> Option.map Uref.hasExplicitDoc |> Option.defaultValue false
@@ -259,6 +260,9 @@ module Dest =
                 Map.tryFind link linkToDecl |> Option.defaultValue []
             | _ -> []
 
+        let configuredExts =
+            (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+
         let resolveDecl includeDecl declToFind =
             let targetDocs =
                 match declToFind with
@@ -272,7 +276,7 @@ module Dest =
                         let targetDocRefs = resolveLinks folder targetDoc
 
                         let backRefs =
-                            findReferencingElements targetDocRefs declToFind
+                            findReferencingElements configuredExts targetDocRefs declToFind
                             |> Seq.map (fun el -> targetDoc, el)
 
                         yield! backRefs

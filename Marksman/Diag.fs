@@ -50,7 +50,10 @@ let isCrossFileLink uref =
     | Uref.LinkDef _ -> false
 
 let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
-    let uref = Uref.ofElement link
+    let configuredExts =
+        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+
+    let uref = Uref.ofElement configuredExts link
 
     match uref with
     | None -> []

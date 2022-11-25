@@ -127,6 +127,14 @@ module Config =
             hi.coreMarkdownFileExtensions
             |> Option.orElse low.coreMarkdownFileExtensions }
 
+    let mergeOpt hi low =
+        match low with
+        | None -> hi
+        | Some low ->
+            match hi with
+            | None -> Some low
+            | Some hi -> Some(merge hi low)
+
     let tryParse (content: string) =
         let mutable table, diag = null, null
         let ok = Toml.TryToModel(content, &table, &diag)

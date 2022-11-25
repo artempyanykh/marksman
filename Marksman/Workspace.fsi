@@ -57,7 +57,7 @@ module Folder =
     val docs: Folder -> seq<Doc>
     val docCount: Folder -> int
 
-    val tryLoad: name: string -> root: RootPath -> option<Folder>
+    val tryLoad: userConfig: option<Config> -> name: string -> root: RootPath -> option<Folder>
 
     val singleFile: doc: Doc -> config: option<Config> -> Folder
     val multiFile: name: string -> root: RootPath -> docs: Map<PathUri, Doc> -> config: option<Config> -> Folder

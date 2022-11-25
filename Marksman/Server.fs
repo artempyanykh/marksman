@@ -75,21 +75,23 @@ module ServerUtil =
                 else
                     Map.empty
 
-    let readWorkspace (roots: Map<string, RootPath>) : list<Folder> =
+    let readWorkspace (userConfig: option<Config>) (roots: Map<string, RootPath>) : list<Folder> =
         seq {
             for KeyValue (name, root) in roots do
-                match Folder.tryLoad name root with
+                match Folder.tryLoad userConfig name root with
                 | Some folder -> yield folder
                 | _ -> ()
         }
         |> List.ofSeq
 
-    let mkServerCaps (par: InitializeParams) : ServerCapabilities =
+    let mkServerCaps (markdownExts: array<string>) (par: InitializeParams) : ServerCapabilities =
         let workspaceFoldersCaps =
             { Supported = Some true; ChangeNotifications = Some true }
 
+        let glob = mkWatchGlob markdownExts
+
         let markdownFilePattern =
-            { Glob = "**/*.md"
+            { Glob = glob
               Matches = Some FileOperationPatternKind.File
               Options = Some { FileOperationPatternOptions.Default with IgnoreCase = Some true } }
 
@@ -473,14 +475,15 @@ type MarksmanServer(client: MarksmanClient) =
 
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
         let workspaceFolders = ServerUtil.extractWorkspaceFolders par
+        let clientDesc = ClientDescription.ofParams par
 
         logger.debug (
             Log.setMessage "Obtained workspace folders"
             >> Log.addContext "workspace" workspaceFolders
         )
 
-        let folders = ServerUtil.readWorkspace workspaceFolders
-
+        let userConfig = tryLoadUserConfig ()
+        let folders = ServerUtil.readWorkspace userConfig workspaceFolders
         let numNotes = folders |> List.sumBy Folder.docCount
 
         logger.debug (
@@ -489,15 +492,25 @@ type MarksmanServer(client: MarksmanClient) =
             >> Log.addContext "numNotes" numNotes
         )
 
-        let clientDesc = ClientDescription.ofParams par
-        let userConfig = tryLoadUserConfig ()
-
-        let initState =
-            State.mk clientDesc (Workspace.ofFolders userConfig folders)
-
+        let workspace = Workspace.ofFolders userConfig folders
+        let initState = State.mk clientDesc workspace
         stateManager <- Some(new StateManager(initState))
 
-        let serverCaps = ServerUtil.mkServerCaps par
+        // Workspace may contain several folders with their own configuration. However, server
+        // capabilities are communicated for the whole workspace. Therefore, we need to collect
+        // all configured markdown extensions and ask the client to watch them all, doing per-folder
+        // filtering on our own.
+        //
+        // NOTE: this doesn't address the case when a folder is added to the workspace later on.
+        // We'd need to add dynamic registration of capabilities on the server side.
+        let configuredExts =
+            Workspace.folders workspace
+            |> Seq.map Folder.configOrDefault
+            |> Seq.collect (fun c -> c.CoreMarkdownFileExtensions())
+            |> Seq.distinct
+            |> Array.ofSeq
+
+        let serverCaps = ServerUtil.mkServerCaps configuredExts par
 
         let initResult =
             { InitializeResult.Default with Capabilities = serverCaps }
@@ -591,20 +604,33 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let path = par.TextDocument.Uri |> PathUri.ofString
 
-            let newFolder =
+            let newState =
                 match State.tryFindFolderEnclosing path state with
                 | None ->
-                    let singletonRoot =
-                        Path.GetDirectoryName path.LocalPath |> RootPath.ofString
+                    let configuredExts =
+                        (State.userConfigOrDefault state).CoreMarkdownFileExtensions()
 
-                    let doc = Doc.fromLsp singletonRoot par.TextDocument
-                    let userConfig = (State.workspace state) |> Workspace.userConfig
-                    Folder.singleFile doc userConfig
+                    if isMarkdownFile configuredExts path.LocalPath then
+                        let singletonRoot =
+                            Path.GetDirectoryName path.LocalPath |> RootPath.ofString
+
+                        let doc = Doc.fromLsp singletonRoot par.TextDocument
+                        let userConfig = (State.workspace state) |> Workspace.userConfig
+                        let newFolder = Folder.singleFile doc userConfig
+                        State.updateFolder newFolder state
+                    else
+                        state
                 | Some folder ->
-                    let doc = Doc.fromLsp (Folder.rootPath folder) par.TextDocument
-                    Folder.withDoc doc folder
+                    let configuredExts =
+                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-            let newState = State.updateFolder newFolder state
+                    if isMarkdownFile configuredExts path.LocalPath then
+                        let doc = Doc.fromLsp (Folder.rootPath folder) par.TextDocument
+                        let newFolder = Folder.withDoc doc folder
+                        State.updateFolder newFolder state
+                    else
+                        state
+
             Mutation.state newState
 
     override this.WorkspaceDidChangeWorkspaceFolders(par: DidChangeWorkspaceFoldersParams) =
@@ -632,17 +658,21 @@ type MarksmanServer(client: MarksmanClient) =
                 match State.tryFindFolderEnclosing docUri newState with
                 | None -> ()
                 | Some folder ->
-                    match Doc.tryLoad (Folder.rootPath folder) docUri with
-                    | Some doc ->
-                        let newFolder = Folder.withDoc doc folder
-                        newState <- State.updateFolder newFolder newState
-                    | _ ->
-                        logger.warn (
-                            Log.setMessage "Couldn't load created document"
-                            >> Log.addContext "uri" docUri
-                        )
+                    let configuredExts =
+                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-                        ()
+                    if isMarkdownFile configuredExts docUri.LocalPath then
+                        match Doc.tryLoad (Folder.rootPath folder) docUri with
+                        | Some doc ->
+                            let newFolder = Folder.withDoc doc folder
+                            newState <- State.updateFolder newFolder newState
+                        | _ ->
+                            logger.warn (
+                                Log.setMessage "Couldn't load created document"
+                                >> Log.addContext "uri" docUri
+                            )
+
+                            ()
 
             Mutation.state newState
 
@@ -716,9 +746,13 @@ type MarksmanServer(client: MarksmanClient) =
             let goto =
                 monad {
                     let! folder = State.tryFindFolderEnclosing docUri state
+
+                    let configuredExts =
+                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+
                     let! srcDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let! uref = Uref.ofElement atPos
+                    let! uref = Uref.ofElement configuredExts atPos
 
                     let refs = Dest.tryResolveUref uref srcDoc folder
 
@@ -743,9 +777,13 @@ type MarksmanServer(client: MarksmanClient) =
             let hover =
                 monad {
                     let! folder = State.tryFindFolderEnclosing docUri state
+
+                    let configuredExts =
+                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+
                     let! srcDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let! uref = Uref.ofElement atPos
+                    let! uref = Uref.ofElement configuredExts atPos
                     // NOTE: Due to ambiguity there may be several sources for hover. Since hover
                     // request requires a single result we return the first. When links are not
                     // ambiguous this is OK, otherwise the author is to blame for ambiguity anyway.

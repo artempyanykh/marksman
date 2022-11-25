@@ -19,11 +19,20 @@ let mkWatchGlob (configuredExts: seq<string>) : string =
     $"**/*.{ext_pattern}"
 
 let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
-    // GetExtension returns extension with a '.'. In config we don't have '.'s.
-    let ext = (Path.GetExtension path).TrimStart('.')
-    let ext = ext.ToLowerInvariant()
+    let isEmacsBackup =
+        try
+            (Path.GetFileName path).StartsWith(".#")
+        with :? ArgumentException ->
+            false
 
-    Seq.contains ext configuredExts
+    if isEmacsBackup then
+        false
+    else
+        // GetExtension returns extension with a '.'. In config we don't have '.'s.
+        let ext = (Path.GetExtension path).TrimStart('.')
+        let ext = ext.ToLowerInvariant()
+
+        Seq.contains ext configuredExts
 
 type String with
 

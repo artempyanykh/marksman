@@ -8,6 +8,7 @@ open FSharpPlus.GenericBuilders
 open Marksman.Diag
 open Marksman.Workspace
 open Marksman.Misc
+open Marksman.Config
 
 type ClientDescription =
     { info: ClientInfo option
@@ -79,6 +80,9 @@ module State =
 
     let workspace s = s.workspace
 
+    let userConfigOrDefault s =
+        Workspace.userConfig s.workspace |> Option.defaultValue Config.Default
+
     let revision s = s.revision
 
     let diag (s: State) = s.Diag()
@@ -116,12 +120,14 @@ module State =
             removed
             |> Array.map (fun f -> PathUri.ofString f.Uri |> FolderId.ofPath)
 
+        let userConfig = workspace state |> Workspace.userConfig
+
         let addedFolders =
             seq {
                 for f in added do
                     let rootUri = RootPath.ofString f.Uri
 
-                    let folder = Folder.tryLoad f.Name rootUri
+                    let folder = Folder.tryLoad userConfig f.Name rootUri
 
                     match folder with
                     | Some folder -> yield folder

@@ -1,6 +1,7 @@
 module Marksman.Misc
 
 open System
+open System.IO
 open System.Text
 open System.Text.RegularExpressions
 open Ionide.LanguageServerProtocol.Types
@@ -12,6 +13,17 @@ let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 let lineEndings = [| "\r\n"; "\n" |]
 
 let concatLines (lines: array<string>) : string = String.concat Environment.NewLine lines
+
+let mkWatchGlob (configuredExts: seq<string>) : string =
+    let ext_pattern = "{" + (String.concat "," (configuredExts)) + "}"
+    $"**/*.{ext_pattern}"
+
+let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
+    // GetExtension returns extension with a '.'. In config we don't have '.'s.
+    let ext = (Path.GetExtension path).TrimStart('.')
+    let ext = ext.ToLowerInvariant()
+
+    Seq.contains ext configuredExts
 
 type String with
 

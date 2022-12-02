@@ -61,10 +61,7 @@ let noDiagOnRealUrls () =
     let folder = FakeFolder.Mk([ doc ])
     let diag = checkFolder folder |> diagToHuman
 
-    Assert.Equal<string * string>(
-        [ "fake.md", "Link to non-existent document at 'www.bad.md'" ],
-        diag
-    )
+    Assert.Equal<string * string>([ "fake.md", "Link to non-existent document 'www.bad.md'" ], diag)
 
 [<Fact>]
 let noDiagOnNonMarkdownFiles () =
@@ -81,8 +78,21 @@ let noDiagOnNonMarkdownFiles () =
     let diag = checkFolder folder |> diagToHuman
 
     Assert.Equal<string * string>(
-        [ "fake.md", "Link to non-existent document at 'bad.md'"
-          "fake.md", "Link to non-existent document at 'another%20bad.md'" ],
+        [ "fake.md", "Link to non-existent document 'bad.md'"
+          "fake.md", "Link to non-existent document 'another%20bad.md'" ],
+        diag
+    )
+
+
+[<Fact>]
+let crossFileDiagOnBrokenWikiLinks () =
+    let doc = FakeDoc.Mk([| "[[bad]]" |])
+
+    let folder = FakeFolder.Mk([doc])
+    let diag = checkFolder folder |> diagToHuman
+
+    Assert.Equal<string * string>(
+        [ "fake.md", "Link to non-existent document 'bad'" ],
         diag
     )
 

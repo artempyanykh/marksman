@@ -13,23 +13,18 @@ open Marksman.Index
 open Marksman.Misc
 open Marksman.Workspace
 
-[<RequireQualifiedAccess>]
-type DocRef =
-    | Title of title: string
-    | Url of url: string
+type InternName = InternName of string
 
-module DocRef =
-    let ofUrl (configuredExts: seq<string>) (url: string) : option<DocRef> =
+module InternName =
+    let name (InternName s) = s
+
+    let ofUrl (configuredExts: array<string>) url : option<InternName> =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
             None
+        else if isPotentiallyMarkdownFile configuredExts url then
+            Some(InternName url)
         else
-            try
-                if isMarkdownFile configuredExts url then
-                    Some(DocRef.Url url)
-                else
-                    None
-            with :? ArgumentException ->
-                None
+            None
 
     let tryResolveToRootPath
         (folderPath: RootPath)
@@ -74,24 +69,25 @@ module DocRef =
             | :? UriFormatException
             | :? InvalidOperationException -> None
 
-    let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : seq<Doc> =
-        match docRef with
-        | DocRef.Title title -> Folder.filterDocsBySlug (Slug.ofString title) folder
-        | DocRef.Url url ->
-            let url = tryResolveToRootPath (Doc.rootPath srcDoc) (Doc.path srcDoc) url
+type InternNameNode = Node<InternName>
 
-            match url >>= fun url -> Folder.tryFindDocByUrl url folder with
-            | Some doc -> [ doc ]
-            | _ -> []
+module InternNameNode =
+    let mk name range : InternNameNode = { text = InternName.name name; range = range; data = name }
 
-    let tryFindFirstDoc (folder: Folder) (srcDoc: Doc) (docRef: DocRef) : option<Doc> =
-        filterMatchingDocs folder srcDoc docRef |> Seq.tryHead
+    let ofTextUnchecked { text = text; range = range } : InternNameNode = mk (InternName text) range
+
+    let ofTextChecked
+        (configuredExts: array<string>)
+        { text = text; range = range }
+        : option<InternNameNode> =
+        InternName.ofUrl configuredExts text
+        |> Option.map (fun sym -> mk sym range)
 
 /// Unresolved reference.
 [<RequireQualifiedAccess>]
 type Uref =
-    | Doc of DocRef
-    | Heading of doc: option<DocRef> * heading: TextNode
+    | Doc of InternNameNode
+    | Heading of doc: option<InternNameNode> * heading: TextNode
     | LinkDef of TextNode
 
 module Uref =
@@ -99,8 +95,10 @@ module Uref =
         match el with
         | WL wl ->
             match wl.data.doc, wl.data.heading with
-            | Some doc, Some heading -> Uref.Heading(Some(DocRef.Title doc.text), heading) |> Some
-            | Some doc, None -> Uref.Doc(DocRef.Title doc.text) |> Some
+            | Some doc, Some heading ->
+                Uref.Heading(Some(InternNameNode.ofTextUnchecked doc), heading)
+                |> Some
+            | Some doc, None -> Uref.Doc(InternNameNode.ofTextUnchecked doc) |> Some
             | None, Some heading -> Uref.Heading(None, heading) |> Some
             | None, None -> None
         | ML ml ->
@@ -110,9 +108,10 @@ module Uref =
 
                 match docUrl.url, docUrl.anchor with
                 | Some url, Some anchor ->
-                    DocRef.ofUrl configuredExts url.text
-                    |> Option.map (fun url -> Uref.Heading(Some(url), anchor))
-                | Some url, None -> DocRef.ofUrl configuredExts url.text |> Option.map Uref.Doc
+                    InternNameNode.ofTextChecked configuredExts url
+                    |> Option.map (fun sym -> Uref.Heading(Some(sym), anchor))
+                | Some url, None ->
+                    InternNameNode.ofTextChecked configuredExts url |> Option.map Uref.Doc
                 | None, Some anchor -> Uref.Heading(None, anchor) |> Some
                 | None, None -> None
             | MdLink.IL (_, None, _) -> None
@@ -130,29 +129,90 @@ module Uref =
         | Uref.Heading(doc = None) -> false
         | Uref.LinkDef _ -> false
 
+[<RequireQualifiedAccess>]
+type FileLinkKind =
+    | FilePath
+    | FileName
+    | FileStem
+    | Title
+
+type FileLink = { link: string; kind: FileLinkKind; dest: Doc }
+
+module FileLink =
+    let dest { dest = dest } = dest
+
+    let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (InternName name) : seq<FileLink> =
+        let filterFn (doc: Doc) =
+            if Slug.isSubSequence (Slug.ofString name) (Doc.slug doc) then
+                Some { link = name; kind = FileLinkKind.Title; dest = doc }
+            else
+                InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
+                |> Option.bind (fun linkRootPath ->
+                    if
+                        linkRootPath
+                            .AbsPathUrlEncode()
+                            .IsSubSequenceOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
+                    then
+                        Some { link = name; kind = FileLinkKind.FilePath; dest = doc }
+                    else
+                        let docFileName = Path.GetFileName(Doc.pathFromRoot doc)
+
+                        if
+                            name
+                                .AbsPathUrlEncode()
+                                .IsSubSequenceOf(docFileName.AbsPathUrlEncode())
+                        then
+                            Some { link = name; kind = FileLinkKind.FileName; dest = doc }
+                        else
+                            let docFileStem = Path.GetFileNameWithoutExtension(docFileName)
+
+                            if
+                                name
+                                    .AbsPathUrlEncode()
+                                    .IsSubSequenceOf(docFileStem.AbsPathUrlEncode())
+                            then
+                                Some { link = name; kind = FileLinkKind.FileStem; dest = doc }
+                            else
+                                None)
+
+        Folder.docs folder |> Seq.choose filterFn
+
+type DocLink =
+    | Explicit of FileLink
+    | Implicit of Doc
+
+module DocLink =
+    let doc =
+        function
+        | Explicit { dest = doc }
+        | Implicit doc -> doc
+
+    let isSame this other = doc this = doc other
+
 /// Resolved reference.
 [<RequireQualifiedAccess>]
 type Dest =
-    | Doc of Doc
-    | Heading of Doc * Node<Heading>
+    | Doc of FileLink
+    | Heading of DocLink * Node<Heading>
     | LinkDef of Doc * Node<MdLinkDef>
 
 module Dest =
     let doc: Dest -> Doc =
         function
-        | Dest.Doc doc -> doc
-        | Dest.Heading (doc, _) -> doc
+        | Dest.Doc { dest = doc }
         | Dest.LinkDef (doc, _) -> doc
+        | Dest.Heading (docLink, _) -> DocLink.doc docLink
 
     let element: Dest -> Element option =
         function
-        | Dest.Doc d -> Doc.title d |>> H
+        | Dest.Doc { kind = FileLinkKind.Title; dest = d } -> Doc.title d |>> H
+        | Dest.Doc _ -> None
         | Dest.Heading (_, h) -> Some(H h)
         | Dest.LinkDef (_, ld) -> Some(MLD ld)
 
     let range: Dest -> Range =
         function
-        | Dest.Doc doc ->
+        | Dest.Doc { dest = doc } ->
             Doc.title doc
             |> Option.map Node.range
             |> Option.defaultWith (Doc.text doc).FullRange
@@ -161,13 +221,24 @@ module Dest =
 
     let scope: Dest -> Range =
         function
-        | Dest.Doc doc -> (Doc.text doc).FullRange()
+        | Dest.Doc { dest = doc } -> (Doc.text doc).FullRange()
         | Dest.Heading (_, heading) -> heading.data.scope
         | Dest.LinkDef (_, linkDef) -> linkDef.range
 
     let uri (ref: Dest) : DocumentUri = doc ref |> Doc.uri
 
     let location (ref: Dest) : Location = { Uri = uri ref; Range = range ref }
+
+    let overlapsWith this other =
+        match this, other with
+        | Dest.Doc { dest = thisDoc }, Dest.Doc { dest = otherDoc }
+        | Dest.Doc { dest = thisDoc }, Dest.Heading (Explicit { dest = otherDoc }, _) ->
+            thisDoc = otherDoc
+        | Dest.Doc _, _ -> false
+        | Dest.Heading (thisDocLink, thisHeading), Dest.Heading (otherDocLink, otherHeading) ->
+            DocLink.isSame thisDocLink otherDocLink && thisHeading = otherHeading
+        | _, _ -> this = other
+
 
     let tryResolveUref (uref: Uref) (srcDoc: Doc) (folder: Folder) : seq<Dest> =
         match uref with
@@ -180,19 +251,22 @@ module Dest =
             match ld |>> fun x -> Dest.LinkDef(srcDoc, x) with
             | None -> Seq.empty
             | Some ld -> [ ld ]
-        | Uref.Doc docRef ->
-            let doc = DocRef.filterMatchingDocs folder srcDoc docRef
+        | Uref.Doc docName ->
+            let doc = FileLink.filterMatchingDocs folder srcDoc docName.data
             doc |>> Dest.Doc
-        | Uref.Heading (docRef, heading) ->
+        | Uref.Heading (docName, heading) ->
             let matchingDocs =
-                docRef
-                |> Option.map (DocRef.filterMatchingDocs folder srcDoc)
-                |> Option.defaultValue [ srcDoc ]
+                docName
+                |> Option.map (fun docName ->
+                    FileLink.filterMatchingDocs folder srcDoc docName.data
+                    |> Seq.map Explicit)
+                |> Option.defaultValue [ Implicit srcDoc ]
 
             seq {
                 for doc in matchingDocs do
                     let headings =
                         doc
+                        |> DocLink.doc
                         |> Doc.index
                         |> Index.filterHeadingBySlug (Slug.ofString heading.text)
 
@@ -218,26 +292,13 @@ module Dest =
         |> Map.ofSeq
 
     let private findReferencingElements
-        (configuredExts: array<string>)
         (refMap: Map<Element, list<Dest>>)
         (target: Dest)
         : seq<Element> =
         seq {
             for KeyValue (el, refs) in refMap do
-                match target with
-                | Dest.Doc targetDoc ->
-                    let curUref = Uref.ofElement configuredExts el
-
-                    let explicitDoc =
-                        curUref |> Option.map Uref.hasExplicitDoc |> Option.defaultValue false
-
-                    let doesMatch ref = explicitDoc && doc ref = targetDoc
-
-                    if List.exists doesMatch refs then
-                        yield el
-                | _ ->
-                    if List.exists ((=) target) refs then
-                        yield el
+                if List.exists (overlapsWith target) refs then
+                    yield el
         }
         |> Seq.sortBy Element.rangeStart
 
@@ -253,15 +314,13 @@ module Dest =
         let declsToFind =
             match el with
             | MLD ld -> [ Dest.LinkDef(srcDoc, ld) ]
-            | H h when Heading.isTitle h.data -> [ Dest.Doc(srcDoc) ]
-            | H h -> [ Dest.Heading(srcDoc, h) ]
+            | H h when Heading.isTitle h.data ->
+                [ Dest.Doc { link = h.text; kind = FileLinkKind.Title; dest = srcDoc } ]
+            | H h -> [ Dest.Heading(Implicit srcDoc, h) ]
             | link when Element.isLink link ->
                 let linkToDecl = resolveLinks folder srcDoc
                 Map.tryFind link linkToDecl |> Option.defaultValue []
             | _ -> []
-
-        let configuredExts =
-            (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
         let resolveDecl includeDecl declToFind =
             let targetDocs =
@@ -276,7 +335,7 @@ module Dest =
                         let targetDocRefs = resolveLinks folder targetDoc
 
                         let backRefs =
-                            findReferencingElements configuredExts targetDocRefs declToFind
+                            findReferencingElements targetDocRefs declToFind
                             |> Seq.map (fun el -> targetDoc, el)
 
                         yield! backRefs

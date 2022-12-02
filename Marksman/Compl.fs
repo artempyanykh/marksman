@@ -255,7 +255,7 @@ module Prompt =
             | E (ML { data = MdLink.RF (_, label) })
             | E (ML { data = MdLink.RC label })
             | E (ML { data = MdLink.RS label }) -> Some(Reference label.text)
-            | E (ML { data = MdLink.IL (_, None, _); range = range }) ->
+            | E (ML { data = MdLink.IL (_, None, _); range = _range }) ->
                 Some(InlineDoc String.Empty)
             | E (ML { data = MdLink.IL (_, Some url, _) }) ->
                 match Url.ofUrlNode url with
@@ -522,23 +522,29 @@ module Completions =
         | _ -> None
 
 module Candidates =
-    let findDocCandidates (folder: Folder) (srcDoc: Doc) (destPart: option<DocRef>) : array<Doc> =
+    let findDocCandidates
+        (folder: Folder)
+        (srcDoc: Doc)
+        (destPart: option<InternName>)
+        : array<Doc> =
         let candidates =
             match destPart with
             | None -> Folder.docs folder
-            | Some docRef -> DocRef.filterMatchingDocs folder srcDoc docRef
+            | Some name ->
+                FileLink.filterMatchingDocs folder srcDoc name
+                |> Seq.map FileLink.dest
 
         candidates |> Seq.filter (fun d -> d <> srcDoc) |> Array.ofSeq
 
     let findHeadingCandidates
         (folder: Folder)
         (srcDoc: Doc)
-        (destPart: option<DocRef>)
+        (destPart: option<InternName>)
         (headingPart: string)
         : array<Doc * string> =
         let targetDocs =
             destPart
-            |> Option.map (DocRef.filterMatchingDocs folder srcDoc)
+            |> Option.map (FileLink.filterMatchingDocs folder srcDoc >> Seq.map FileLink.dest)
             |> Option.defaultValue [ srcDoc ]
 
         let targetDocs =
@@ -566,7 +572,7 @@ module Candidates =
 
         targetDocs |> Seq.collect prepareForDoc |> Array.ofSeq
 
-    let findLinkDefCandidates (folder: Folder) (srcDoc: Doc) (input: string) : array<MdLinkDef> =
+    let findLinkDefCandidates (_folder: Folder) (srcDoc: Doc) (input: string) : array<MdLinkDef> =
         Index.filterLinkDefs
             (LinkLabel.isSubSequenceOf (LinkLabel.ofString input))
             (Doc.index srcDoc)
@@ -591,7 +597,7 @@ let findCandidatesForCompl
     match Prompt.ofCompletable pos compl with
     | None -> [||]
     | Some (WikiDoc input) ->
-        let destPart = Some(DocRef.Title input)
+        let destPart = Some(InternName input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
         cand |> Array.choose (Completions.wikiDoc pos compl)
     | Some (WikiHeadingInSrcDoc input) ->
@@ -601,7 +607,7 @@ let findCandidatesForCompl
         |> Array.map snd
         |> Array.choose (Completions.wikiHeadingInSrcDoc pos compl)
     | Some (WikiHeadingInOtherDoc (destPart, headingPart)) ->
-        let destPart = Some(DocRef.Title destPart)
+        let destPart = Some(InternName destPart)
 
         let cand =
             Candidates.findHeadingCandidates folder srcDoc destPart headingPart
@@ -612,7 +618,7 @@ let findCandidatesForCompl
         cand |> Array.choose (Completions.reference pos compl)
     | Some (InlineDoc input) ->
         let cand =
-            match DocRef.ofUrl (config.CoreMarkdownFileExtensions()) input with
+            match InternName.ofUrl (config.CoreMarkdownFileExtensions()) input with
             | None when input.IsEmpty() -> Candidates.findDocCandidates folder srcDoc None
             | None -> [||]
             | Some destPart -> Candidates.findDocCandidates folder srcDoc (Some destPart)
@@ -626,7 +632,7 @@ let findCandidatesForCompl
         |> Array.choose (Completions.inlineAnchorInSrcDoc pos compl)
     | Some (InlineAnchorInOtherDoc (pathPart, anchorPart)) ->
         let cand =
-            match DocRef.ofUrl (config.CoreMarkdownFileExtensions()) pathPart with
+            match InternName.ofUrl (config.CoreMarkdownFileExtensions()) pathPart with
             | None -> [||]
             | Some destPart ->
                 Candidates.findHeadingCandidates folder srcDoc (Some destPart) anchorPart

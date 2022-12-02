@@ -1,5 +1,6 @@
 module Marksman.Diag
 
+open System.IO
 open Ionide.LanguageServerProtocol.Types
 open Marksman.Workspace
 
@@ -69,6 +70,16 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
             // Inline shortcut links often are a part of regular text.
             // Raising diagnostics on them would be noisy.
             | ML { data = MdLink.RS _ } -> []
+            | ML { data = MdLink.IL _ } ->
+                match uref with
+                | Uref.Doc { data = InternName name } ->
+                    // Inline links to docs that don't look like a markdown file should not
+                    // produce diagnostics
+                    if isMarkdownFile configuredExts name then
+                        [ BrokenLink(link, uref) ]
+                    else
+                        []
+                | _ -> [ BrokenLink(link, uref) ]
             | _ -> [ BrokenLink(link, uref) ]
         else
             [ AmbiguousLink(link, uref, refs) ]
@@ -92,23 +103,20 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
 
 let refToHuman (ref: Dest) : string =
     match ref with
-    | Dest.Doc doc -> $"document {Doc.name doc}"
-    | Dest.Heading (doc, { data = heading }) ->
-        $"heading {Heading.name heading} in the document {Doc.name doc}"
+    | Dest.Doc { dest = doc } -> $"document {Doc.name doc}"
+    | Dest.Heading (docLink, { data = heading }) ->
+        $"heading {Heading.name heading} in the document {Doc.name (DocLink.doc docLink)}"
     | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
 
-let docRefToHuman: DocRef -> string =
-    function
-    | DocRef.Title title -> $"document with the title '{title}'"
-    | DocRef.Url url -> $"document at '{url}'"
+let docRefToHuman (InternName name) : string = $"document '{name}'"
 
 let urefToHuman (uref: Uref) : string =
     match uref with
-    | Uref.Doc docRef -> docRefToHuman docRef
-    | Uref.Heading (docRef, heading) ->
-        match docRef with
+    | Uref.Doc { data = name } -> docRefToHuman name
+    | Uref.Heading (docLink, heading) ->
+        match docLink with
         | None -> $"heading '{Node.text heading}'"
-        | Some docRef -> $"heading '{Node.text heading}' in {docRefToHuman docRef}"
+        | Some { data = name } -> $"heading '{Node.text heading}' in {docRefToHuman name}"
     | Uref.LinkDef ld -> $"link definition with the label '{Node.text ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =

@@ -10,7 +10,7 @@ open Marksman.Cst
 open Marksman.Workspace
 open Marksman.Refs
 
-module DocRefTests =
+module InternNameTests =
     [<Fact>]
     let relPath_1 () =
         let folder = dummyRootPath [ "rootFolder" ] |> RootPath.ofString
@@ -20,7 +20,8 @@ module DocRefTests =
             |> PathUri.ofString
 
         let actual =
-            DocRef.tryResolveToRootPath folder docPath "../doc.md" |> Option.get
+            InternName.tryResolveToRootPath folder docPath "../doc.md"
+            |> Option.get
 
         Assert.Equal("doc.md", actual)
 
@@ -32,7 +33,8 @@ module DocRefTests =
             dummyRootPath [ "rootFolder"; "doc1.md" ] |> PathUri.ofString
 
         let actual =
-            DocRef.tryResolveToRootPath folder docPath "./doc2.md" |> Option.get
+            InternName.tryResolveToRootPath folder docPath "./doc2.md"
+            |> Option.get
 
         Assert.Equal("doc2.md", actual)
 
@@ -43,7 +45,7 @@ module DocRefTests =
         let docPath =
             dummyRootPath [ "rootFolder"; "doc1.md" ] |> PathUri.ofString
 
-        let actual = DocRef.tryResolveToRootPath folder docPath "../doc2.md"
+        let actual = InternName.tryResolveToRootPath folder docPath "../doc2.md"
         Assert.Equal(None, actual)
 
     [<Fact>]
@@ -55,7 +57,7 @@ module DocRefTests =
             |> PathUri.ofString
 
         let actual =
-            DocRef.tryResolveToRootPath folder docPath "/doc.md" |> Option.get
+            InternName.tryResolveToRootPath folder docPath "/doc.md" |> Option.get
 
         Assert.Equal("doc.md", actual)
 
@@ -68,7 +70,7 @@ module DocRefTests =
             |> PathUri.ofString
 
         let actual =
-            DocRef.tryResolveToRootPath folder docPath "www.google.com"
+            InternName.tryResolveToRootPath folder docPath "www.google.com"
             |> Option.get
 
         Assert.Equal("subfolder/www.google.com", actual)
@@ -82,79 +84,69 @@ module DocRefTests =
             |> PathUri.ofString
 
         let actual =
-            DocRef.tryResolveToRootPath folder docPath "http://www.google.com"
+            InternName.tryResolveToRootPath folder docPath "http://www.google.com"
 
         Assert.Equal(None, actual)
 
-    [<Fact>]
-    let filterMatching_title_substring () =
-        let doc1 = FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Doc 1" |])
-        let doc2 = FakeDoc.Mk(path = "doc2.md", contentLines = [| "# Doc 2" |])
-        let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Just 3" |])
-        let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
-
-        let matching =
-            DocRef.filterMatchingDocs folder doc1 (DocRef.Title "do")
-            |> Seq.map Doc.pathFromRoot
-            |> Array.ofSeq
-
-        Assert.Equal<string>([| "doc1.md"; "doc2.md" |], matching)
-
-let doc1 =
-    FakeDoc.Mk(
-        path = "doc1.md",
-        contentLines =
-            [| "# Doc 1" // 0
-               "" // 1
-               "## D1 H2.1" // 2
-               "" // 3
-               "[[doc-2#d2-h22]]" // 4
-               "" // 5
-               "## D1 H2.2" // 6
-               "" // 7
-               "[[#dup]]" // 8
-               "" // 9
-               "## Dup" // 10
-               "Entry 1" // 11
-               "" // 12
-               "## Dup" // 13
-               "Entry 2" |] // 14
-    )
-
-let doc2 =
-    FakeDoc.Mk(
-        path = "doc2.md",
-        contentLines =
-            [| "# Doc 2" // 0
-               "" // 1
-               "# D2 H2.1" // 2
-               "" // 3
-               "[D2-Link-1]" // 4
-               "" // 5
-               "[[#d2-h22]]" // 6
-               "" // 7
-               "[d2-LINK-1]" // 8
-               "" // 9
-               "# D2 H2.2" // 10
-               "" // 11
-               "[[doc-1]]" // 12
-               "[[doc-1#dup]]" // 13
-               "[lbl1](/doc1.md)" // 14
-               "[^fn1]" // 15
-               "" // 16
-               "[d2-link-1]: some-url" // 17
-               "" // 18
-               "[^fn1]: This is footnote" |] // 19
-    )
-
-let folder = FakeFolder.Mk [ doc1; doc2 ]
+let requireElementAtPos doc line col =
+    Cst.elementAtPos (Position.Mk(line, col)) (Doc.cst doc)
+    |> Option.defaultWith (fun _ -> failwith $"No element found at ({line}, {col})")
 
 let stripRefs (refs: seq<Doc * Element>) =
     refs
     |> Seq.map (fun (doc, el) -> Path.GetFileName(Doc.uri doc), (Element.range el).DebuggerDisplay)
     |> Array.ofSeq
 
-module RefsTests =
+module BasicRefsTests =
+    let doc1 =
+        FakeDoc.Mk(
+            path = "doc1.md",
+            contentLines =
+                [| "# Doc 1" // 0
+                   "" // 1
+                   "## D1 H2.1" // 2
+                   "" // 3
+                   "[[doc-2#d2-h22]]" // 4
+                   "" // 5
+                   "## D1 H2.2" // 6
+                   "" // 7
+                   "[[#dup]]" // 8
+                   "" // 9
+                   "## Dup" // 10
+                   "Entry 1" // 11
+                   "" // 12
+                   "## Dup" // 13
+                   "Entry 2" |] // 14
+        )
+
+    let doc2 =
+        FakeDoc.Mk(
+            path = "doc2.md",
+            contentLines =
+                [| "# Doc 2" // 0
+                   "" // 1
+                   "# D2 H2.1" // 2
+                   "" // 3
+                   "[D2-Link-1]" // 4
+                   "" // 5
+                   "[[#d2-h22]]" // 6
+                   "" // 7
+                   "[d2-LINK-1]" // 8
+                   "" // 9
+                   "# D2 H2.2" // 10
+                   "" // 11
+                   "[[doc-1]]" // 12
+                   "[[doc-1#dup]]" // 13
+                   "[lbl1](/doc1.md)" // 14
+                   "[^fn1]" // 15
+                   "" // 16
+                   "[d2-link-1]: some-url" // 17
+                   "" // 18
+                   "[^fn1]: This is footnote" |] // 19
+        )
+
+    let folder = FakeFolder.Mk [ doc1; doc2 ]
+
     [<Fact>]
     let refToLinkDef_atDef () =
         let def =
@@ -282,3 +274,54 @@ module RefsTests =
             [ "(doc2.md, (10,0)-(10,9))"
               "(doc1.md, (4,0)-(4,16))"
               "(doc2.md, (6,0)-(6,11))" ]
+
+
+module LinkKindRefsTests =
+    let doc1 =
+        FakeDoc.Mk(
+            path = "file1.md",
+            contentLines =
+                [| "# Doc 1 Title"
+                   "[[file2]]"
+                   "[[file2.md]]"
+                   "[[file2#doc-2-subtitle]]"
+                   "[[doc-2-title]]"
+                   "[link](file2)"
+                   "[[file3]]" |]
+        )
+
+    let doc2 =
+        FakeDoc.Mk(
+            path = "file2.md",
+            contentLines = [| "# Doc 2 Title"; "## Doc 2 SubTitle"; "[[doc-3-title]]" |]
+        )
+
+    let doc3 =
+        FakeDoc.Mk(path = "sub/file3.md", contentLines = [| "# Doc 3 Title" |])
+
+    let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
+
+
+    [<Fact>]
+    let atWiki_VariousFilenames () =
+        let link = requireElementAtPos doc1 1 2
+        let refs = Dest.findElementRefs false folder doc1 link |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(file1.md, (1,0)-(1,9))"
+              "(file1.md, (2,0)-(2,12))"
+              "(file1.md, (3,0)-(3,24))"
+              "(file1.md, (4,0)-(4,15))"
+              "(file1.md, (5,0)-(5,13))" ]
+
+    [<Fact>]
+    let atWiki_Filenames_Subfolder () =
+        let link = requireElementAtPos doc2 2 3
+        let refs = Dest.findElementRefs false folder doc2 link |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(file1.md, (6,0)-(6,9))"; "(file2.md, (2,0)-(2,15))" ]

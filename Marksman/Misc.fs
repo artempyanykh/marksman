@@ -29,10 +29,21 @@ let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
         false
     else
         // GetExtension returns extension with a '.'. In config we don't have '.'s.
-        let ext = (Path.GetExtension path).TrimStart('.')
-        let ext = ext.ToLowerInvariant()
+        let ext = (Path.GetExtension path)
 
-        Seq.contains ext configuredExts
+        match ext with
+        | null -> false
+        | ext ->
+            let ext = ext.TrimStart('.').ToLowerInvariant()
+            Seq.contains ext configuredExts
+
+let isPotentiallyMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
+    let ext = Path.GetExtension path
+
+    match ext with
+    | null
+    | "" -> true
+    | _ -> isMarkdownFile configuredExts path
 
 let fmtOption fmt value =
     match value with

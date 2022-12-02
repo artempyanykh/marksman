@@ -35,6 +35,7 @@ module Doc =
     val cst: Doc -> Cst
     val title: Doc -> option<Node<Heading>>
     val name: Doc -> string
+    val slug: Doc -> Slug
     val index: Doc -> Index
     val uri: Doc -> DocumentUri
 

@@ -73,8 +73,11 @@ type Text =
       lineMap: LineMap }
 
     member this.Substring(range: Range) : string =
-        let s, e = this.lineMap.FindRange range
-        this.content.Substring(s, e - s)
+        if range.IsEmpty() then
+            String.Empty
+        else
+            let s, e = this.lineMap.FindRange range
+            this.content.Substring(s, e - s)
 
     member this.Cutout(range: Range) : string * string =
         let s, e = this.lineMap.FindRange range
@@ -236,6 +239,8 @@ module Cursor =
     let backward c : option<Cursor> =
         if c.pos > c.span.start then Some { c with pos = c.pos - 1 } else None
 
+    let backwardChar c = backward c |> Option.map char
+
     let forwardChar c = forward c |> Option.map char
 
     let forwardChar2 c =
@@ -259,6 +264,15 @@ module Cursor =
 
         loop [] n c |> Option.map List.rev
 
+
+    let backwardN n c =
+        let mutable res = backward c
+        let mutable i = 1
+
+        while i < n && res.IsSome do
+            res <- Option.bind backward res
+
+        res
 
     let forwardN n c =
         let mutable res = forward c

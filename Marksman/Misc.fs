@@ -34,6 +34,11 @@ let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
 
         Seq.contains ext configuredExts
 
+let fmtOption fmt value =
+    match value with
+    | Some value -> $"{fmt value}"
+    | None -> "∅"
+
 type String with
 
     member this.Lines() : array<string> = this.Split(lineEndings, StringSplitOptions.None)
@@ -52,7 +57,7 @@ type String with
                     isMatching (thisIdx + 1) (otherIdx + 1)
                 | _ -> isMatching thisIdx (otherIdx + 1)
 
-        isMatching 0 0
+        if this.IsEmpty() then true else isMatching 0 0
 
     member this.IsEmpty() : bool = String.IsNullOrEmpty(this)
 
@@ -241,6 +246,8 @@ type Range with
           End = Position.Mk(endLine, endChar) }
 
     static member Mk(start: Position, end_: Position) : Range = { Start = start; End = end_ }
+
+    member this.IsEmpty() : bool = this.Start >= this.End
 
     member this.ContainsInclusive(pos: Position) : bool = this.Start <= pos && pos <= this.End
 

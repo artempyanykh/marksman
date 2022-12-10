@@ -247,7 +247,7 @@ module Markdown =
                                 Some(Node.mkText title (sourceSpanToRange text titleSpan))
 
                         let link =
-                            MdLink.IL(label = label, url = url, title = title)
+                            MdLink.IL(text = label, url = url, title = title)
                             |> Node.mk linkText linkRange
 
                         elements.Add(ML link)

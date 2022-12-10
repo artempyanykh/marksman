@@ -16,10 +16,13 @@ module Node =
     let mk text range inner = { text = text; range = range; data = inner }
     let mkText text range : TextNode = mk text range ()
     let text node = node.text
+    let textOpt nodeOpt def = Option.map text nodeOpt |> Option.defaultValue def
     let range node = node.range
     let data node = node.data
     let inner node = node.data
     let fmtText (node: TextNode) : string = $"{node.text} @ {node.range.DebuggerDisplay}"
+
+    let fmtOptText (node: option<TextNode>) : string = fmtOption fmtText node
 
 [<RequireQualifiedAccess>]
 type WikiLink = { doc: option<TextNode>; heading: option<TextNode> }
@@ -40,10 +43,19 @@ module WikiLink =
 
         String.Join(Environment.NewLine, lines)
 
+    let render (doc: option<string>) (heading: option<string>) (includeBraces: bool) : string =
+        let docText = doc |> Option.defaultValue ""
+
+        let headingText =
+            heading |> Option.map (fun h -> "#" + h) |> Option.defaultValue ""
+
+        let linkText = $"{docText}{headingText}"
+        if includeBraces then $"[[{linkText}]]" else linkText
+
 [<RequireQualifiedAccess>]
 type MdLink =
     // inline
-    | IL of label: TextNode * url: option<TextNode> * title: option<TextNode>
+    | IL of text: TextNode * url: option<TextNode> * title: option<TextNode>
     // reference full
     | RF of text: TextNode * label: TextNode
     // reference collapsed
@@ -132,6 +144,17 @@ module MdLink =
         | MdLink.RC label
         | MdLink.RS label -> Some label
         | MdLink.IL _ -> None
+
+    let renderInline text path anchor =
+        let text = text |> Option.defaultValue String.Empty
+        let path = path |> Option.defaultValue String.Empty
+
+        let anchor =
+            anchor
+            |> Option.map (fun x -> "#" + x)
+            |> Option.defaultValue String.Empty
+
+        $"[{text}]({path}{anchor})"
 
 type MdLinkDef = private { label: TextNode; url: TextNode; title: option<TextNode> }
 

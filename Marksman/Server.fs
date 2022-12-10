@@ -731,7 +731,7 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder = State.tryFindFolderEnclosing docUri state
 
-                    match Compl.findCandidates pos docUri folder with
+                    match Compl.findCandidates folder docUri pos with
                     | [||] -> return! None
                     | candidates -> { IsIncomplete = true; Items = candidates }
                 }

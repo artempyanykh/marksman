@@ -86,6 +86,20 @@ module DocRefTests =
 
         Assert.Equal(None, actual)
 
+    [<Fact>]
+    let filterMatching_title_substring () =
+        let doc1 = FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Doc 1" |])
+        let doc2 = FakeDoc.Mk(path = "doc2.md", contentLines = [| "# Doc 2" |])
+        let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Just 3" |])
+        let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
+
+        let matching =
+            DocRef.filterMatchingDocs folder doc1 (DocRef.Title "do")
+            |> Seq.map Doc.pathFromRoot
+            |> Array.ofSeq
+
+        Assert.Equal<string>([| "doc1.md"; "doc2.md" |], matching)
+
 let doc1 =
     FakeDoc.Mk(
         path = "doc1.md",
@@ -197,7 +211,7 @@ module RefsTests =
               "(doc2.md, (4,0)-(4,11))"
               "(doc2.md, (8,0)-(8,11))" ]
 
-    [<Fact(Skip="Footnote parsing not implemented")>]
+    [<Fact(Skip = "Footnote parsing not implemented")>]
     let refToFootnote_atLink () =
         let fnLink =
             Cst.elementAtPos (Position.Mk(15, 2)) (Doc.cst doc2)

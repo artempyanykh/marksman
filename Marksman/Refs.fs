@@ -19,7 +19,7 @@ type DocRef =
     | Url of url: string
 
 module DocRef =
-    let ofUrl (configuredExts: seq<string>) url : option<DocRef> =
+    let ofUrl (configuredExts: seq<string>) (url: string) : option<DocRef> =
         if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
             None
         else

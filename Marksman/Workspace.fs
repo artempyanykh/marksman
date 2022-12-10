@@ -377,10 +377,21 @@ module Folder =
             else
                 None
 
+    /// Find document matching a slug.
+    /// First check for full match. When nothing matches, check fuzzy substring match.
     let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
-        let isMatchingDoc doc = Doc.slug doc = slug
+        let hasSameSlug doc = Doc.slug doc = slug
+        let hasMatchingSlug doc = Slug.isSubSequence slug (Doc.slug doc)
 
-        docs folder |> Seq.filter isMatchingDoc
+        let filtered = docs folder |> Seq.filter hasSameSlug
+
+        let filtered =
+            if Seq.isEmpty filtered then
+                docs folder |> Seq.filter hasMatchingSlug
+            else
+                filtered
+
+        filtered
 
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()

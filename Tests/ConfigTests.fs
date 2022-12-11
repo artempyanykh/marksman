@@ -42,6 +42,21 @@ toc.enable = false
     let expected = { Config.Empty with caTocEnable = Some false }
 
     Assert.Equal(Some expected, actual)
+    
+
+[<Fact>]
+let testParse_3 () =
+    let content =
+        """
+[completion]
+wiki.style = "file-stem"
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with complWikiStyle = Some FileStem }
+
+    Assert.Equal(Some expected, actual)
 
 [<Fact>]
 let testParse_broken_0 () =
@@ -52,7 +67,7 @@ blah
 
     let actual = Config.tryParse content
     Assert.Equal(None, actual)
-    
+
 [<Fact>]
 let testParse_broken_1 () =
     let content =
@@ -63,7 +78,7 @@ markdown.file_extensions = [1, 2]
 
     let actual = Config.tryParse content
     Assert.Equal(None, actual)
-    
+
 [<Fact>]
 let testParse_broken_2 () =
     let content =
@@ -74,7 +89,7 @@ markdown.file_extensions = [["md"], "markdown"]
 
     let actual = Config.tryParse content
     Assert.Equal(None, actual)
-    
+
 [<Fact>]
 let testParse_broken_3 () =
     let content =

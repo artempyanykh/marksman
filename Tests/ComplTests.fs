@@ -612,6 +612,44 @@ module Candidates =
 
         checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
 
+
+    [<Fact>]
+    let partialWikiDocHeading_FilePathStem () =
+        let doc1 =
+            FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Doc 1"; "[[d#" |])
+
+        let doc2 =
+            FakeDoc.Mk(path = "sub2/doc2.md", contentLines = [| "# Doc 2"; "## H2" |])
+
+        let doc3 =
+            FakeDoc.Mk(path = "sub3/this is doc 3.md", contentLines = [| "# Doc 3"; "## H3" |])
+
+        let config =
+            { Config.Config.Empty with complWikiStyle = Some Config.FilePathStem }
+
+        let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
+
+        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
+        
+
+    [<Fact>]
+    let partialWikiDocHeading_FileStem () =
+        let doc1 =
+            FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Doc 1"; "[[d#" |])
+
+        let doc2 =
+            FakeDoc.Mk(path = "sub2/doc2.md", contentLines = [| "# Doc 2"; "## H2" |])
+
+        let doc3 =
+            FakeDoc.Mk(path = "sub3/this is doc 3.md", contentLines = [| "# Doc 3"; "## H3" |])
+
+        let config =
+            { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
+
+        let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
+
+        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
+
     [<Fact>]
     let partialReferenceEmpty () =
         let doc1 =
@@ -636,7 +674,7 @@ module Candidates =
         let folder = FakeFolder.Mk([ doc1 ])
 
         checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 8)))
-    
+
     [<Fact>]
     let partialInlineDoc () =
         let doc1 =

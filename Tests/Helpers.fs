@@ -57,8 +57,8 @@ type FakeDoc =
 
 type FakeFolder =
     class
-        static member Mk(docs: seq<Doc>) : Folder =
+        static member Mk(docs: seq<Doc>, ?config: Config.Config) : Folder =
             let docsMap = docs |> Seq.map (fun d -> Doc.path d, d) |> Map.ofSeq
 
-            Folder.multiFile "dummy" (RootPath.ofString dummyRootUri) docsMap None
+            Folder.multiFile "dummy" (RootPath.ofString dummyRootUri) docsMap config
     end

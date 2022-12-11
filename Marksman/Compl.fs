@@ -2,11 +2,13 @@
 
 open System
 
+open System.IO
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
 
 open FSharpPlus.GenericBuilders
 
+open Marksman.Config
 open Marksman.Cst
 open Marksman.Index
 open Marksman.Refs
@@ -281,10 +283,29 @@ module Prompt =
             | PE (PartialElement.ReferenceLink (label, _)) ->
                 Some(Reference(Node.textOpt label String.Empty))
 
+module CompletionHelpers =
+    let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) =
+        let docPath = Doc.pathFromRoot doc
+
+        match style with
+        | TitleSlug -> Slug.str (Doc.name doc)
+        | FileStem ->
+            let fileStem = docPath |> Path.GetFileNameWithoutExtension
+            fileStem.UrlEncode()
+        | FilePathStem ->
+            let extension = docPath |> Path.GetExtension
+            let pathStem = docPath.TrimSuffix(extension)
+            pathStem.AbsPathUrlEncode()
+
 module Completions =
-    let wikiDoc (pos: Position) (compl: Completable) (doc: Doc) : option<CompletionItem> =
+    let wikiDoc
+        (style: ComplWikiStyle)
+        (pos: Position)
+        (compl: Completable)
+        (doc: Doc)
+        : option<CompletionItem> =
         let targetName = (Doc.name doc)
-        let targetSlug = Slug.str targetName
+        let targetLink = CompletionHelpers.wikiTargetLink style doc
 
         match compl with
         | E (WL { data = { doc = input; heading = heading }; range = range })
@@ -297,7 +318,7 @@ module Completions =
             match heading with
             | None ->
                 let newText =
-                    WikiLink.render (Some targetSlug) None (Completable.isPartial compl)
+                    WikiLink.render (Some targetLink) None (Completable.isPartial compl)
 
                 let range = if Completable.isPartial compl then range else inputRange
                 let textEdit = { Range = range; NewText = newText }
@@ -308,7 +329,7 @@ module Completions =
                         TextEdit = Some textEdit
                         FilterText = Some newText }
             | Some _ ->
-                let newText = targetSlug
+                let newText = targetLink
                 let range = inputRange
                 let textEdit = { Range = range; NewText = newText }
 
@@ -320,6 +341,7 @@ module Completions =
         | _ -> None
 
     let wikiHeadingInSrcDoc
+        (_style: ComplWikiStyle)
         (_pos: Position)
         (compl: Completable)
         (completionHeading: string)
@@ -343,6 +365,7 @@ module Completions =
         | _ -> None
 
     let wikiHeadingInOtherDoc
+        (style: ComplWikiStyle)
         (_pos: Position)
         (compl: Completable)
         (doc: Doc, heading: string)
@@ -353,9 +376,11 @@ module Completions =
         | E (WL { data = { doc = Some destPart; heading = Some headingPart }
                   range = range })
         | PE (PartialElement.WikiLink (Some destPart, Some headingPart, range)) ->
+            let targetLink = CompletionHelpers.wikiTargetLink style doc
+
             let newText =
                 WikiLink.render
-                    (Doc.name doc |> Slug.str |> Some)
+                    (targetLink |> Some)
                     (Slug.str heading |> Some)
                     (Completable.isPartial compl)
 
@@ -599,20 +624,23 @@ let findCandidatesForCompl
     | Some (WikiDoc input) ->
         let destPart = Some(InternName input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
-        cand |> Array.choose (Completions.wikiDoc pos compl)
+
+        cand
+        |> Array.choose (Completions.wikiDoc (config.ComplWikiStyle()) pos compl)
     | Some (WikiHeadingInSrcDoc input) ->
         let cand = Candidates.findHeadingCandidates folder srcDoc None input
 
         cand
         |> Array.map snd
-        |> Array.choose (Completions.wikiHeadingInSrcDoc pos compl)
+        |> Array.choose (Completions.wikiHeadingInSrcDoc (config.ComplWikiStyle()) pos compl)
     | Some (WikiHeadingInOtherDoc (destPart, headingPart)) ->
         let destPart = Some(InternName destPart)
 
         let cand =
             Candidates.findHeadingCandidates folder srcDoc destPart headingPart
 
-        cand |> Array.choose (Completions.wikiHeadingInOtherDoc pos compl)
+        cand
+        |> Array.choose (Completions.wikiHeadingInOtherDoc (config.ComplWikiStyle()) pos compl)
     | Some (Reference input) ->
         let cand = Candidates.findLinkDefCandidates folder srcDoc input
         cand |> Array.choose (Completions.reference pos compl)

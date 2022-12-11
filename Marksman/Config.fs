@@ -1,11 +1,10 @@
 module Marksman.Config
 
 open System.IO
+open FSharpPlus
 open Ionide.LanguageServerProtocol.Logging
 open Tomlyn
 open Tomlyn.Model
-
-open FSharpPlus.GenericBuilders
 
 type LookupError =
     | NotFound of path: list<string>
@@ -83,19 +82,45 @@ let private lookupAsOpt =
 let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, LookupError> =
     getFromTable table revSeenPath remPath |> lookupAsOpt
 
+type ComplWikiStyle =
+    /// Document title's slug, e.g. "A B C" -> "a-b-c"
+    | TitleSlug
+    /// File name without an extension, e.g. "path/to/doc.md" -> "doc"
+    | FileStem
+    /// File path without an extension, e.g. "path/to/doc.md" -> "path/to/doc"
+    | FilePathStem
+
+module ComplWikiStyle =
+    let ofString (input: string) : Result<ComplWikiStyle, string> =
+        match input.ToLower() with
+        | "title-slug" -> Ok TitleSlug
+        | "file-stem" -> Ok FileStem
+        | "file-path-stem" -> Ok FilePathStem
+        | other -> Error $"Unknown ComplWikiStyle: {other}"
+
+    let ofStringOpt input =
+        match ofString input with
+        | Ok x -> Some x
+        | Error _ -> None
+
 /// Configuration knobs for the Marksman LSP.
 ///
 /// Note: all config options are laid out flat to make working with the config
 /// without lenses manageable.
 type Config =
     { caTocEnable: option<bool>
-      coreMarkdownFileExtensions: option<array<string>> }
+      coreMarkdownFileExtensions: option<array<string>>
+      complWikiStyle: option<ComplWikiStyle> }
 
     static member Default =
         { caTocEnable = Some true
-          coreMarkdownFileExtensions = Some [| "md"; "markdown" |] }
+          coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
+          complWikiStyle = Some TitleSlug }
 
-    static member Empty = { caTocEnable = None; coreMarkdownFileExtensions = None }
+    static member Empty =
+        { caTocEnable = None
+          coreMarkdownFileExtensions = None
+          complWikiStyle = None }
 
     member this.CaTocEnable() =
         this.caTocEnable
@@ -107,6 +132,11 @@ type Config =
         |> Option.orElse Config.Default.coreMarkdownFileExtensions
         |> Option.get
 
+    member this.ComplWikiStyle() =
+        this.complWikiStyle
+        |> Option.orElse Config.Default.complWikiStyle
+        |> Option.get
+
 let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
@@ -114,8 +144,14 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         let! coreMarkdownFileExtensions =
             getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "file_extensions" ]
 
+        let! complWikiStyle = getFromTableOpt<string> table [] [ "completion"; "wiki"; "style" ]
+
+        let complWikiStyle =
+            complWikiStyle |> Option.bind ComplWikiStyle.ofStringOpt
+
         { caTocEnable = caTocEnable
-          coreMarkdownFileExtensions = coreMarkdownFileExtensions }
+          coreMarkdownFileExtensions = coreMarkdownFileExtensions
+          complWikiStyle = complWikiStyle }
     }
 
 module Config =
@@ -125,7 +161,8 @@ module Config =
         { caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
           coreMarkdownFileExtensions =
             hi.coreMarkdownFileExtensions
-            |> Option.orElse low.coreMarkdownFileExtensions }
+            |> Option.orElse low.coreMarkdownFileExtensions
+          complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle }
 
     let mergeOpt hi low =
         match low with

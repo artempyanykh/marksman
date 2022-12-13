@@ -9,23 +9,20 @@ on:
 
 jobs:
   build:
-    name: Build the release for ${{ matrix.os.rid }}
+    name: Build the release for ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
         os:
           - runner: windows-latest
             exe: marksman.exe
-            rid: win-x64
+            task: publishTo
           - runner: ubuntu-latest
             exe: marksman
-            rid: linux-x64
+            task: publishTo
           - runner: macos-latest
             exe: marksman
-            rid: osx-x64
-          - runner: macos-latest
-            exe: marksman
-            rid: osx-arm64
+            task: macosUniversalBinary
     steps:
       - uses: actions/checkout@v2
       - name: Setup dotnet
@@ -37,17 +34,17 @@ jobs:
         run: dotnet restore
       
       - name: Build the release binary
-        run: make publishTo DEST=out RID=${{ matrix.os.rid }}
+        run: make ${{ matrix.os.task }} DEST=out
 
       - name: Upload the binary
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os.rid }}-${{ matrix.os.exe }}
+          name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
           path: out/${{ matrix.os.exe }}
           if-no-files-found: error
   
   release:
-    name: Create the release for ${{ matrix.os.rid }}
+    name: Create the release for ${{ matrix.os.runner }}
     needs: build
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -55,26 +52,19 @@ jobs:
         os:
           - runner: windows-latest
             exe: marksman.exe
-            rid: win-x64
             release_exe: marksman.exe
           - runner: ubuntu-latest
             exe: marksman
-            rid: linux-x64
             release_exe: marksman-linux
           - runner: macos-latest
             exe: marksman
-            rid: osx-x64
             release_exe: marksman-macos
-          - runner: macos-latest
-            exe: marksman
-            rid: osx-arm64
-            release_exe: marksman-macos-arm64
     steps:
       - id: download
         name: Download the release binary
         uses: actions/download-artifact@v2
         with:
-          name: ${{ matrix.os.rid }}-${{ matrix.os.exe }}
+          name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
 
       - name: Rename the binary
         shell: python

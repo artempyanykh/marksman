@@ -103,7 +103,9 @@ module RenameTests =
                     [| "# Doc 2"
                        "[[doc-1]]"
                        "[[doc-1#doc-12]]"
-                       "[](/doc1.md#doc-12)" |],
+                       "[](/doc1.md#doc-12)"
+                       // filename wiki-link
+                       "[[doc1]]" |],
                     path = "doc2.md"
                 )
 

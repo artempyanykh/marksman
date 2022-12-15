@@ -20,7 +20,7 @@ module Node =
     let range node = node.range
     let data node = node.data
     let inner node = node.data
-    let fmtText (node: TextNode) : string = $"{node.text} @ {node.range.DebuggerDisplay}"
+    let fmtText (node: TextNode) : string = $"{node.text} @ {node.range}"
 
     let fmtOptText (node: option<TextNode>) : string = fmtOption fmtText node
 
@@ -36,10 +36,10 @@ module WikiLink =
         let lines = ResizeArray()
 
         wl.doc
-        |> Option.iter (fun d -> $"doc={d.text}; {d.range.DebuggerDisplay}" |> lines.Add)
+        |> Option.iter (fun d -> $"doc={d.text}; {d.range}" |> lines.Add)
 
         wl.heading
-        |> Option.iter (fun h -> $"head={h.text}; {h.range.DebuggerDisplay}" |> lines.Add)
+        |> Option.iter (fun h -> $"head={h.text}; {h.range}" |> lines.Add)
 
         String.Join(Environment.NewLine, lines)
 
@@ -205,30 +205,28 @@ let rec private fmtElement =
 and private fmtHeading node =
     let inner = node.data
 
-    let l1 =
-        $"H{inner.level}: range={node.range.DebuggerDisplay}; scope={inner.scope.DebuggerDisplay}"
+    let l1 = $"H{inner.level}: range={node.range}; scope={inner.scope}"
 
     let l2 = $"  text=`{node.text}`"
 
-    let l3 =
-        $"  title=`{inner.title.text}` @ {inner.title.range.DebuggerDisplay}"
+    let l3 = $"  title=`{inner.title.text}` @ {inner.title.range}"
 
     let rest = Array.map (indentFmt fmtElement) inner.children
 
     String.Join(Environment.NewLine, Array.concat [ [| l1; l2; l3 |]; rest ])
 
 and private fmtWikiLink node =
-    let first = $"WL: {node.text}; {node.range.DebuggerDisplay}"
+    let first = $"WL: {node.text}; {node.range}"
     let rest = (indentFmt WikiLink.fmt) node.data
     String.Join(Environment.NewLine, [ first; rest ])
 
 and private fmtMdLink node =
-    let first = $"ML: {node.text} @ {node.range.DebuggerDisplay}"
+    let first = $"ML: {node.text} @ {node.range}"
     let rest = (indentFmt MdLink.fmt) node.data
     String.Join(Environment.NewLine, [ first; rest ])
 
 and private fmtMdLinkDef node =
-    let first = $"MLD: {node.text} @ {node.range.DebuggerDisplay}"
+    let first = $"MLD: {node.text} @ {node.range}"
     let rest = (indentFmt MdLinkDef.fmt) node.data
     String.Join(Environment.NewLine, [ first; rest ])
 

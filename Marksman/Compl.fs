@@ -31,11 +31,11 @@ type PartialElement =
     override this.ToString() =
         match this with
         | PartialElement.WikiLink (dest, heading, range) ->
-            $"WL {range.DebuggerDisplay}: dest={Node.fmtOptText dest}; heading={Node.fmtOptText heading}"
+            $"WL {range}: dest={Node.fmtOptText dest}; heading={Node.fmtOptText heading}"
         | PartialElement.InlineLink (text, path, anchor, range) ->
-            $"IL {range.DebuggerDisplay}: text={Node.fmtOptText text}; path={Node.fmtOptText path}; anchor={Node.fmtOptText anchor}"
+            $"IL {range}: text={Node.fmtOptText text}; path={Node.fmtOptText path}; anchor={Node.fmtOptText anchor}"
         | PartialElement.ReferenceLink (label, range) ->
-            $"RL {range.DebuggerDisplay}: label={Node.fmtOptText label}"
+            $"RL {range}: label={Node.fmtOptText label}"
 
 module PartialElement =
     open FSharpPlus.Operators

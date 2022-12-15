@@ -67,7 +67,7 @@ type DocumentSelector = DocumentFilter []
 
 /// Position in a text document expressed as zero-based line and zero-based character offset.
 /// A position is between two characters like an ‘insert’ cursor in a editor.
-[<DebuggerDisplay("{DebuggerDisplay}")>]
+[<StructuredFormatDisplay("{DebuggerDisplay}")>]
 type Position =
   { /// Line position in a document (zero-based).
     Line: int
@@ -81,6 +81,7 @@ type Position =
     Character: int }
   [<DebuggerBrowsable(DebuggerBrowsableState.Never); JsonIgnore>]
   member x.DebuggerDisplay = $"({x.Line},{x.Character})"
+  override x.ToString() = x.DebuggerDisplay
 
 /// A range in a text document expressed as (zero-based) start and end positions.
 /// A range is comparable to a selection in an editor. Therefore the end position is exclusive.
@@ -94,7 +95,7 @@ type Position =
 ///     End = { Line = 6; character = 0 }
 /// }
 /// ```
-[<DebuggerDisplay("{DebuggerDisplay}")>]
+[<StructuredFormatDisplay("{DebuggerDisplay}")>]
 type Range =
   { /// The range's start position.
     Start: Position
@@ -103,6 +104,7 @@ type Range =
     End: Position }
   [<DebuggerBrowsable(DebuggerBrowsableState.Never); JsonIgnore>]
   member x.DebuggerDisplay = $"{x.Start.DebuggerDisplay}-{x.End.DebuggerDisplay}"
+  override x.ToString() = x.DebuggerDisplay
 
 type DocumentUri = string
 
@@ -1705,7 +1707,7 @@ type CodeDescription =
 
 /// Represents a diagnostic, such as a compiler error or warning. Diagnostic objects are only valid in the
 /// scope of a resource.
-[<DebuggerDisplay("{DebuggerDisplay}")>]
+[<StructuredFormatDisplay("{DebuggerDisplay}")>]
 type Diagnostic =
   { /// The range at which the message applies.
     Range: Range
@@ -1734,6 +1736,8 @@ type Diagnostic =
   [<DebuggerBrowsable(DebuggerBrowsableState.Never); JsonIgnore>]
   member x.DebuggerDisplay =
     $"[{defaultArg x.Severity DiagnosticSeverity.Error}] ({x.Range.DebuggerDisplay}) {x.Message} ({defaultArg x.Code String.Empty})"
+
+  override x.ToString() = x.DebuggerDisplay
 
 type PublishDiagnosticsParams =
   { /// The URI for which diagnostic information is reported.

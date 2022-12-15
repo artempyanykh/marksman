@@ -28,7 +28,7 @@ type Token =
     { range: Range
       typ: TokenType }
 
-    override this.ToString() = $"{this.typ}@{this.range.DebuggerDisplay}"
+    override this.ToString() = $"{this.typ}@{this.range}"
 
 module Token =
     // We don't use modifiers in the encoding currently

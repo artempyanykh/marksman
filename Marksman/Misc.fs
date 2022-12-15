@@ -246,7 +246,7 @@ type Position with
     // TODO: use text for precise loc
     member this.PrevChar(n: int) : Position =
         if this.Character <= n then
-            failwith $"Start of line doesn't have a previous char: ${this.DebuggerDisplay}"
+            failwith $"Start of line doesn't have a previous char: {this}"
         else
             { Line = this.Line; Character = this.Character - n }
 

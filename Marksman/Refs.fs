@@ -143,24 +143,23 @@ module FileLink =
 
     let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (InternName name) : seq<FileLink> =
         let filterFn (doc: Doc) =
-            if Slug.isSubSequence (Slug.ofString name) (Doc.slug doc) then
+            if Slug.isSubString (Slug.ofString name) (Doc.slug doc) then
                 Some { link = name; kind = FileLinkKind.Title; dest = doc }
             else
+                // TODO: improve name resolution logic to detect the most specific kind of FileLink
                 InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
                 |> Option.bind (fun linkRootPath ->
                     if
                         linkRootPath
                             .AbsPathUrlEncode()
-                            .IsSubSequenceOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
+                            .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
                     then
                         Some { link = name; kind = FileLinkKind.FilePath; dest = doc }
                     else
                         let docFileName = Path.GetFileName(Doc.pathFromRoot doc)
 
                         if
-                            name
-                                .AbsPathUrlEncode()
-                                .IsSubSequenceOf(docFileName.AbsPathUrlEncode())
+                            name.AbsPathUrlEncode().IsSubStringOf(docFileName.AbsPathUrlEncode())
                         then
                             Some { link = name; kind = FileLinkKind.FileName; dest = doc }
                         else
@@ -169,7 +168,7 @@ module FileLink =
                             if
                                 name
                                     .AbsPathUrlEncode()
-                                    .IsSubSequenceOf(docFileStem.AbsPathUrlEncode())
+                                    .IsSubStringOf(docFileStem.AbsPathUrlEncode())
                             then
                                 Some { link = name; kind = FileLinkKind.FileStem; dest = doc }
                             else
@@ -282,25 +281,27 @@ module Dest =
         | Some uref -> tryResolveUref uref doc folder
         | None -> Seq.empty
 
-    let resolveLinks (folder: Folder) (doc: Doc) : Map<Element, list<Dest>> =
+    let resolveLinks (folder: Folder) (doc: Doc) : Map<Element, array<Dest>> =
         let links = Index.links (Doc.index doc)
 
         links
         |> Seq.collect (fun link ->
-            match tryResolveElement folder doc link |> Seq.toList with
+            match tryResolveElement folder doc link |> Seq.toArray with
             | refs -> [ link, refs ])
         |> Map.ofSeq
 
     let private findReferencingElements
-        (refMap: Map<Element, list<Dest>>)
+        (refMap: Map<Element, array<Dest>>)
         (target: Dest)
-        : seq<Element> =
+        : seq<Element * array<Dest>> =
         seq {
             for KeyValue (el, refs) in refMap do
-                if List.exists (overlapsWith target) refs then
-                    yield el
+                let matchingDest = Array.filter (overlapsWith target) refs
+
+                if not (Array.isEmpty matchingDest) then
+                    yield el, matchingDest
         }
-        |> Seq.sortBy Element.rangeStart
+        |> Seq.sortBy (fun (el, _) -> Element.rangeStart el)
 
     /// Finds elements referencing `el`.
     /// When `el` is a link, it's resolved to its destination first and then references to the
@@ -310,17 +311,17 @@ module Dest =
         (folder: Folder)
         (srcDoc: Doc)
         (el: Element)
-        : seq<Doc * Element> =
+        : seq<Doc * Element * array<Dest>> =
         let declsToFind =
             match el with
-            | MLD ld -> [ Dest.LinkDef(srcDoc, ld) ]
+            | MLD ld -> [| Dest.LinkDef(srcDoc, ld) |]
             | H h when Heading.isTitle h.data ->
-                [ Dest.Doc { link = h.text; kind = FileLinkKind.Title; dest = srcDoc } ]
-            | H h -> [ Dest.Heading(Implicit srcDoc, h) ]
+                [| Dest.Doc { link = h.text; kind = FileLinkKind.Title; dest = srcDoc } |]
+            | H h -> [| Dest.Heading(Implicit srcDoc, h) |]
             | link when Element.isLink link ->
                 let linkToDecl = resolveLinks folder srcDoc
-                Map.tryFind link linkToDecl |> Option.defaultValue []
-            | _ -> []
+                Map.tryFind link linkToDecl |> Option.defaultValue [||]
+            | _ -> [||]
 
         let resolveDecl includeDecl declToFind =
             let targetDocs =
@@ -336,7 +337,7 @@ module Dest =
 
                         let backRefs =
                             findReferencingElements targetDocRefs declToFind
-                            |> Seq.map (fun el -> targetDoc, el)
+                            |> Seq.map (fun (el, dest) -> targetDoc, el, dest)
 
                         yield! backRefs
                 }
@@ -347,14 +348,12 @@ module Dest =
                         monad' {
                             let! el = element declToFind
                             let doc = doc declToFind
-                            doc, el
+                            doc, el, [| declToFind |]
                         }
 
-                    match decl with
-                    | Some decl -> [ decl ]
-                    | _ -> []
+                    decl |> Option.toArray
                 else
-                    []
+                    [||]
 
             Seq.append declEl referencingEls
 

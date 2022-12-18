@@ -70,6 +70,8 @@ type String with
 
         if this.IsEmpty() then true else isMatching 0 0
 
+    member this.IsSubStringOf(other: string) : bool = other.Contains(this)
+
     member this.IsEmpty() : bool = String.IsNullOrEmpty(this)
 
     member this.IsWhitespace() : bool = String.IsNullOrWhiteSpace(this)
@@ -146,6 +148,11 @@ module Slug =
         let (Slug sub) = sub
         let (Slug sup) = sup
         sub.IsSubSequenceOf(sup)
+
+    let isSubString (sub: Slug) (sup: Slug) =
+        let (Slug sub) = sub
+        let (Slug sup) = sup
+        sub.IsSubStringOf(sup)
 
 let indentFmt (fmtA: 'A -> string) (a: 'A) =
     let reprA = fmtA a

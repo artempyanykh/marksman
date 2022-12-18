@@ -819,7 +819,7 @@ type MarksmanServer(client: MarksmanClient) =
                     let referencingEls =
                         Dest.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
 
-                    let toLoc (doc, el) = { Uri = Doc.uri doc; Range = Element.range el }
+                    let toLoc (doc, el, _) = { Uri = Doc.uri doc; Range = Element.range el }
 
                     referencingEls |> Seq.map toLoc |> Array.ofSeq
                 }

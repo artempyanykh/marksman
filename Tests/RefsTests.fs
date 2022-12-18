@@ -92,9 +92,10 @@ let requireElementAtPos doc line col =
     Cst.elementAtPos (Position.Mk(line, col)) (Doc.cst doc)
     |> Option.defaultWith (fun _ -> failwith $"No element found at ({line}, {col})")
 
-let stripRefs (refs: seq<Doc * Element>) =
+let stripRefs (refs: seq<Doc * Element * array<Dest>>) =
     refs
-    |> Seq.map (fun (doc, el) -> Path.GetFileName(Doc.uri doc), (Element.range el).DebuggerDisplay)
+    |> Seq.map (fun (doc, el, _) ->
+        Path.GetFileName(Doc.uri doc), (Element.range el).DebuggerDisplay)
     |> Array.ofSeq
 
 module BasicRefsTests =

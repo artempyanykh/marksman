@@ -320,6 +320,9 @@ module Completions =
                 let newText =
                     WikiLink.render (Some targetLink) None (Completable.isPartial compl)
 
+                let filterText =
+                    WikiLink.render (Some targetName) None (Completable.isPartial compl)
+
                 let range = if Completable.isPartial compl then range else inputRange
                 let textEdit = { Range = range; NewText = newText }
 
@@ -327,7 +330,7 @@ module Completions =
                     { CompletionItem.Create(targetName) with
                         Detail = Some(Doc.pathFromRoot doc)
                         TextEdit = Some textEdit
-                        FilterText = Some newText }
+                        FilterText = Some filterText }
             | Some _ ->
                 let newText = targetLink
                 let range = inputRange
@@ -337,7 +340,7 @@ module Completions =
                     { CompletionItem.Create(targetName) with
                         Detail = Some(Doc.pathFromRoot doc)
                         TextEdit = Some textEdit
-                        FilterText = Some newText }
+                        FilterText = Some targetName }
         | _ -> None
 
     let wikiHeadingInSrcDoc
@@ -384,6 +387,10 @@ module Completions =
                     (Slug.str heading |> Some)
                     (Completable.isPartial compl)
 
+
+            let filterText =
+                WikiLink.render (Some targetLink) (Some heading) (Completable.isPartial compl)
+
             let range =
                 if Completable.isPartial compl then
                     range
@@ -396,7 +403,7 @@ module Completions =
                 { CompletionItem.Create(label) with
                     Detail = Some(Doc.pathFromRoot doc)
                     TextEdit = Some textEdit
-                    FilterText = Some newText }
+                    FilterText = Some filterText }
         | _ -> None
 
     let reference (pos: Position) (compl: Completable) (def: MdLinkDef) : option<CompletionItem> =

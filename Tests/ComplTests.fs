@@ -246,8 +246,10 @@ module PartialElementInline =
 module Candidates =
     let checkSnapshot (completions: array<CompletionItem>) =
         let fmtItem (ci: CompletionItem) =
+            let filterText = ci.FilterText |> Option.defaultValue "<no-filter>"
+
             ci.TextEdit
-            |> Option.map (fun te -> $"{te.Range.DebuggerDisplay}: {te.NewText}")
+            |> Option.map (fun te -> $"{te.Range.DebuggerDisplay}: {te.NewText} / {filterText}")
             |> Option.defaultValue "<no-edit>"
 
         let lines = Array.map fmtItem completions
@@ -412,6 +414,18 @@ module Candidates =
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
 
         checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
+
+    [<Fact>]
+    let partialWikiDoc_FileStem_ArbitraryPath () =
+        let doc1 =
+            FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Doc 1"; "[[sun" |])
+
+        let doc2 =
+            FakeDoc.Mk(path = "20221218.md", contentLines = [| "# Sun 18 Dec 2022" |])
+
+        let folder = FakeFolder.Mk([ doc1; doc2 ])
+
+        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 5)))
 
     [<Fact>]
     let partialReferenceEmpty () =

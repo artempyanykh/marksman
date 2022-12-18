@@ -18,6 +18,7 @@ features below.
 Marksman **works on MacOS, Linux, and Windows** and is distributed as a **self-contained binary** for each OS.
 
 The server provides assistance with:
+
 * Markdown inline links:
    ```md
    This is [inline link](/some-file.md#some-heading).
@@ -43,10 +44,11 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 * VSCode via [Marksman VSCode][mn-vscode].
 * Neovim:
-    * via [mason.nvim][mason-nvim] (automatic server installation) (Requires [mason-lspconfig.nvim][mason-nvim-lsp-config])
+    * via [mason.nvim][mason-nvim] (automatic server installation) (
+      Requires [mason-lspconfig.nvim][mason-nvim-lsp-config])
     * via [nvim-lspconfig][nvim-marksman],
     * via [CoC-marksman][coc-marksman].
-* Emacs: 
+* Emacs:
     * via [LSP Mode](https://emacs-lsp.github.io/lsp-mode/page/lsp-marksman/) (automatic server installation).
 
       Example config for `use-package` users:
@@ -65,7 +67,8 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
       (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))      
       (add-hook 'markdown-mode-hook #'eglot-ensure)
       ````
-* [Helix](https://helix-editor.com/) supports Marksman out of the box. However, you need add `marksman` binary to your `PATH` manually.
+* [Helix](https://helix-editor.com/) supports Marksman out of the box. However, you need add `marksman` binary to
+  your `PATH` manually.
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
   installation).
 
@@ -110,8 +113,8 @@ generally most features should work equaly in all editors.
 - **Hover preview**:
   ![Hover](assets/readme/gifs/hover.gif)
 - **Completion**:
-  * ![Completion Markdown](assets/readme/gifs/completion-markdown.gif)
-  * ![Completion Wiki](assets/readme/gifs/completion-wiki.gif)
+    * ![Completion Markdown](assets/readme/gifs/completion-markdown.gif)
+    * ![Completion Wiki](assets/readme/gifs/completion-wiki.gif)
 - **Find references**:
   ![Find references](assets/readme/gifs/find-references.gif)
 - **Project-wide diagnostics**:
@@ -125,7 +128,7 @@ generally most features should work equaly in all editors.
 
 - ✅ Document symbols from headings.
 - ✅ Workspace symbols from headings.
-  * Query matching is subsequence-based, that is `lsp` will match both `LSP` and `Low Seismic Profile`.
+    * Query matching is subsequence-based, that is `lsp` will match both `LSP` and `Low Seismic Profile`.
 - ✅ Completion for links (inline, reference, wiki).
 - ✅ Hover prevew for links.
 - ✅ "Go to definition" for links.
@@ -133,17 +136,29 @@ generally most features should work equaly in all editors.
 - ✅ Diagnostics for wiki-links.
 - ✅ Support multi-folder workspaces.
 - ✅ Custom parser for more fine-grained note structure.
-- 🗓  Code Lens with "# references" on headings.
+- 🗓 Code Lens with "# references" on headings.
 - ✅ Rename refactor.
-- 🗓  Add support for images (diagnostics, completion, goto).
-- 🗓  Add "check" command for standalone workspace checking.
-- 🗓  Add "build" command that rewrites all cross-references into proper
+- 🗓 Add support for images (diagnostics, completion, goto).
+- 🗓 Add "check" command for standalone workspace checking.
+- 🗓 Add "build" command that rewrites all cross-references into proper
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.
-- 🗓  Support for Jupyter notebooks.
+- 🗓 Support for Jupyter notebooks.
 
 ### Configuration
+
 See [Configuration](docs/configuration.md) docs for more details.
+
+### Wiki links
+
+Alongside regular markdown links, Marksman also supports wiki-style links, e.g. ``[[some-doc]]``
+or ``[[#some-heading]]``. This is particularly convenient when working with a Zettelkasten-like repository of markdown
+notes, as it streamlines linking and cross-linking of notes. This is what tool like [Obsidian][obsidian]
+and [Emanote][emanote] use.
+
+By default Marksman uses a document **title's slug** when referencing a document, however there is an configuration
+setting to use a **file name** or a file path instead. This functionality is currently **experimental** and may change
+in future depending on user's feedback. See [Configuration](docs/configuration.md) for more details.
 
 ### Code actions
 
@@ -151,6 +166,7 @@ Code actions usually can be enabled/disabled via a configuration option. See
 [configuration](#configuration) for more details.
 
 #### Table of Contents
+
 Marksman has a code action to create and update a table of contents of a document.
 
 ![Table of Contents](assets/readme/gifs/toc.gif)
@@ -169,16 +185,18 @@ files<sup>[4](#fn4)</sup>. Marksman has a custom **single-file mode** that
 provides a *subset* of language features for markdown files open outside of any
 project. This works well for small one-off edits or when opening random
 markdown files. However, when you have several interconnected documents do
-consider setting up a project folder for them for an improved experience. 
+consider setting up a project folder for them for an improved experience.
 
 How a folder (aka project, aka root) is found varies between editors, but
 usually it's either
+
 1. a root of a VCS repository (applicable to all languages),
 2. a folder with `.marksman.toml` marker file (specific to Marksman
    integrations).
 
 When Marksman doesn't provide cross-file language assist for your files and you
 don't understand why, you can either:
+
 1. check your project into version control, or
 2. create a `.marksman.toml` at the root folder of your project, or
 3. refer to your editor/LSP client documentation regarding how a project root
@@ -221,17 +239,25 @@ LSP but it's not a part of the spec at least until and including v3.17.
 [original-zn]: https://github.com/artempyanykh/zeta-note
 
 [nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#marksman
+
 [mason-nvim]: https://github.com/williamboman/mason.nvim
+
 [mason-nvim-lsp-config]: https://github.com/williamboman/mason-lspconfig.nvim
 
 [lsp-main]: https://microsoft.github.io/language-server-protocol/
 
 [helix-editor]: https://helix-editor.com
+
 [helix-marksman-pr]: https://github.com/helix-editor/helix/pull/3499
 
 [coc-marksman]: https://github.com/yaegassy/coc-marksman
 
 [eglot]: https://github.com/joaotavora/eglot
+
 [eglot-marksman-pr]: https://github.com/joaotavora/eglot/pull/1013
 
 [sublime-marksman]: https://github.com/bitsper2nd/LSP-marksman
+
+[obsidian]: https://obsidian.md
+
+[emanote]: https://emanote.srid.ca

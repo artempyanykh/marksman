@@ -8,7 +8,7 @@
         <EnableLint>false</EnableLint>
     </PropertyGroup>
     <Target Name="Version" BeforeTargets="BeforeBuild">
-        <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true">
+        <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true" Condition="'$(VersionString)'==''">
             <Output TaskParameter="ConsoleOutput" PropertyName="VersionString"/>
         </Exec>
         <PropertyGroup>

@@ -80,6 +80,7 @@ publishTo:
 		-p:PublishTrimmed=true \
 		-p:DebugType=embedded \
 		-p:EnableCompressionInSingleFile=true \
+		-p:VersionString=$(VERSIONSTRING) \
 		Marksman/Marksman.fsproj \
 		-o $(DEST)
 		

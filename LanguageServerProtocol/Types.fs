@@ -747,7 +747,7 @@ type TextDocumentClientCapabilities =
   { Synchronization: SynchronizationCapabilities option
 
     /// Capabilities specific to `textDocument/publishDiagnostics`.
-    PublishDiagnostics: PublishDiagnosticsCapabilities
+    PublishDiagnostics: PublishDiagnosticsCapabilities option
 
     /// Capabilities specific to the `textDocument/completion`
     Completion: CompletionCapabilities option

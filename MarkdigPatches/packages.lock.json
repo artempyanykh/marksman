@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net6.0": {
+      "Markdig": {
+        "type": "Direct",
+        "requested": "[0.30.2, )",
+        "resolved": "0.30.2",
+        "contentHash": "rm5rfHGP0BZtcB31CmQeWLLPdpG6xA6xN92x2KcNrl+9MPJONq9u4dfG7VgnTOxdjDnuEkX6GCxMYS+LpoKGOQ=="
+      }
+    },
+    "net6.0/osx-arm64": {}
+  }
+}

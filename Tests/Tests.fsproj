@@ -5,6 +5,9 @@
 
         <IsPackable>false</IsPackable>
         <GenerateProgramFile>false</GenerateProgramFile>
+
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+        <RestoreLockedMode>true</RestoreLockedMode>
     </PropertyGroup>
 
     <ItemGroup>

@@ -10,6 +10,8 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/ionide/LanguageServerProtocol</PackageProjectUrl>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode>true</RestoreLockedMode>
   </PropertyGroup>
   <ItemGroup>
     <!-- FsLibLog.fs comes verbatim from

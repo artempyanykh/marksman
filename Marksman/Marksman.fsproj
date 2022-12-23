@@ -6,6 +6,8 @@
         <AssemblyName>marksman</AssemblyName>
         <VersionPrefix>1.0.0</VersionPrefix>
         <EnableLint>false</EnableLint>
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+        <RestoreLockedMode>true</RestoreLockedMode>
     </PropertyGroup>
     <Target Name="Version" BeforeTargets="BeforeBuild">
         <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true" Condition="'$(VersionString)'==''">

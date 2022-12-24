@@ -103,6 +103,14 @@ xattr -d com.apple.quarantine <path-to-marksman-bin>
 2. Inside `marksman` folder run `make install`
 3. The binary will be installed under `$HOME/.local/bin` (make sure this folder is in your `PATH`).
 
+### Option 3: use a package manager
+
+* Homebrew, for Linux and MacOS:
+
+```bash
+brew install marksman
+```
+
 ## Demo
 
 Below is a mix of VSCode, Neovim, and Emacs screenshots. Although, not all features demonstrated for each editor,

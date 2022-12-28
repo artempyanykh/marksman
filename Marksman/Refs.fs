@@ -141,40 +141,88 @@ type FileLink = { link: string; kind: FileLinkKind; dest: Doc }
 module FileLink =
     let dest { dest = dest } = dest
 
-    let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (InternName name) : seq<FileLink> =
-        let filterFn (doc: Doc) =
-            if Slug.isSubString (Slug.ofString name) (Doc.slug doc) then
+    let tryMatchDoc (folder: Folder) (srcDoc: Doc) (InternName name) (doc: Doc) : option<FileLink> =
+        let titleLink =
+            if (Slug.ofString name) = (Doc.slug doc) then
                 Some { link = name; kind = FileLinkKind.Title; dest = doc }
             else
-                // TODO: improve name resolution logic to detect the most specific kind of FileLink
-                InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
-                |> Option.bind (fun linkRootPath ->
-                    if
-                        linkRootPath
-                            .AbsPathUrlEncode()
-                            .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
-                    then
-                        Some { link = name; kind = FileLinkKind.FilePath; dest = doc }
+                None
+
+        let linkRootPath =
+            InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
+
+        let fileStemLink, fileNameLink, filePathLink =
+            match linkRootPath with
+            | Some linkRootPath ->
+                let docFileStem = Path.GetFileNameWithoutExtension(Doc.pathFromRoot doc)
+
+                let fileStemLink =
+                    if name.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode() then
+                        Some { link = name; kind = FileLinkKind.FileStem; dest = doc }
                     else
-                        let docFileName = Path.GetFileName(Doc.pathFromRoot doc)
+                        None
+
+                let docFileName = Path.GetFileName(Doc.pathFromRoot doc)
+
+                let fileNameLink =
+                    if name.AbsPathUrlEncode() = docFileName.AbsPathUrlEncode() then
+                        Some { link = name; kind = FileLinkKind.FileName; dest = doc }
+                    else
+                        None
+
+                let filePathLink =
+                    try
+                        let nameFileStem = Path.GetFileNameWithoutExtension(name)
 
                         if
-                            name.AbsPathUrlEncode().IsSubStringOf(docFileName.AbsPathUrlEncode())
+                            docFileStem.AbsPathUrlEncode() = nameFileStem.AbsPathUrlEncode()
+                            && linkRootPath
+                                .AbsPathUrlEncode()
+                                .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
                         then
-                            Some { link = name; kind = FileLinkKind.FileName; dest = doc }
+                            Some { link = name; kind = FileLinkKind.FilePath; dest = doc }
                         else
-                            let docFileStem = Path.GetFileNameWithoutExtension(docFileName)
+                            None
+                    with :? ArgumentException ->
+                        None
 
-                            if
-                                name
-                                    .AbsPathUrlEncode()
-                                    .IsSubStringOf(docFileStem.AbsPathUrlEncode())
-                            then
-                                Some { link = name; kind = FileLinkKind.FileStem; dest = doc }
-                            else
-                                None)
+                fileStemLink, fileNameLink, filePathLink
+            | None -> None, None, None
 
-        Folder.docs folder |> Seq.choose filterFn
+        let completionStyle = (Folder.configOrDefault folder).ComplWikiStyle()
+
+        let fileLink =
+            fileStemLink
+            |> Option.orElse fileNameLink
+            |> Option.orElse filePathLink
+
+        match titleLink, fileLink with
+        | Some _, None -> titleLink
+        | None, Some _ -> fileLink
+        | None, None -> None
+        | Some _, Some _ when completionStyle = Config.TitleSlug -> titleLink
+        | Some _, Some _ -> fileLink
+
+    let isFuzzyMatchDoc (folder: Folder) (srcDoc: Doc) (InternName name) (doc: Doc) : bool =
+        let byTitle = Slug.isSubString (Slug.ofString name) (Doc.slug doc)
+
+        let byPath () =
+            match
+                InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
+            with
+            | Some linkRootPath ->
+                linkRootPath
+                    .AbsPathUrlEncode()
+                    .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
+            | None -> false
+
+        byTitle || byPath ()
+
+    let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (name: InternName) : seq<FileLink> =
+        Folder.docs folder |> Seq.choose (tryMatchDoc folder srcDoc name)
+
+    let filterFuzzyMatchingDocs (folder: Folder) (srcDoc: Doc) (name: InternName) : seq<Doc> =
+        Folder.docs folder |> Seq.filter (isFuzzyMatchDoc folder srcDoc name)
 
 type DocLink =
     | Explicit of FileLink

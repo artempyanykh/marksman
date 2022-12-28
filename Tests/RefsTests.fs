@@ -98,6 +98,59 @@ let stripRefs (refs: seq<Doc * Element * array<Dest>>) =
         Path.GetFileName(Doc.uri doc), (Element.range el).DebuggerDisplay)
     |> Array.ofSeq
 
+module FileLinkTests =
+    let doc1 = FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Horses" |])
+
+    let doc2 =
+        FakeDoc.Mk(path = "doc2.md", contentLines = [| "# Riding Horses" |])
+
+    let doc3 =
+        FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Fruit" |])
+
+
+    [<Fact>]
+    let fileName_Partial () =
+        let folder =
+            FakeFolder.Mk(
+                [ doc1; doc2 ],
+                { Config.Config.Default with complWikiStyle = Some Config.FileStem }
+            )
+
+        let partial = FileLink.filterMatchingDocs folder doc1 (InternName "doc")
+        Assert.Empty(partial)
+
+        let full =
+            FileLink.filterMatchingDocs folder doc2 (InternName "doc2")
+            |> Array.ofSeq
+
+        Assert.Equal(full.Length, 1)
+        Assert.Equal(full[0].dest, doc2)
+
+
+    [<Fact>]
+    let heading_Partial () =
+        let folder =
+            FakeFolder.Mk(
+                [ doc1; doc2; doc3 ],
+                { Config.Config.Default with complWikiStyle = Some Config.TitleSlug }
+            )
+
+        let actual =
+            FileLink.filterMatchingDocs folder doc3 (InternName "horses")
+            |> Seq.map FileLink.dest
+            |> Array.ofSeq
+
+        Assert.Equal<Doc>(actual, [| doc1 |])
+
+        let actual =
+            FileLink.filterMatchingDocs folder doc3 (InternName "riding-horses")
+            |> Seq.map FileLink.dest
+            |> Array.ofSeq
+
+        Assert.Equal<Doc>(actual, [| doc2 |])
+
+
+
 module BasicRefsTests =
     let doc1 =
         FakeDoc.Mk(

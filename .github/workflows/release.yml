@@ -11,6 +11,7 @@ jobs:
   build:
     name: Build the release for ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
+
     strategy:
       matrix:
         os:
@@ -23,30 +24,34 @@ jobs:
           - runner: macos-latest
             exe: marksman
             task: macosUniversalBinary
+
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+
       - name: Setup dotnet
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '6.0.x'
-          
+
       - name: Install dependencies
         run: dotnet restore
-      
+
       - name: Build the release binary
         run: make ${{ matrix.os.task }} DEST=out
 
       - name: Upload the binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
           path: out/${{ matrix.os.exe }}
           if-no-files-found: error
-  
+
   release:
     name: Create the release for ${{ matrix.os.runner }}
-    needs: build
     runs-on: ${{ matrix.os.runner }}
+
+    needs: build
+
     strategy:
       matrix:
         os:
@@ -59,10 +64,11 @@ jobs:
           - runner: macos-latest
             exe: marksman
             release_exe: marksman-macos
+
     steps:
       - id: download
         name: Download the release binary
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
 
@@ -81,4 +87,3 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

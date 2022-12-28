@@ -9,22 +9,29 @@ on:
 jobs:
   check:
     name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v3
+
       - name: Setup dotnet
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '6.0.x'
+
       - name: Install dependencies
         run: dotnet restore
+
       - name: Build
         run: dotnet build
+
       - name: Check format and lints
         run: make check
         if: ${{ matrix.os == 'ubuntu-latest' }}
+
       - name: Test with the dotnet CLI
         run: dotnet test

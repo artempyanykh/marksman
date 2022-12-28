@@ -5,14 +5,14 @@
 
 _Write Markdown with code assist and intelligence in the comfort of your favourite editor._
 
-![](assets/readme/splash.png)
+![splash](assets/readme/splash.png)
 
 ---
 
 Marksman is a program that integrates with your editor to assist you in writing and maintaining your Markdown documents.
 Using [LSP protocol][lsp-main] it provides **completion**, goto **definition**, find **references**, **rename**
 refactoring, **diagnostics**, and more. In addition to regular Markdown, it also supports **wiki-link**-style references
-that enable [Zettelkasten-like][zettel-wiki]<sup>[1](#fn1), [2](#fn2)</sup> note taking. See more about Marksman's
+that enable [Zettelkasten-like][zettel-wiki][^roam-research], [^markdown-memo] note taking. See more about Marksman's
 features below.
 
 Marksman **works on MacOS, Linux, and Windows** and is distributed as a **self-contained binary** for each OS.
@@ -40,7 +40,7 @@ The server provides assistance with:
 All types of links support completion, hover, goto definition/references. Additionally, Marksman provides diagnostics
 for wiki-links to detect broken references and duplicate/ambiguous headings.
 
-## Existing editor integrations<sup>[3](#fn3)</sup>:
+## Existing editor integrations[^lsp]:
 
 * VSCode via [Marksman VSCode][mn-vscode].
 * Neovim:
@@ -189,7 +189,7 @@ workspace. similarly to what Git does.
 ### Workspace folders, project roots, and single-file mode
 
 The LSP specification is designed to work with projects rather than individual
-files<sup>[4](#fn4)</sup>. Marksman has a custom **single-file mode** that
+files[^single-file-mode]. Marksman has a custom **single-file mode** that
 provides a *subset* of language features for markdown files open outside of any
 project. This works well for small one-off edits or when opening random
 markdown files. However, when you have several interconnected documents do
@@ -218,22 +218,22 @@ language server **in F#** and add new features to it, than it is to add new feat
 The original Rust implementation is archived [in a separate repo][original-zn]. Further development will happen in this
 repository in F#.
 
----
 
-<span id="fn1">\[1\]</span>: You may have heard about [Roam Research][roam]. This is a commercial implementation of the
+
+[^roam-research]: You may have heard about [Roam Research][roam]. That is a commercial implementation of the
 Zettelkasten method and another point of reference for what Marksman is about. However, unlike a proprietary Roam
 Research, Marksman is free, open-source and integrated into your favourite editor (albeit for not not as feature rich as
 Roam Research).
 
-<span id="fn2">\[2\]</span>: There is an excellent VSCode extension called [Markdown Memo][md-memo]. You definitely need
+[^markdown-memo]: There is an excellent VSCode extension called [Markdown Memo][md-memo]. You definitely need
 to check it out if you're primarily using VSCode as it has some features that are missing in Marksman and [Marksman
 VSCode extension][mn-vscode]. However, Markdown Memo is VSCode specific while Marksman is a generic language server, so
 can be used with any editor that has LSP support: Emacs, Vim, Neovim, etc.
 
-<span id="fn3">\[3\]</span>: Since Marksman is a regular Language Server most of the functionality works out of the box
+[^lsp]: Since Marksman is a regular Language Server most of the functionality works out of the box
 with any LSP client.
 
-<span id="fn4">\[4\]</span>: There is an initiative to add a single-file mode to
+[^single-file-mode]: There is an initiative to add a single-file mode to
 LSP but it's not a part of the spec at least until and including v3.17.
 
 [zettel-wiki]: https://en.wikipedia.org/wiki/Zettelkasten

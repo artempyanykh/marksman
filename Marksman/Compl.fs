@@ -562,9 +562,7 @@ module Candidates =
         let candidates =
             match destPart with
             | None -> Folder.docs folder
-            | Some name ->
-                FileLink.filterMatchingDocs folder srcDoc name
-                |> Seq.map FileLink.dest
+            | Some name -> FileLink.filterFuzzyMatchingDocs folder srcDoc name
 
         candidates |> Seq.filter (fun d -> d <> srcDoc) |> Array.ofSeq
 
@@ -576,7 +574,7 @@ module Candidates =
         : array<Doc * string> =
         let targetDocs =
             destPart
-            |> Option.map (FileLink.filterMatchingDocs folder srcDoc >> Seq.map FileLink.dest)
+            |> Option.map (FileLink.filterFuzzyMatchingDocs folder srcDoc)
             |> Option.defaultValue [ srcDoc ]
 
         let targetDocs =

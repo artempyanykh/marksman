@@ -389,7 +389,7 @@ module Completions =
 
 
             let filterText =
-                WikiLink.render (Some targetLink) (Some heading) (Completable.isPartial compl)
+                WikiLink.render (Some destPart.text) (Some heading) (Completable.isPartial compl)
 
             let range =
                 if Completable.isPartial compl then

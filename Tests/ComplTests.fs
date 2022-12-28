@@ -415,6 +415,22 @@ module Candidates =
 
         checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
 
+    
+    [<Fact>]
+    let partialWikiDocHeading_FileStem_On_FilePath () =
+        let doc1 =
+            FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Doc 1"; "[[/doc2#" |])
+
+        let doc2 =
+            FakeDoc.Mk(path = "doc2.md", contentLines = [| "# Doc 2"; "## H2" |])
+
+        let config =
+            { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
+
+        let folder = FakeFolder.Mk([ doc1; doc2 ], config = config)
+
+        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 8)))
+
     [<Fact>]
     let partialWikiDoc_FileStem_ArbitraryPath () =
         let doc1 =

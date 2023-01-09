@@ -124,18 +124,20 @@ In your config import the channel at the top
 ```nix 
 { pkgs, ... }:
 let 
-  master = import <nixpkgs-master> {};
+  masterpkgs = import <nixpkgs-master> {};
 in 
 {
  # ...
  # just a simple system wide installation example
  # ...
   environment.systemPackages = [
-    master.marksman
+    masterpkgs.marksman
   ];
  # ...
 }
 ```
+
+In the future, it'll be available via the `unstable` channel and eventually via the `stable` channel.
 
 ## Demo
 

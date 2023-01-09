@@ -111,6 +111,32 @@ xattr -d com.apple.quarantine <path-to-marksman-bin>
 brew install marksman
 ```
 
+### NixOS
+
+`marksman` is available via `nixpkgs`. Currently, it's only available on the `master` branch. You can add it via 
+
+```
+$ nix-channel --add https://github.com/NixOS/nixpkgs/archive/master.tar.gz nixpkgs-master
+```
+
+In your config import the channel at the top 
+
+```nix 
+{ pkgs, ... }:
+let 
+  master = import <nixpkgs-master> {};
+in 
+{
+ # ...
+ # just a simple system wide installation example
+ # ...
+  environment.systemPackages = [
+    master.marksman
+  ];
+ # ...
+}
+```
+
 ## Demo
 
 Below is a mix of VSCode, Neovim, and Emacs screenshots. Although, not all features demonstrated for each editor,

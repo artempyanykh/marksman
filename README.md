@@ -111,7 +111,7 @@ xattr -d com.apple.quarantine <path-to-marksman-bin>
 brew install marksman
 ```
 
-### NixOS
+* Nix
 
 `marksman` is available via `nixpkgs`. Currently, it's only available on the `master` branch. You can add it via 
 

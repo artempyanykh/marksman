@@ -137,7 +137,7 @@ in
 }
 ```
 
-In the future, it'll be available via the `unstable` channel and eventually via the `stable` channel.
+In the future, it'll be available via the [`unstable`](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=marksman) channel and eventually via the [`stable`](https://search.nixos.org/packages?channel=22.11&from=0&size=50&sort=relevance&type=packages&query=marksman) channel.
 
 ## Demo
 

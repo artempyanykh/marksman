@@ -295,7 +295,7 @@ module CompletionHelpers =
         | FilePathStem ->
             let extension = docPath |> Path.GetExtension
             let name = docPath.TrimSuffix(extension)
-            name.EncodeForWiki()
+            name.EncodePathForWiki()
 
 module Completions =
     let wikiDoc

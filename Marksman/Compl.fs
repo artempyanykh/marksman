@@ -290,12 +290,12 @@ module CompletionHelpers =
         match style with
         | TitleSlug -> Slug.str (Doc.name doc)
         | FileStem ->
-            let fileStem = docPath |> Path.GetFileNameWithoutExtension
-            fileStem.UrlEncode()
+            let name = docPath |> Path.GetFileNameWithoutExtension
+            name.EncodeForWiki()
         | FilePathStem ->
             let extension = docPath |> Path.GetExtension
-            let pathStem = docPath.TrimSuffix(extension)
-            pathStem.AbsPathUrlEncode()
+            let name = docPath.TrimSuffix(extension)
+            name.EncodeForWiki()
 
 module Completions =
     let wikiDoc

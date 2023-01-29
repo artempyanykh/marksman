@@ -35,6 +35,11 @@ module DocTest =
 
         let updated = Doc.applyLspChange insertChange empty
         Assert.Equal("[", (Doc.text updated).content)
+        
+    [<Fact(Skip = "Uri and # don't mix well")>]
+    let pathFromRoot_SpecialChars () =
+        let doc = FakeDoc.Mk(path = "blah#blah.md", contentLines = [||])
+        Assert.Equal("blah#blah.md", Doc.pathFromRoot doc)
 
 module WorkspaceTest =
     [<Fact>]

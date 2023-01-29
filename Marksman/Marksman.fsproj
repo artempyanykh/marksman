@@ -13,6 +13,7 @@
         </Exec>
         <PropertyGroup>
             <VersionSuffix>$(VersionString)</VersionSuffix>
+            <VersionSuffix Condition="$(VersionString.StartsWith('0'))">r$(VersionString)</VersionSuffix>
             <Version>$(VersionPrefix)-$(VersionSuffix)</Version>
         </PropertyGroup>
     </Target>

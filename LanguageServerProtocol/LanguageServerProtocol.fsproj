@@ -2,7 +2,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <Description>Library for implementing Language Server Protocol in F#.</Description>
     <PackageTags>LSP, editor tooling</PackageTags>
@@ -10,6 +9,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/ionide/LanguageServerProtocol</PackageProjectUrl>
+    <TargetFramework>net7.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <!-- FsLibLog.fs comes verbatim from

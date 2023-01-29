@@ -112,6 +112,15 @@ type String with
         |> Array.fold (fun (sb: StringBuilder) -> sb.Replace) (StringBuilder(this))
         |> (fun x -> x.ToString())
 
+    member this.EncodePathForWiki() : string =
+        let parts = this.TrimStart('/').Split([| '\\'; '/' |])
+        // We do decode and then encode because path components here can be raw
+        // url-encoded strings coming straight from document's source.
+        let encodedParts =
+            parts |> Seq.map (fun s -> s.UrlDecode().EncodeForWiki())
+
+        "/" + String.Join('/', encodedParts)
+
     member this.UrlEncode() : string = Uri.EscapeDataString(this)
 
     member this.UrlDecode() : string = Uri.UnescapeDataString(this)

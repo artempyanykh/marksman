@@ -105,8 +105,7 @@ type String with
         sb.ToString()
 
     member this.EncodeForWiki() : string =
-        let replacement =
-            [| "#", "%23"; "[", "%5B"; "]", "%5D"; "(", "%28"; ")", "%29" |]
+        let replacement = [| "#", "%23"; "[", "%5B"; "]", "%5D" |]
 
         replacement
         |> Array.fold (fun (sb: StringBuilder) -> sb.Replace) (StringBuilder(this))

@@ -94,7 +94,7 @@ module StringExtensionsTests =
     [<Fact>]
     let encodeForWiki_2 () =
         let original = "blah #blah [] ()"
-        let expected = "blah %23blah %5B%5D %28%29"
+        let expected = "blah %23blah %5B%5D ()"
         let actual = original.EncodeForWiki()
         Assert.Equal(expected, actual)
         Assert.Equal(original, actual.UrlDecode())

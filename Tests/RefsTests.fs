@@ -106,13 +106,15 @@ module FileLinkTests =
 
     let doc3 =
         FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Fruit" |])
-
+        
+    let doc4 =
+        FakeDoc.Mk(path = "file with spaces.md", contentLines = [| "# File with spaces" |])
 
     [<Fact>]
     let fileName_Partial () =
         let folder =
             FakeFolder.Mk(
-                [ doc1; doc2 ],
+                [ doc1; doc2; doc4 ],
                 { Config.Config.Default with complWikiStyle = Some Config.FileStem }
             )
 
@@ -123,8 +125,22 @@ module FileLinkTests =
             FileLink.filterMatchingDocs folder doc2 (InternName "doc2")
             |> Array.ofSeq
 
-        Assert.Equal(full.Length, 1)
-        Assert.Equal(full[0].dest, doc2)
+        Assert.Equal(1, full.Length)
+        Assert.Equal(doc2, full[0].dest)
+        
+        let fullWithSpacesEncoded =
+            FileLink.filterMatchingDocs folder doc2 (InternName "file%20with%20spaces.md")
+            |> Array.ofSeq
+
+        Assert.Equal(1, fullWithSpacesEncoded.Length)
+        Assert.Equal(doc4, fullWithSpacesEncoded[0].dest)
+        
+        let fullWithSpacesNotEncoded =
+            FileLink.filterMatchingDocs folder doc2 (InternName "file with spaces.md")
+            |> Array.ofSeq
+
+        Assert.Equal(1, fullWithSpacesNotEncoded.Length)
+        Assert.Equal(doc4, fullWithSpacesNotEncoded[0].dest)
 
 
     [<Fact>]

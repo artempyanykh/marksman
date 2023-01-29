@@ -175,7 +175,7 @@ module FileLink =
                         let nameFileStem = Path.GetFileNameWithoutExtension(name)
 
                         if
-                            docFileStem.AbsPathUrlEncode() = nameFileStem.AbsPathUrlEncode()
+                            nameFileStem.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode()
                             && linkRootPath
                                 .AbsPathUrlEncode()
                                 .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())

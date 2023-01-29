@@ -14,7 +14,6 @@ let tryParsePartialElement text line col = PartialElement.inText text (Position.
 let parsePartialElement text line col = tryParsePartialElement text line col |> Option.get
 
 [<StoreSnapshotsPerClass>]
-[<UpdateSnapshots>]
 module PartialElementWiki =
     let checkSnapshot els =
         let lines = Seq.map (fun x -> x.ToString().Lines()) els |> Array.concat
@@ -71,7 +70,6 @@ module PartialElementWiki =
         checkSnapshot [ (parsePartialElement text 0 3) ]
 
 [<StoreSnapshotsPerClass>]
-[<UpdateSnapshots>]
 module PartialElementReference =
     let checkSnapshot els =
         let lines = Seq.map (fun x -> x.ToString().Lines()) els |> Array.concat
@@ -440,7 +438,6 @@ module Candidates =
         checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 1)))
 
     [<Fact>]
-    [<UpdateSnapshots>]
     let partialInlineHeading () =
         let doc1 =
             FakeDoc.Mk(
@@ -462,3 +459,77 @@ module Candidates =
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
         checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 3)))
+
+    [<StoreSnapshotsPerClass>]
+    module WikiWithSpaces_TitleSlug =
+        let doc1 = FakeDoc.Mk(path = "doc1.md", contentLines = [| "# A A B B" |])
+        let doc2 = FakeDoc.Mk(path = "doc2.md", contentLines = [| "# A A C C" |])
+        let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# A B B D" |])
+
+        let doc4 =
+            FakeDoc.Mk(path = "doc4.md", contentLines = [| "[[a]]"; "[[a-a]]"; "[[a-b]]" |])
+
+        let folder = FakeFolder.Mk([ doc1; doc2; doc3; doc4 ])
+
+        [<Fact>]
+        let test1 () =
+            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(0, 3)))
+
+        [<Fact>]
+        let test2 () =
+            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(1, 5)))
+
+        [<Fact>]
+        let test3 () =
+            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(2, 5)))
+
+    [<StoreSnapshotsPerClass>]
+    module WikiWithSpaces_FileStem =
+        let doc1 = FakeDoc.Mk(path = "doc one.md", contentLines = [| "# Doc 1" |])
+        let doc2 = FakeDoc.Mk(path = "doc two.md", contentLines = [| "# Doc 2" |])
+
+        let doc3 =
+            FakeDoc.Mk(path = "another doc.md", contentLines = [| "# Doc 3" |])
+
+        let doc4 =
+            FakeDoc.Mk(path = "doc4.md", contentLines = [| "[[do]]"; "[[doc o]]"; "[[ano]]" |])
+
+        let folder =
+            FakeFolder.Mk(
+                [ doc1; doc2; doc3; doc4 ],
+                config = { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
+            )
+
+        [<Fact>]
+        let test1 () =
+            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(0, 4)))
+
+        [<Fact>]
+        let test2 () =
+            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(1, 7)))
+
+        [<Fact>]
+        let test3 () =
+            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(2, 5)))
+
+    [<Fact>]
+    // # has a special meaning in URIs. Because of this Uri library doesn't handle
+    // paths with # well and we can't provide subtitle completion.
+    // Best workaround -- don't use paths with # sign.
+    let wiki_FileWithSpecialChars_Subtitle_NoCompletionProvided () =
+        let doc1 =
+            FakeDoc.Mk(
+                path = "blah#blah.md",
+                contentLines = [| "# Blah Blah"; "## Subtitle 1"; "## Subtitle 2" |]
+            )
+
+        let doc2 =
+            //                                              0123456789012345
+            FakeDoc.Mk(path = "doc2.md", contentLines = [| "[[blah%23blah#]]" |])
+
+        let config =
+            { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
+
+        let folder = FakeFolder.Mk([ doc1; doc2 ], config)
+
+        checkSnapshot (findCandidates folder (Doc.path doc2) (Position.Mk(0, 14)))

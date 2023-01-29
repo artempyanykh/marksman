@@ -104,19 +104,29 @@ type String with
 
         sb.ToString()
 
+    member this.EncodeForWiki() : string =
+        let replacement =
+            [| "#", "%23"; "[", "%5B"; "]", "%5D"; "(", "%28"; ")", "%29" |]
+
+        replacement
+        |> Array.fold (fun (sb: StringBuilder) -> sb.Replace) (StringBuilder(this))
+        |> (fun x -> x.ToString())
+
     member this.UrlEncode() : string = Uri.EscapeDataString(this)
+
+    member this.UrlDecode() : string = Uri.UnescapeDataString(this)
 
     member this.AbsPathUrlEncode() : string =
         let parts = this.TrimStart('/').Split([| '\\'; '/' |])
-        let encodedParts = parts |> Seq.map (fun s -> s.UrlEncode())
+        // We do decode and then encode because path components here can be raw
+        // url-encoded strings coming straight from document's source.
+        let encodedParts = parts |> Seq.map (fun s -> s.UrlDecode().UrlEncode())
         "/" + String.Join('/', encodedParts)
 
     member this.AsUnixAbsPath() : string =
         let parts = this.TrimStart('/').Split([| '\\'; '/' |])
         let joined = String.Join('/', parts)
         if joined.StartsWith('/') then joined else "/" + joined
-
-    member this.UrlDecode() : string = Uri.UnescapeDataString(this)
 
     member this.AbsPathUrlEncodedToRelPath() : string = this.TrimStart('/').UrlDecode()
 

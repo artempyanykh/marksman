@@ -2,9 +2,9 @@ module Marksman.Parser
 
 open System
 open Ionide.LanguageServerProtocol.Types
-
 open Markdig.Syntax
-open Text
+
+open Marksman.Text
 open Marksman.Cst
 
 module Markdown =
@@ -169,29 +169,34 @@ module Markdown =
             | :? HeadingBlock as h ->
                 let level = h.Level
 
-                let fullText = text.content.Substring(h.Span.Start, h.Span.Length)
-                let title0 = fullText.TrimStart(' ', '#')
-                let headingPrefixLen = fullText.Length - title0.Length
-                let title = title0.TrimEnd(' ')
-                let headingSuffixLen = title0.Length - title.Length
+                // TODO: remove after https://github.com/xoofx/markdig/pull/696 is released
+                if h.Span.End < text.content.Length then
+                    let fullText = text.content.Substring(h.Span.Start, h.Span.Length)
+                    let title0 = fullText.TrimStart(' ', '#')
+                    let headingPrefixLen = fullText.Length - title0.Length
+                    let title = title0.TrimEnd(' ')
+                    let headingSuffixLen = title0.Length - title.Length
 
-                let titleRange =
-                    sourceSpanToRange
-                        text
-                        (SourceSpan(h.Span.Start + headingPrefixLen, h.Span.End - headingSuffixLen))
+                    let titleRange =
+                        sourceSpanToRange
+                            text
+                            (SourceSpan(
+                                h.Span.Start + headingPrefixLen,
+                                h.Span.End - headingSuffixLen
+                            ))
 
-                let range = sourceSpanToRange text h.Span
+                    let range = sourceSpanToRange text h.Span
 
-                let heading =
-                    Node.mk
-                        fullText
-                        range
-                        { level = level
-                          title = Node.mkText title titleRange
-                          scope = range
-                          children = [||] }
+                    let heading =
+                        Node.mk
+                            fullText
+                            range
+                            { level = level
+                              title = Node.mkText title titleRange
+                              scope = range
+                              children = [||] }
 
-                elements.Add(H heading)
+                    elements.Add(H heading)
             | :? WikiLinkInline as link ->
                 let doc =
                     match link.Doc, link.DocSpan with

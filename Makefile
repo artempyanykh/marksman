@@ -49,6 +49,10 @@ check: setup
 	dotnet fantomas --check Marksman
 	dotnet fsi scripts/silent-lint.fsx
 
+.PHONY: clean
+clean:
+	dotnet clean
+
 .PHONY: build
 build:
 	dotnet build Marksman/Marksman.fsproj

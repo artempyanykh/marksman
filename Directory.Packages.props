@@ -1,0 +1,21 @@
+﻿<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageVersion Include="Markdig" Version="0.30.4" />
+        <PackageVersion Include="Snapper" Version="2.3.2" />
+        <PackageVersion Include="xunit" Version="2.4.2" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="2.4.5" />
+        <PackageVersion Include="coverlet.collector" Version="3.1.2" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.2.0" />
+        <PackageVersion Include="FSharp.SystemCommandLine" Version="0.13.0-beta4" />
+        <PackageVersion Include="FSharpPlus" Version="1.2.4" />
+        <PackageVersion Include="Glob" Version="1.1.9" />
+        <PackageVersion Include="Serilog" Version="2.11.0" />
+        <PackageVersion Include="Serilog.Sinks.Console" Version="4.0.1 "/>
+        <PackageVersion Include="Tomlyn" Version="0.16.0" />
+        <PackageVersion Include="Newtonsoft.Json" Version="13.0.1" />
+        <PackageVersion Include="StreamJsonRpc" Version="2.10.44" />
+    </ItemGroup>
+</Project>

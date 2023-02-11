@@ -294,7 +294,7 @@ module MdLinkTest =
               "  label=ref @ (2,1)-(2,4); url=https://some.url @ (2,7)-(2,23); title=∅" ]
 
 module FootnoteTests =
-    [<Fact(Skip="Footnote parsing not implemented")>]
+    [<Fact(Skip = "Footnote parsing not implemented")>]
     let footnote_1 () =
         let text = "[^1]\n\n[^1]: Single line footnote"
         let document = scrapeString text
@@ -329,3 +329,11 @@ module DocUrlTests =
         let actual = mkTextNode "#anchor" |> Url.ofUrlNode
 
         Assert.Equal("anchor=anchor @ (0,1)-(0,7)", actual.ToString())
+
+module RegressionTests =
+    [<Fact>]
+    let no156 () =
+        let content = "A\n\n-\n-"
+
+        let actual = scrapeString content
+        checkInlineSnapshot actual []

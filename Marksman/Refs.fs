@@ -120,6 +120,7 @@ module Uref =
             | MdLink.RF (_, label) -> Some(Uref.LinkDef label)
         | H _
         | YML _
+        | T _
         | MLD _ -> None
 
     let hasExplicitDoc =

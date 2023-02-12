@@ -181,11 +181,17 @@ module MdLinkDef =
 
     let name (mld: MdLinkDef) = mld.label |> Node.text
 
+type Tag = { name: TextNode }
+
+module Tag =
+    let fmt (t: Tag) = $"name={t.name.text}; range={t.name.range}"
+
 type Element =
     | H of Node<Heading>
     | WL of Node<WikiLink>
     | ML of Node<MdLink>
     | MLD of Node<MdLinkDef>
+    | T of Node<Tag>
     | YML of TextNode
 
 and Heading =
@@ -200,6 +206,7 @@ let rec private fmtElement =
     | WL x -> fmtWikiLink x
     | ML l -> fmtMdLink l
     | MLD r -> fmtMdLinkDef r
+    | T t -> fmtTag t
     | YML y -> Node.fmtText y
 
 and private fmtHeading node =
@@ -230,6 +237,8 @@ and private fmtMdLinkDef node =
     let rest = (indentFmt MdLinkDef.fmt) node.data
     String.Join(Environment.NewLine, [ first; rest ])
 
+and private fmtTag node = $"T: {Tag.fmt node.data} @ {node.range}"
+
 module Heading =
     let fmt = fmtHeading
 
@@ -252,6 +261,7 @@ module Element =
         | WL n -> n.range
         | ML n -> n.range
         | MLD n -> n.range
+        | T n -> n.range
         | YML n -> n.range
 
     let rangeStart el = (range el).Start
@@ -262,6 +272,7 @@ module Element =
         | WL n -> n.text
         | ML n -> n.text
         | MLD n -> n.text
+        | T n -> n.text
         | YML n -> n.text
 
     let asHeading =
@@ -285,7 +296,8 @@ module Element =
     let isDecl =
         function
         | WL _
-        | ML _ -> false
+        | ML _
+        | T _ -> false
         | YML _
         | H _
         | MLD _ -> true
@@ -296,6 +308,7 @@ module Element =
         | ML _ -> true
         | H _
         | MLD _
+        | T _
         | YML _ -> false
 
     let isTitle el =
@@ -314,6 +327,7 @@ module Cst =
                     match el with
                     | H h -> yield! collect h.data.children
                     | YML _
+                    | T _
                     | WL _
                     | ML _
                     | MLD _ -> ()

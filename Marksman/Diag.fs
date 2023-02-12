@@ -128,6 +128,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
             | ML _ -> Lsp.DiagnosticSeverity.Warning
             | H _
             | MLD _
+            | T _
             | YML _ -> Lsp.DiagnosticSeverity.Information
 
         let mkRelated ref : DiagnosticRelatedInformation =
@@ -153,6 +154,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
             | ML _ -> Lsp.DiagnosticSeverity.Warning
             | H _
             | MLD _
+            | T _
             | YML _ -> Lsp.DiagnosticSeverity.Information
 
         let msg = $"Link to non-existent {urefToHuman uref}"

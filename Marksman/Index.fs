@@ -13,6 +13,7 @@ type Index =
       wikiLinks: array<Node<WikiLink>>
       mdLinks: array<Node<MdLink>>
       linkDefs: array<Node<MdLinkDef>>
+      tags: array<Node<Tag>>
       yamlFrontMatter: option<TextNode> }
 
 module Index =
@@ -23,6 +24,7 @@ module Index =
         let headings = ResizeArray()
         let mdLinks = ResizeArray()
         let linkDefs = ResizeArray()
+        let tags = ResizeArray()
         let mutable yaml = None
 
         for el in Cst.elementsAll cst do
@@ -42,6 +44,7 @@ module Index =
             | WL wl -> wikiLinks.Add(wl)
             | ML ml -> mdLinks.Add(ml)
             | MLD linkDef -> linkDefs.Add(linkDef)
+            | T t -> tags.Add(t)
             | YML yml -> yaml <- Some yml
 
         let headingsBySlug =
@@ -56,6 +59,7 @@ module Index =
         let mdLinks = mdLinks.ToArray()
         let linkDefs = linkDefs.ToArray()
         let headings = headings.ToArray()
+        let tags = tags.ToArray()
 
         { titles = titles
           headings = headings
@@ -63,6 +67,7 @@ module Index =
           wikiLinks = wikiLinks
           mdLinks = mdLinks
           linkDefs = linkDefs
+          tags = tags
           yamlFrontMatter = yaml }
 
     let titles index = index.titles

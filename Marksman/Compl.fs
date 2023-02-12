@@ -245,6 +245,7 @@ module Prompt =
             | E (H _)
             | E (MLD _)
             | E (YML _) -> None
+            | E (T _) -> None // TODO: implement tags completion
             | E (WL { data = { doc = doc; heading = None } }) ->
                 Some(WikiDoc(Node.textOpt doc String.Empty))
             | E (WL { data = { doc = None; heading = Some heading } }) ->

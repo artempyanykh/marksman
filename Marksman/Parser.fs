@@ -6,6 +6,7 @@ open Markdig.Syntax
 
 open Marksman.Text
 open Marksman.Cst
+open Marksman.Misc
 
 module Markdown =
     open Markdig
@@ -28,6 +29,39 @@ module Markdown =
 
         member val Heading = Option.map fst heading
         member val HeadingSpan = Option.map snd heading
+
+    type TagInline(text: string) =
+        inherit LeafInline()
+
+        member val Text = text
+
+
+    type TagsParser() as this =
+        inherit InlineParser()
+
+        do this.OpeningCharacters <- [| '#' |]
+
+        override this.Match(processor, slice) =
+            let start = slice.Start
+            let offsetStart = processor.GetSourcePosition(slice.Start)
+
+            let shouldAccept (c: char) = c.IsAlphaNumeric() || c = '-' || c = '_'
+
+            while (shouldAccept (slice.PeekChar())) do
+                slice.NextChar() |> ignore
+
+            let end_ = slice.Start
+            let offsetEnd = offsetStart + (end_ - start)
+
+            if end_ > start then
+                let text = slice.Text.Substring(start, end_ - start + 1)
+                let tag = TagInline(text)
+                tag.Span <- SourceSpan(offsetStart, offsetEnd)
+                processor.Inline <- tag
+                true
+            else
+                false
+
 
     type WikiLinkParser() as this =
         inherit InlineParser()
@@ -136,6 +170,7 @@ module Markdown =
 
         pipelineBuilder.InlineParsers.Insert(0, MarkdigPatches.PatchedLinkInlineParser())
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())
+        pipelineBuilder.InlineParsers.Add(TagsParser())
         pipelineBuilder.Build()
 
     let sourceSpanToRange (text: Text) (span: SourceSpan) : Range =
@@ -298,6 +333,22 @@ module Markdown =
                 elements.Add(MLD def)
 
                 ()
+            | :? TagInline as tag ->
+                let tagText = tag.Text
+                let tagRange = sourceSpanToRange text tag.Span
+
+                let nameText, nameRange =
+                    if tagText.StartsWith('#') then
+                        tagText.Substring(1),
+                        { Start = tagRange.Start.NextChar(1); End = tagRange.End }
+                    else
+                        tagText, tagRange
+
+                let tag = { name = Node.mkText nameText nameRange }
+                let tag = Node.mk tagText tagRange tag
+                elements.Add(T tag)
+
+                ()
             | _ -> ()
 
         elements.ToArray()
@@ -349,6 +400,7 @@ let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Ele
         for el in flat do
             match el with
             | YML _
+            | T _
             | WL _
             | ML _
             | MLD _ ->

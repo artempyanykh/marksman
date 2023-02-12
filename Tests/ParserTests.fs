@@ -306,6 +306,38 @@ module FootnoteTests =
               "MLD: [^1]: Footnote @ (2,0)-(2,14)"
               "  label=^1 @ (2,1)-(2,3); url=Footnote @ (2,6)-(2,14); title=∅" ]
 
+module TagsTests =
+    [<Fact>]
+    let tags_1 () =
+        let text = "#tag"
+        let cst = scrapeString text
+
+        checkInlineSnapshot cst [ "T: name=tag; range=(0,1)-(0,4) @ (0,0)-(0,4)" ]
+
+    [<Fact>]
+    let tags_2 () =
+        let text = "(#tag\n(#tag\n(#tag)\n[?](#tag)"
+        let cst = scrapeString text
+
+        checkInlineSnapshot
+            cst
+            [ "T: name=tag; range=(0,2)-(0,5) @ (0,1)-(0,5)"
+              "T: name=tag; range=(1,2)-(1,5) @ (1,1)-(1,5)"
+              "T: name=tag; range=(2,2)-(2,5) @ (2,1)-(2,5)"
+              "ML: [?](#tag) @ (3,0)-(3,9)"
+              "  IL: label=? @ (3,1)-(3,2); url=#tag @ (3,4)-(3,8); title=∅" ]
+
+    [<Fact>]
+    let tags_3 () =
+        //          012345678901
+        let text = "#tag1,#tag2"
+        let cst = scrapeString text
+
+        checkInlineSnapshot
+            cst
+            [ "T: name=tag1; range=(0,1)-(0,5) @ (0,0)-(0,5)"
+              "T: name=tag2; range=(0,7)-(0,11) @ (0,6)-(0,11)" ]
+
 module DocUrlTests =
     let mkTextNode str = Node.mkText str (Range.Mk(0, 0, 0, str.Length))
 

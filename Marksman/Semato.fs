@@ -10,19 +10,22 @@ open Marksman.Index
 type TokenType =
     | WikiLink
     | RefLink
+    | Tag
 
 module TokenType =
     let toLspName =
         function
         | WikiLink -> "property"
         | RefLink -> "variable"
+        | Tag -> "enumMember"
 
     let toNum =
         function
         | WikiLink -> 0u
         | RefLink -> 1u
+        | Tag -> 2u
 
-    let mapping = [| WikiLink; RefLink |] |> Array.map toLspName
+    let mapping = [| WikiLink; RefLink; Tag |] |> Array.map toLspName
 
 type Token =
     { range: Range
@@ -89,6 +92,8 @@ module Token =
                 match MdLink.referenceLabel link.data with
                 | Some label -> yield { range = label.range; typ = RefLink }
                 | None -> ()
+
+            for tag in Index.tags index -> { range = tag.range; typ = Tag }
         }
 
     let isInRange (range: Range) token =

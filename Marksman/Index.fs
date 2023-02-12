@@ -83,6 +83,8 @@ module Index =
 
     let linkDefs index = index.linkDefs
 
+    let tags index = index.tags
+
     let tryFindLinkDef (label: LinkLabel) index =
         index.linkDefs
         |> Array.tryFind (fun { data = ld } -> (MdLinkDef.normalizedLabel ld) = label)

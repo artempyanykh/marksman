@@ -689,7 +689,7 @@ let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
         |> Index.tags
         // Inclusive because we want to cover cases when the cursor is right after the tag's end
         |> Array.tryFind (fun { data = { name = name } } -> (Node.range name).ContainsInclusive(pos))
-        |> Option.map (fun x -> E(T x))
+        |> Option.map (T >> E)
 
     let partialElement () = PartialElement.inText (Doc.text doc) pos |> Option.map PE
 

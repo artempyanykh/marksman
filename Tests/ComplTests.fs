@@ -239,6 +239,36 @@ module PartialElementInline =
         let text = Text.mkText "(# "
         checkSnapshot [ parsePartialElement text 0 2 ]
 
+[<StoreSnapshotsPerClass>]
+module PartialElementTag =
+    let checkSnapshot els =
+        let lines = Seq.map (fun x -> x.ToString().Lines()) els |> Array.concat
+        lines.ShouldMatchSnapshot()
+
+    [<Fact>]
+    let opening1 () =
+        let text = Text.mkText "#"
+        checkSnapshot [ parsePartialElement text 0 1 ]
+
+    [<Fact>]
+    let opening2 () =
+        let text = Text.mkText "# "
+        checkSnapshot [ parsePartialElement text 0 1 ]
+
+    [<Fact>]
+    let opening3 () =
+        let text = Text.mkText "## "
+        checkSnapshot [ parsePartialElement text 0 2 ]
+
+    [<Fact>]
+    let opening4 () =
+        // This one is arguably where we may want to NOT suggest any completion.
+        // IOW we may require that a hash sign is preceded with a punctuation or
+        // a whitespace char.
+        //                      01234567
+        let text = Text.mkText "hello# "
+        checkSnapshot [ parsePartialElement text 0 6 ]
+
 
 [<StoreSnapshotsPerClass>]
 module Candidates =
@@ -533,3 +563,29 @@ module Candidates =
         let folder = FakeFolder.Mk([ doc1; doc2 ], config)
 
         checkSnapshot (findCandidates folder (Doc.path doc2) (Position.Mk(0, 14)))
+
+    [<StoreSnapshotsPerClass>]
+    module Tags =
+        let doc1 =
+            FakeDoc.Mk(
+                path = "doc1.md",
+                contentLines =
+                    [| "We have #tag and #anotherTag"
+                       //12345678901234567
+                       "And an opening # "
+                       //12345678901234567
+                       "And partial #ta " |]
+            )
+
+        let doc2 =
+            FakeDoc.Mk(path = "doc2.md", contentLines = [| "And #somethingElse #otherDocTag" |])
+
+        let folder = FakeFolder.Mk([ doc1; doc2 ])
+
+        [<Fact>]
+        let tagOpening () =
+            checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 16)))
+
+        [<Fact>]
+        let tagWithName () =
+            checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(2, 15)))

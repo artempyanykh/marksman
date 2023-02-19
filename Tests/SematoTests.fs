@@ -25,8 +25,8 @@ End with [[wiki-link-no-eol]] and #tag."""
     let data = Token.ofIndexEncoded (Doc.index doc)
     Assert.Equal(5 * 5, data.Length)
 
-    Assert.Equal<uint32>([| 1u; 11u; 15u; 0u; 0u |], nthToken data 0)
-    Assert.Equal<uint32>([| 0u; 25u; 8u; 1u; 0u |], nthToken data 1)
-    Assert.Equal<uint32>([| 1u; 0u; 15u; 0u; 0u |], nthToken data 2)
-    Assert.Equal<uint32>([| 2u; 9u; 20u; 0u; 0u |], nthToken data 3)
-    Assert.Equal<uint32>([| 0u; 25u; 4u; 2u; 0u |], nthToken data 4)
+    Assert.Equal<uint32>([| 1u; 13u; 11u; 0u; 0u |], nthToken data 0)
+    Assert.Equal<uint32>([| 0u; 23u; 8u; 1u; 0u |], nthToken data 1)
+    Assert.Equal<uint32>([| 1u; 2u; 11u; 0u; 0u |], nthToken data 2)
+    Assert.Equal<uint32>([| 2u; 11u; 16u; 0u; 0u |], nthToken data 3)
+    Assert.Equal<uint32>([| 0u; 23u; 4u; 2u; 0u |], nthToken data 4)

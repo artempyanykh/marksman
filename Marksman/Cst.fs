@@ -52,6 +52,14 @@ module WikiLink =
         let linkText = $"{docText}{headingText}"
         if includeBraces then $"[[{linkText}]]" else linkText
 
+    let contentRange ({ doc = doc; heading = heading }: WikiLink) =
+        match Option.map Node.range doc, Option.map Node.range heading with
+        | None, None -> None
+        | Some _ as range, None -> range
+        | None, (Some _ as range) -> range
+        | Some docRange, Some headingRange ->
+            Some { Start = docRange.Start; End = headingRange.End }
+
 [<RequireQualifiedAccess>]
 type MdLink =
     // inline

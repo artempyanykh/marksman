@@ -20,20 +20,37 @@ ifeq ($(OS),Windows_NT)
 	endif
 else
 	UNAME_S := $(shell uname -s)
+	TARGET := $(shell uname -m)
 	ifeq ($(UNAME_S),Linux)
 		OS_ID := linux
 	endif
+
 	ifeq ($(UNAME_S),Darwin)
 		OS_ID := osx
+		ifeq ($(TARGET),arm64)
+			# Non-versioned OSX targets do not support arm64
+			OS_ID := "osx.11.0"
+			ARCH_ID := arm64
+		endif
 	endif
-	UNAME_P := $(shell uname -p)
-	ifeq ($(UNAME_P),x86_64)
+
+	ifeq ($(TARGET),x86_64)
 		ARCH_ID := x64
 	endif
-	ifneq ($(filter %86,$(UNAME_P)),)
-		ARCH_ID := x64
+
+	ifeq ($(TARGET),x86)
+		ARCH_ID := x86
 	endif
-	ifneq ($(filter arm%,$(UNAME_P)),)
+
+	ifeq ($(TARGET),arm)
+		ARCH_ID := arm
+	endif
+	
+	ifeq ($(TARGET),arm64)
+		ARCH_ID := arm64
+	endif
+
+	ifeq ($(TARGET),aarch64)
 		ARCH_ID := arm64
 	endif
 endif
@@ -71,6 +88,7 @@ publish:
 		-p:PublishTrimmed=true \
 		-p:DebugType=embedded \
 		-p:EnableCompressionInSingleFile=true \
+		-p:UseAppHost=true \
 		Marksman/Marksman.fsproj
 		
 .PHONY: publishTo
@@ -81,6 +99,7 @@ publishTo:
 		-p:DebugType=embedded \
 		-p:EnableCompressionInSingleFile=true \
 		-p:VersionString=$(VERSIONSTRING) \
+		-p:UseAppHost=true \
 		Marksman/Marksman.fsproj \
 		-o $(DEST)
 		

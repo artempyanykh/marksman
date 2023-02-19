@@ -15,8 +15,8 @@ type TokenType =
 module TokenType =
     let toLspName =
         function
-        | WikiLink -> "property"
-        | RefLink -> "variable"
+        | WikiLink -> "class"
+        | RefLink -> "class"
         | Tag -> "enumMember"
 
     let toNum =
@@ -86,7 +86,10 @@ module Token =
 
     let ofIndex (index: Index) : seq<Token> =
         seq {
-            for link in Index.wikiLinks index -> { range = link.range; typ = WikiLink }
+            for link in Index.wikiLinks index do
+                match WikiLink.contentRange link.data with
+                | Some range -> yield { range = range; typ = WikiLink }
+                | None -> ()
 
             for link in Index.mdLinks index do
                 match MdLink.referenceLabel link.data with

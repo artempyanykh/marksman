@@ -27,6 +27,7 @@ type PartialElement =
         anchor: option<TextNode> *
         range: Range
     | ReferenceLink of label: option<TextNode> * range: Range
+    | TagOpening of cursorPos: Position
 
     override this.ToString() =
         match this with
@@ -36,6 +37,7 @@ type PartialElement =
             $"IL {range}: text={Node.fmtOptText text}; path={Node.fmtOptText path}; anchor={Node.fmtOptText anchor}"
         | PartialElement.ReferenceLink (label, range) ->
             $"RL {range}: label={Node.fmtOptText label}"
+        | TagOpening pos -> $"TO: cursorPos={pos}"
 
 module PartialElement =
     open FSharpPlus.Operators
@@ -45,8 +47,9 @@ module PartialElement =
         | PartialElement.WikiLink (_, _, range)
         | PartialElement.InlineLink (_, _, _, range)
         | PartialElement.ReferenceLink (_, range) -> range
+        | PartialElement.TagOpening cursorPos -> { Start = cursorPos; End = cursorPos } // empty range
 
-    let inLine (line: Line) (pos: Position) : option<PartialElement> =
+    let linkInLine (line: Line) (pos: Position) : option<PartialElement> =
         monad' {
             let! startCursor =
                 match Line.toCursorAt pos line with
@@ -209,6 +212,23 @@ module PartialElement =
             | _, _ -> return! None
         }
 
+    let tagOpeningInLine (line: Line) (pos: Position) : option<PartialElement> =
+        let potentialHash =
+            (Line.toCursorAt pos line >>= Cursor.backward)
+            // The cursor can be at EOF, so check the end of line
+            |> Option.orElseWith (fun () -> Line.endCursor line)
+            |> Option.map Cursor.char
+
+        match potentialHash with
+        | Some '#' -> Some(PartialElement.TagOpening pos)
+        | _ -> None
+
+    let inLine (line: Line) (pos: Position) : option<PartialElement> =
+        let link = linkInLine line pos
+        let tag () = tagOpeningInLine line pos
+
+        link |> Option.orElseWith tag
+
     let inText (text: Text) (pos: Position) : option<PartialElement> =
         Line.ofPos text pos |> Option.bind (fun l -> inLine l pos)
 
@@ -230,6 +250,7 @@ type Prompt =
     | InlineDoc of input: string
     | InlineAnchorInSrcDoc of input: string
     | InlineAnchorInOtherDoc of pathPart: string * anchorPart: string
+    | Tag of input: string
 
 module Prompt =
     let ofCompletable (pos: Position) (compl: Completable) : option<Prompt> =
@@ -242,10 +263,11 @@ module Prompt =
             None
         else
             match compl with
+            // No completion
             | E (H _)
             | E (MLD _)
             | E (YML _) -> None
-            | E (T _) -> None // TODO: implement tags completion
+            // Wiki link
             | E (WL { data = { doc = doc; heading = None } }) ->
                 Some(WikiDoc(Node.textOpt doc String.Empty))
             | E (WL { data = { doc = None; heading = Some heading } }) ->
@@ -255,6 +277,7 @@ module Prompt =
                     Some(WikiDoc doc.text)
                 else
                     Some(WikiHeadingInOtherDoc(doc.text, heading.text))
+            // Markdown link
             | E (ML { data = MdLink.RF (_, label) })
             | E (ML { data = MdLink.RC label })
             | E (ML { data = MdLink.RS label }) -> Some(Reference label.text)
@@ -269,12 +292,14 @@ module Prompt =
                         Some(InlineDoc path.text)
                     else
                         Some(InlineAnchorInOtherDoc(path.text, anchor.text))
+            // Partial wiki link
             | PE (PartialElement.WikiLink (doc, None, _)) ->
                 Some(WikiDoc(Node.textOpt doc String.Empty))
             | PE (PartialElement.WikiLink (None, heading, _)) ->
                 Some(WikiHeadingInSrcDoc(Node.textOpt heading String.Empty))
             | PE (PartialElement.WikiLink (Some dest, Some heading, _)) ->
                 Some(WikiHeadingInOtherDoc(dest.text, heading.text))
+            // Partial markdown link
             | PE (PartialElement.InlineLink (_, path, None, _)) ->
                 Some(InlineDoc(Node.textOpt path String.Empty))
             | PE (PartialElement.InlineLink (_, None, anchor, _)) ->
@@ -283,6 +308,9 @@ module Prompt =
                 Some(InlineAnchorInOtherDoc(path.text, anchor.text))
             | PE (PartialElement.ReferenceLink (label, _)) ->
                 Some(Reference(Node.textOpt label String.Empty))
+            // Tags
+            | E (T { data = { name = name } }) -> Some(Tag name.text)
+            | PE (PartialElement.TagOpening _) -> Some(Tag String.Empty)
 
 module CompletionHelpers =
     let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) =
@@ -554,6 +582,32 @@ module Completions =
                     FilterText = Some filterText }
         | _ -> None
 
+    let tag
+        (_pos: Position)
+        (compl: Completable)
+        (input: string)
+        (tagName: string, numUsages: int)
+        : option<CompletionItem> =
+        let range =
+            match compl with
+            | E (T { data = { name = name } }) -> Some(Node.range name)
+            | PE (PartialElement.TagOpening _ as peTag) -> Some(PartialElement.range peTag)
+            | _ -> None
+
+        match range with
+        | None -> None
+        | Some range ->
+            let label = tagName
+            let detail = $"{numUsages} usages"
+
+            // IDEA: since we have numUsages we could provide sort text that would sort based on usages.
+            Some
+                { CompletionItem.Create(label) with
+                    Detail = Some detail
+                    // Use input as filter text to avoid any extra filtering on the editor's side
+                    FilterText = Some input
+                    TextEdit = Some { Range = range; NewText = label } }
+
 module Candidates =
     let findDocCandidates
         (folder: Folder)
@@ -610,11 +664,36 @@ module Candidates =
         |> Seq.map Node.data
         |> Array.ofSeq
 
+    let findTagCandidates (folder: Folder) (_srcDoc: Doc) (input: string) : array<string * int> =
+        let matchingTags =
+            seq {
+                for doc in Folder.docs folder do
+                    for tag in Index.tags (Doc.index doc) do
+                        let tagName = tag.data.name.text
+
+                        if
+                            input.ToLowerInvariant().IsSubSequenceOf(tagName.ToLowerInvariant())
+                            && not (input.Equals(tagName))
+                        then
+                            yield tagName
+            }
+            |> Seq.countBy id
+
+        matchingTags |> Array.ofSeq
+
 let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
     let link () = Doc.index doc |> Index.linkAtPos pos |> Option.map E
-    let partialLink () = PartialElement.inText (Doc.text doc) pos |> Option.map PE
 
-    link () |> Option.orElseWith partialLink
+    let tag () =
+        Doc.index doc
+        |> Index.tags
+        // Inclusive because we want to cover cases when the cursor is right after the tag's end
+        |> Array.tryFind (fun { data = { name = name } } -> (Node.range name).ContainsInclusive(pos))
+        |> Option.map (fun x -> E(T x))
+
+    let partialElement () = PartialElement.inText (Doc.text doc) pos |> Option.map PE
+
+    link () |> Option.orElseWith tag |> Option.orElseWith partialElement
 
 
 let findCandidatesForCompl
@@ -672,6 +751,9 @@ let findCandidatesForCompl
                 Candidates.findHeadingCandidates folder srcDoc (Some destPart) anchorPart
 
         cand |> Array.choose (Completions.inlineAnchorInOtherDoc pos compl)
+    | Some (Tag input) ->
+        let cand = Candidates.findTagCandidates folder srcDoc input
+        cand |> Array.choose (Completions.tag pos compl input)
 
 let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) : array<CompletionItem> =
     match findCompletableAtPos doc pos with

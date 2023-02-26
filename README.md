@@ -1,5 +1,7 @@
 [![Build & Test](https://github.com/artempyanykh/marksman/actions/workflows/build.yml/badge.svg)](https://github.com/artempyanykh/marksman/actions/workflows/build.yml)
-![release](https://img.shields.io/github/v/release/artempyanykh/marksman)
+[![release](https://img.shields.io/github/v/release/artempyanykh/marksman)](https://github.com/artempyanykh/marksman/releases)
+[![homebrew](https://img.shields.io/homebrew/v/marksman)](https://formulae.brew.sh/formula/marksman)
+[![marksman](https://snapcraft.io/marksman/badge.svg)](https://snapcraft.io/marksman)
 
 # Marksman
 
@@ -66,7 +68,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
       ```lisp
       (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))      
       (add-hook 'markdown-mode-hook #'eglot-ensure)
-      ````
+      ```
 * [Helix](https://helix-editor.com/) supports Marksman out of the box. However, you need add `marksman` binary to
   your `PATH` manually.
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
@@ -74,7 +76,42 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 ## How to install
 
-### Option 1: use pre-built binary
+### Option 1: via a package manager
+
+#### Homebrew
+
+Available for MacOS and Linux:
+
+```bash
+brew install marksman
+```
+
+#### Nix
+
+`marksman` is available [via `nixpkgs`](https://search.nixos.org/packages?query=marksman) for Linux
+and MacOS.
+
+For example, on non-NixOS you can run the following to permanently install `marksman` into your local profile:
+```
+nix-env -iA nixpkgs.marksman
+```
+
+#### Snap
+
+Available for a number of Linux distros supporting Snap [via Snapcraft](https://snapcraft.io/marksman).
+
+To install the latest stable release:
+
+```
+sudo snap install marksman
+```
+
+To install the edge release (from main branch):
+```
+sudo snap install --edge marksman
+```
+
+### Option 2: use pre-built binary
 
 1. Go to [Releases](https://github.com/artempyanykh/marksman/releases) page: each release has pre-built binaries for
    Linux, MacOS, and Windows. Download the binary for your OS.
@@ -96,24 +133,12 @@ fine:
 xattr -d com.apple.quarantine <path-to-marksman-bin>
 ```
 
-### Option 2: build from source
+### Option 3: build from source
 
 0. Install [Dotnet SDK](https://dotnet.microsoft.com/en-us/download) for your OS.
 1. Clone the repository: `git clone https://github.com/artempyanykh/marksman.git`
 2. Inside `marksman` folder run `make install`
 3. The binary will be installed under `$HOME/.local/bin` (make sure this folder is in your `PATH`).
-
-### Option 3: use a package manager
-
-* Homebrew, for Linux and MacOS:
-
-```bash
-brew install marksman
-```
-
-* Nix, for Linux and MacOS:
-
-`marksman` is available [via `nixpkgs`](https://search.nixos.org/packages?query=marksman).
 
 ## Demo
 

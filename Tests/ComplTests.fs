@@ -541,6 +541,20 @@ module Candidates =
         [<Fact>]
         let test3 () =
             checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(2, 5)))
+            
+    [<Fact>]
+    let wiki_HeadingWithSpecialChars_NotEncoded () =
+        let doc1 = FakeDoc.Mk(
+            path = "doc1.md",
+            contentLines = [|
+                "# Doc 1"
+                "## Foo / Bar"
+                "## Baz"
+                //1234
+                "[[#f"
+                "" |])
+        let folder = FakeFolder.Mk([doc1])
+        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(3, 4)))
 
     [<Fact>]
     // # has a special meaning in URIs. Because of this Uri library doesn't handle

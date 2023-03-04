@@ -27,6 +27,8 @@ type PartialElement =
         anchor: option<TextNode> *
         range: Range
     | ReferenceLink of label: option<TextNode> * range: Range
+    // TODO: consider moving tag opening out of PartialElement due to
+    // complications in findCompletableAtPos
     | TagOpening of cursorPos: Position
 
     override this.ToString() =
@@ -384,7 +386,7 @@ module Completions =
             let newText =
                 WikiLink.render
                     None
-                    (Slug.str completionHeading |> Some)
+                    (completionHeading.EncodeForWiki() |> Some)
                     (Completable.isPartial compl)
 
             let range = if Completable.isPartial compl then range else input.range
@@ -413,7 +415,7 @@ module Completions =
             let newText =
                 WikiLink.render
                     (targetLink |> Some)
-                    (Slug.str heading |> Some)
+                    (heading.EncodeForWiki() |> Some)
                     (Completable.isPartial compl)
 
 
@@ -693,7 +695,18 @@ let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
 
     let partialElement () = PartialElement.inText (Doc.text doc) pos |> Option.map PE
 
-    link () |> Option.orElseWith tag |> Option.orElseWith partialElement
+    // The priority is generally link > partialElement > tag. However, when partial
+    // element is a tag opening, try to check for proper tag first.
+    // In particular, this means that [[#f will be completed as a wiki link,
+    // rather than a tag.
+    match link () with
+    | Some _ as link -> link
+    | _ ->
+        match partialElement () with
+        | Some (PE (PartialElement.TagOpening _)) as tagOpening ->
+            tag () |> Option.orElse tagOpening
+        | Some _ as partialElement -> partialElement
+        | None -> tag ()
 
 
 let findCandidatesForCompl

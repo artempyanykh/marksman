@@ -118,7 +118,11 @@ type String with
         let encodedParts =
             parts |> Seq.map (fun s -> s.UrlDecode().EncodeForWiki())
 
-        "/" + String.Join('/', encodedParts)
+        // NOTE: NO LEADING SLASH HERE. Without the leading slash the paths may be ambiguous
+        // but this is how other tools want the paths to look like.
+        // See: https://github.com/artempyanykh/marksman/issues/162
+        // See: RefsTests.FileLinkTests.fileName_RelativeAsAbs
+        String.Join('/', encodedParts)
 
     member this.UrlEncode() : string = Uri.EscapeDataString(this)
 

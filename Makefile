@@ -69,6 +69,10 @@ check: setup
 .PHONY: build
 build:
 	dotnet build Marksman/Marksman.fsproj
+
+.PHONY: clean
+clean:
+	dotnet clean
 	
 .PHONY: run
 run:

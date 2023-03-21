@@ -14,7 +14,7 @@ _Write Markdown with code assist and intelligence in the comfort of your favouri
 Marksman is a program that integrates with your editor to assist you in writing and maintaining your Markdown documents.
 Using [LSP protocol][lsp-main] it provides **completion**, goto **definition**, find **references**, **rename**
 refactoring, **diagnostics**, and more. In addition to regular Markdown, it also supports **wiki-link**-style references
-that enable [Zettelkasten-like][zettel-wiki][^roam-research], [^markdown-memo] note taking. See more about Marksman's
+that enable [Zettelkasten-like][zettel-wiki][^roam-research]<sup>,</sup> [^markdown-memo] note taking. See more about Marksman's
 features below.
 
 Marksman **works on MacOS, Linux, and Windows** and is distributed as a **self-contained binary** for each OS.

@@ -24,15 +24,24 @@ apps:
 
 parts:
   marksman:
-    plugin: dotnet
+    plugin: nil
     build-packages:
-      - dotnet-sdk-7.0
       - make
+      - wget
+      - git
+      - libicu70
     stage-packages:
       - libicu70
     source: .
+    override-pull: |
+      craftctl default
+      wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
+      chmod +x ./dotnet-install.sh
+      ./dotnet-install.sh --channel 7.0
     override-build: |
       craftctl default
       craftctl set version="$(git describe --tags)"
+      export DOTNET_ROOT=$HOME/.dotnet
+      export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools
       make publishTo DEST=$SNAPCRAFT_PART_INSTALL
       chmod 0755 $SNAPCRAFT_PART_INSTALL/marksman

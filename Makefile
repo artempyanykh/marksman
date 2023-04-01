@@ -126,7 +126,7 @@ else
 install: publish
 	mkdir -p $${HOME}/.local/bin
 	rm -f $${HOME}/.local/bin/marksman
-	cp Marksman/bin/Release/net6.0/$(RID)/publish/marksman $${HOME}/.local/bin
+	cp Marksman/bin/Release/net7.0/$(RID)/publish/marksman $${HOME}/.local/bin
 endif
 
 .DEFAULT_GOAL := build

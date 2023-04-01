@@ -98,10 +98,25 @@ module ComplWikiStyle =
         | "file-path-stem" -> Ok FilePathStem
         | other -> Error $"Unknown ComplWikiStyle: {other}"
 
-    let ofStringOpt input =
-        match ofString input with
-        | Ok x -> Some x
-        | Error _ -> None
+    let ofStringOpt input = Option.ofResult (ofString input)
+
+type TextSync =
+    | Full
+    | Incremental
+
+module TextSync =
+    let ofString (input: string) : Result<TextSync, string> =
+        match input.ToLower() with
+        | "full" -> Ok Full
+        | "incremental" -> Ok Incremental
+        | other -> Error $"Unknown text sync setting: {other}"
+
+    let ofStringOpt input = Option.ofResult (ofString input)
+
+    let ord =
+        function
+        | Full -> 0
+        | Incremental -> 1
 
 /// Configuration knobs for the Marksman LSP.
 ///
@@ -110,16 +125,19 @@ module ComplWikiStyle =
 type Config =
     { caTocEnable: option<bool>
       coreMarkdownFileExtensions: option<array<string>>
+      coreTextSync: option<TextSync>
       complWikiStyle: option<ComplWikiStyle> }
 
     static member Default =
         { caTocEnable = Some true
           coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
+          coreTextSync = Some Full
           complWikiStyle = Some TitleSlug }
 
     static member Empty =
         { caTocEnable = None
           coreMarkdownFileExtensions = None
+          coreTextSync = None
           complWikiStyle = None }
 
     member this.CaTocEnable() =
@@ -130,6 +148,11 @@ type Config =
     member this.CoreMarkdownFileExtensions() =
         this.coreMarkdownFileExtensions
         |> Option.orElse Config.Default.coreMarkdownFileExtensions
+        |> Option.get
+
+    member this.CoreTextSync() =
+        this.coreTextSync
+        |> Option.orElse Config.Default.coreTextSync
         |> Option.get
 
     member this.ComplWikiStyle() =
@@ -144,6 +167,9 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         let! coreMarkdownFileExtensions =
             getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "file_extensions" ]
 
+        let! coreTextSync = getFromTableOpt<string> table [] [ "core"; "text_sync" ]
+        let coreTextSync = coreTextSync |> Option.bind TextSync.ofStringOpt
+
         let! complWikiStyle = getFromTableOpt<string> table [] [ "completion"; "wiki"; "style" ]
 
         let complWikiStyle =
@@ -151,6 +177,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
 
         { caTocEnable = caTocEnable
           coreMarkdownFileExtensions = coreMarkdownFileExtensions
+          coreTextSync = coreTextSync
           complWikiStyle = complWikiStyle }
     }
 
@@ -162,6 +189,7 @@ module Config =
           coreMarkdownFileExtensions =
             hi.coreMarkdownFileExtensions
             |> Option.orElse low.coreMarkdownFileExtensions
+          coreTextSync = hi.coreTextSync |> Option.orElse low.coreTextSync
           complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle }
 
     let mergeOpt hi low =

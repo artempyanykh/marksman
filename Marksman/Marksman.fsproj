@@ -37,6 +37,7 @@
         <Compile Include="Refs.fs"/>
         <Compile Include="Diag.fs"/>
         <Compile Include="State.fs"/>
+        <Compile Include="Fatality.fs"/>
         <Compile Include="Toc.fs"/>
         <Compile Include="CodeActions.fs"/>
         <Compile Include="Compl.fs"/>

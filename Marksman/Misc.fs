@@ -6,8 +6,6 @@ open System.Text
 open System.Text.RegularExpressions
 open Ionide.LanguageServerProtocol.Types
 
-let todo what = failwith $"{what} not implemented"
-
 let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 
 let lineEndings = [| "\r\n"; "\n" |]

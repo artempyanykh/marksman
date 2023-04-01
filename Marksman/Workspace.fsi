@@ -76,6 +76,7 @@ type Workspace
 
 module Workspace =
     val folders: Workspace -> seq<Folder>
+    val folderCount: Workspace -> int
     val docCount: Workspace -> int
     val userConfig: Workspace -> option<Config>
 

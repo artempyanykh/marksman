@@ -92,7 +92,7 @@ module State =
 
     let findFolderEnclosing (uri: PathUri) (state: State) : Folder =
         tryFindFolderEnclosing uri state
-        |> Option.defaultWith (fun _ -> failwith $"Expected folder now found: {uri}")
+        |> Option.defaultWith (fun _ -> failwith $"Expected folder not found: {uri}")
 
     let tryFindFolderAndDoc (uri: PathUri) (state: State) : option<Folder * Doc> =
         tryFindFolderEnclosing uri state

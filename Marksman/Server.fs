@@ -372,7 +372,12 @@ type StateManager(initState: State) =
                         chan.Reply state
                         return! go prevState state hooks
                     | MutateState mutator ->
-                        let newState, addedHooks = mutator state
+                        let newState, addedHooks =
+                            try
+                                mutator state
+                            with ex ->
+                                // Failing to update a state is a fatal error. We should crash
+                                Fatality.abort (Some state) ex
 
                         // Step 1: run _added_ hooks on the existing state
 

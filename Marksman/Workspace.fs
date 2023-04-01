@@ -476,3 +476,5 @@ module Workspace =
 
     let docCount (workspace: Workspace) : int =
         workspace.folders.Values |> Seq.sumBy Folder.docCount
+
+    let folderCount (workspace: Workspace) : int = workspace.folders.Count

@@ -2,10 +2,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net6.0</TargetFramework>
         <AssemblyName>marksman</AssemblyName>
         <VersionPrefix>1.0.0</VersionPrefix>
         <EnableLint>false</EnableLint>
+        <TargetFramework>net7.0</TargetFramework>
     </PropertyGroup>
     <Target Name="Version" BeforeTargets="BeforeBuild">
         <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true" Condition="'$(VersionString)'==''">

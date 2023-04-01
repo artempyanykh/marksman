@@ -26,7 +26,7 @@ parts:
   marksman:
     plugin: dotnet
     build-packages:
-      - dotnet-sdk-6.0
+      - dotnet-sdk-7.0
       - make
     stage-packages:
       - libicu70

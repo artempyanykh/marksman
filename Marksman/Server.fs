@@ -84,7 +84,11 @@ module ServerUtil =
         }
         |> List.ofSeq
 
-    let mkServerCaps (markdownExts: array<string>) (par: InitializeParams) : ServerCapabilities =
+    let mkServerCaps
+        (markdownExts: array<string>)
+        (textSyncKind: TextSync)
+        (par: InitializeParams)
+        : ServerCapabilities =
         let workspaceFoldersCaps =
             { Supported = Some true; ChangeNotifications = Some true }
 
@@ -114,10 +118,15 @@ module ServerUtil =
                 WorkspaceFolders = Some workspaceFoldersCaps
                 FileOperations = Some workspaceFileCaps }
 
+        let syncKind =
+            match textSyncKind with
+            | Full -> TextDocumentSyncKind.Full
+            | Incremental -> TextDocumentSyncKind.Incremental
+
         let textSyncCaps =
             { TextDocumentSyncOptions.Default with
                 OpenClose = Some true
-                Change = Some TextDocumentSyncKind.Incremental }
+                Change = Some syncKind }
 
 
         let clientDesc = ClientDescription.ofParams par
@@ -515,7 +524,12 @@ type MarksmanServer(client: MarksmanClient) =
             |> Seq.distinct
             |> Array.ofSeq
 
-        let serverCaps = ServerUtil.mkServerCaps configuredExts par
+        let textSyncKind =
+            Workspace.folders workspace
+            |> Seq.map (fun x -> (Folder.configOrDefault x).CoreTextSync())
+            |> Seq.minBy TextSync.ord
+
+        let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
 
         let initResult =
             { InitializeResult.Default with Capabilities = serverCaps }

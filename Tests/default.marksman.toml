@@ -4,6 +4,7 @@
 
 [core]
 markdown.file_extensions = ["md", "markdown"]
+text_sync = "full"
 
 [code_action]
 toc.enable = true # Enable/disable "Table of Contents" code action

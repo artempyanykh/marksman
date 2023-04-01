@@ -42,7 +42,7 @@ toc.enable = false
     let expected = { Config.Empty with caTocEnable = Some false }
 
     Assert.Equal(Some expected, actual)
-    
+
 
 [<Fact>]
 let testParse_3 () =
@@ -55,6 +55,20 @@ wiki.style = "file-stem"
     let actual = Config.tryParse content
 
     let expected = { Config.Empty with complWikiStyle = Some FileStem }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
+let testParse_4 () =
+    let content =
+        """
+[core]
+text_sync = "incremental"
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with coreTextSync = Some Incremental }
 
     Assert.Equal(Some expected, actual)
 

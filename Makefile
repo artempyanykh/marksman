@@ -90,6 +90,7 @@ publish:
 	dotnet publish -c Release -r $(RID) --self-contained true \
 		-p:PublishSingleFile=true \
 		-p:PublishTrimmed=true \
+		-p:TrimMode=partial \
 		-p:DebugType=embedded \
 		-p:EnableCompressionInSingleFile=true \
 		-p:UseAppHost=true \
@@ -100,6 +101,7 @@ publishTo:
 	dotnet publish -c Release -r $(RID) --self-contained true \
 		-p:PublishSingleFile=true \
 		-p:PublishTrimmed=true \
+		-p:TrimMode=partial \
 		-p:DebugType=embedded \
 		-p:EnableCompressionInSingleFile=true \
 		-p:VersionString=$(VERSIONSTRING) \

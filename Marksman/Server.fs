@@ -488,59 +488,67 @@ type MarksmanServer(client: MarksmanClient) =
             None
 
     override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
-        let workspaceFolders = ServerUtil.extractWorkspaceFolders par
-        let clientDesc = ClientDescription.ofParams par
+        try
+            let workspaceFolders = ServerUtil.extractWorkspaceFolders par
+            let clientDesc = ClientDescription.ofParams par
 
-        logger.debug (
-            Log.setMessage "Obtained workspace folders"
-            >> Log.addContext "workspace" workspaceFolders
-        )
+            logger.debug (
+                Log.setMessage "Obtained workspace folders"
+                >> Log.addContext "workspace" workspaceFolders
+            )
 
-        let userConfig = tryLoadUserConfig ()
-        let folders = ServerUtil.readWorkspace userConfig workspaceFolders
-        let numNotes = folders |> List.sumBy Folder.docCount
+            let userConfig = tryLoadUserConfig ()
+            let folders = ServerUtil.readWorkspace userConfig workspaceFolders
+            let numNotes = folders |> List.sumBy Folder.docCount
 
-        logger.debug (
-            Log.setMessage "Completed reading workspace folders"
-            >> Log.addContext "numFolders" folders.Length
-            >> Log.addContext "numNotes" numNotes
-        )
+            logger.debug (
+                Log.setMessage "Completed reading workspace folders"
+                >> Log.addContext "numFolders" folders.Length
+                >> Log.addContext "numNotes" numNotes
+            )
 
-        let workspace = Workspace.ofFolders userConfig folders
-        let initState = State.mk clientDesc workspace
-        stateManager <- Some(new StateManager(initState))
+            let workspace = Workspace.ofFolders userConfig folders
+            let initState = State.mk clientDesc workspace
+            stateManager <- Some(new StateManager(initState))
 
-        // Workspace may contain several folders with their own configuration. However, server
-        // capabilities are communicated for the whole workspace. Therefore, we need to collect
-        // all configured markdown extensions and ask the client to watch them all, doing per-folder
-        // filtering on our own.
-        //
-        // NOTE: this doesn't address the case when a folder is added to the workspace later on.
-        // We'd need to add dynamic registration of capabilities on the server side.
-        let configuredExts =
-            Workspace.folders workspace
-            |> Seq.map Folder.configOrDefault
-            |> Seq.collect (fun c -> c.CoreMarkdownFileExtensions())
-            |> Seq.distinct
-            |> Array.ofSeq
+            // Workspace may contain several folders with their own configuration. However, server
+            // capabilities are communicated for the whole workspace. Therefore, we need to collect
+            // all configured markdown extensions and ask the client to watch them all, doing per-folder
+            // filtering on our own.
+            //
+            // NOTE: this doesn't address the case when a folder is added to the workspace later on.
+            // We'd need to add dynamic registration of capabilities on the server side.
+            let configuredExts =
+                Workspace.folders workspace
+                |> Seq.map Folder.configOrDefault
+                |> Seq.collect (fun c -> c.CoreMarkdownFileExtensions())
+                |> Seq.distinct
+                |> Array.ofSeq
 
-        let textSyncKind =
-            Workspace.folders workspace
-            |> Seq.map (fun x -> (Folder.configOrDefault x).CoreTextSync())
-            |> Seq.minBy TextSync.ord
+            let configuredSyncKinds =
+                Workspace.folders workspace
+                |> Seq.map (fun x -> (Folder.configOrDefault x).CoreTextSync())
+                |> Array.ofSeq
 
-        let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
+            let textSyncKind =
+                if Array.isEmpty configuredSyncKinds then
+                    Full
+                else
+                    Array.minBy TextSync.ord configuredSyncKinds
 
-        let initResult =
-            { InitializeResult.Default with Capabilities = serverCaps }
+            let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
 
-        logger.debug (
-            Log.setMessage
-                "Finished workspace initialization. Waiting for the `initialized` notification from the client."
-        )
+            let initResult =
+                { InitializeResult.Default with Capabilities = serverCaps }
 
-        AsyncLspResult.success initResult
+            logger.debug (
+                Log.setMessage
+                    "Finished workspace initialization. Waiting for the `initialized` notification from the client."
+            )
 
+            AsyncLspResult.success initResult
+        with ex ->
+            Fatality.abort None ex
 
     override this.Initialized(_: InitializedParams) =
         withStateExclusive

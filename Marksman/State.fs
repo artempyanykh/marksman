@@ -9,10 +9,36 @@ open Marksman.Diag
 open Marksman.Workspace
 open Marksman.Misc
 open Marksman.Config
+open Newtonsoft.Json.Linq
+
+type InitOptions = { preferredTextSyncKind: Option<TextSync> }
+
+module InitOptions =
+    let empty = { preferredTextSyncKind = None }
+
+    let ofJson (json: JToken) : InitOptions =
+        match json.SelectToken("preferredTextSyncKind") with
+        | null -> empty
+        | kindNum ->
+            let kind =
+                try
+                    Some(int64 kindNum)
+                with _ ->
+                    None
+
+            let kind =
+                kind
+                |> Option.bind (function
+                    | x when x = int64 TextDocumentSyncKind.Full -> Some Full
+                    | x when x = int64 TextDocumentSyncKind.Incremental -> Some Incremental
+                    | _ -> None)
+
+            { preferredTextSyncKind = kind }
 
 type ClientDescription =
     { info: ClientInfo option
-      caps: ClientCapabilities }
+      caps: ClientCapabilities
+      opts: InitOptions }
 
     member this.IsVSCode: bool =
         this.info |> Option.exists (fun x -> x.Name = "Visual Studio Code")
@@ -51,14 +77,26 @@ type ClientDescription =
         }
         |> Option.defaultValue false
 
+    member this.PreferredTextSyncKind: Option<TextSync> =
+        this.opts.preferredTextSyncKind
+
 module ClientDescription =
     let ofParams (par: InitializeParams) : ClientDescription =
         let caps =
             par.Capabilities
             |> Option.defaultValue { Workspace = None; TextDocument = None; Experimental = None }
 
-        { info = par.ClientInfo; caps = caps }
+        let opts =
+            par.InitializationOptions
+            |> Option.map InitOptions.ofJson
+            |> Option.defaultValue InitOptions.empty
 
+        { info = par.ClientInfo; caps = caps; opts = opts }
+
+    let empty =
+        { info = None
+          caps = { Workspace = None; TextDocument = None; Experimental = None }
+          opts = InitOptions.empty }
 
 type State =
     private

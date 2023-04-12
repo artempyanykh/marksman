@@ -19,6 +19,7 @@ open Marksman.Misc
 open Marksman.Refs
 open Marksman.State
 open Marksman.Workspace
+open Newtonsoft.Json.Linq
 
 module ServerUtil =
     let logger = LogProvider.getLoggerByName "ServerUtil"
@@ -83,6 +84,28 @@ module ServerUtil =
                 | _ -> ()
         }
         |> List.ofSeq
+
+    let calcTextSync
+        (userConfigOpt: Option<Config.Config>)
+        (workspace: Workspace)
+        (clientDesc: ClientDescription)
+        =
+        let configuredSyncKinds =
+            Workspace.folders workspace
+            |> Seq.choose Folder.config
+            |> Seq.choose (fun x -> x.coreTextSync)
+            |> Array.ofSeq
+
+        if not (Array.isEmpty configuredSyncKinds) then
+            let commonKind = Array.minBy TextSync.ord configuredSyncKinds
+            "workspaceConfig", commonKind
+        else
+            match userConfigOpt |> Option.bind (fun x -> x.coreTextSync) with
+            | Some kind -> "userConfig", kind
+            | None ->
+                match clientDesc.PreferredTextSyncKind with
+                | Some kind -> "clientOption", kind
+                | None -> "default", Full
 
     let mkServerCaps
         (markdownExts: array<string>)
@@ -525,16 +548,14 @@ type MarksmanServer(client: MarksmanClient) =
                 |> Seq.distinct
                 |> Array.ofSeq
 
-            let configuredSyncKinds =
-                Workspace.folders workspace
-                |> Seq.map (fun x -> (Folder.configOrDefault x).CoreTextSync())
-                |> Array.ofSeq
+            let textSyncKindSource, textSyncKind =
+                ServerUtil.calcTextSync userConfig workspace clientDesc
 
-            let textSyncKind =
-                if Array.isEmpty configuredSyncKinds then
-                    Full
-                else
-                    Array.minBy TextSync.ord configuredSyncKinds
+            logger.debug (
+                Log.setMessage "Configured text sync"
+                >> Log.addContext "source" textSyncKindSource
+                >> Log.addContext "kind" textSyncKind
+            )
 
             let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
 

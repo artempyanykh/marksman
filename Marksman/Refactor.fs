@@ -2,10 +2,10 @@ module Marksman.Refactor
 
 open Ionide.LanguageServerProtocol.Types
 
-open Marksman.Workspace
 open Marksman.Cst
 open Marksman.Misc
 open Marksman.Refs
+open Marksman.Workspace
 
 type RenameResult =
     | Edit of WorkspaceEdit

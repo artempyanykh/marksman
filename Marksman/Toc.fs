@@ -3,9 +3,9 @@ module Marksman.Toc
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
-open Marksman.Misc
-open Marksman.Index
 open Marksman.Cst
+open Marksman.Index
+open Marksman.Misc
 open Marksman.Text
 open Marksman.Workspace
 

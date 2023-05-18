@@ -4,9 +4,9 @@ open System
 open Ionide.LanguageServerProtocol.Types
 open Markdig.Syntax
 
-open Marksman.Text
 open Marksman.Cst
 open Marksman.Misc
+open Marksman.Text
 
 module Markdown =
     open Markdig

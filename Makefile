@@ -70,6 +70,10 @@ check: setup
 build:
 	dotnet build Marksman/Marksman.fsproj
 
+.PHONY: test
+test:
+	dotnet test
+
 .PHONY: clean
 clean:
 	dotnet clean

@@ -2,10 +2,11 @@ module Marksman.Workspace
 
 open Ionide.LanguageServerProtocol.Types
 
-open Marksman.Misc
 open Marksman.Config
 open Marksman.Cst
 open Marksman.Index
+open Marksman.Misc
+open Marksman.Paths
 open Marksman.Text
 
 [<Sealed>]
@@ -14,15 +15,6 @@ type FolderId =
 
 module FolderId =
     val ofPath: PathUri -> FolderId
-
-[<Sealed>]
-type RootPath =
-    interface System.IComparable
-
-module RootPath =
-    val ofPath: PathUri -> RootPath
-    val ofString: string -> RootPath
-    val path: RootPath -> PathUri
 
 type Doc
 

@@ -1,20 +1,19 @@
 ﻿module Marksman.Compl
 
 open System
-
 open System.IO
+open FSharpPlus.GenericBuilders
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
-
-open FSharpPlus.GenericBuilders
 
 open Marksman.Config
 open Marksman.Cst
 open Marksman.Index
-open Marksman.Refs
-open Marksman.Workspace
 open Marksman.Misc
+open Marksman.Paths
+open Marksman.Refs
 open Marksman.Text
+open Marksman.Workspace
 
 let private logger = LogProvider.getLoggerByName "Compl"
 

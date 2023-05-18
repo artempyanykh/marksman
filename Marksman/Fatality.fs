@@ -1,6 +1,7 @@
 module Marksman.Fatality
 
 open Ionide.LanguageServerProtocol.Types
+
 open Marksman.State
 open Marksman.Workspace
 

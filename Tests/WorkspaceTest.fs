@@ -5,6 +5,7 @@ open Ionide.LanguageServerProtocol.Types
 open Xunit
 
 open Marksman.Misc
+open Marksman.Paths
 open Marksman.Workspace
 open Marksman.Config
 

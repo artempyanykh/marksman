@@ -2,9 +2,8 @@
 
 open System
 
-open Ionide.LanguageServerProtocol.Types
-
 open FSharpPlus.Operators
+open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 

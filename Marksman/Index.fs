@@ -1,8 +1,9 @@
 module Marksman.Index
 
 open Ionide.LanguageServerProtocol.Types
-open Marksman.Misc
+
 open Marksman.Cst
+open Marksman.Misc
 
 type Dictionary<'K, 'V> = System.Collections.Generic.Dictionary<'K, 'V>
 

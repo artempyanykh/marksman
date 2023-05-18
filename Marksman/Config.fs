@@ -1,8 +1,8 @@
 module Marksman.Config
 
-open System.IO
 open FSharpPlus
 open Ionide.LanguageServerProtocol.Logging
+open System.IO
 open Tomlyn
 open Tomlyn.Model
 

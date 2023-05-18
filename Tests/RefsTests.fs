@@ -4,11 +4,12 @@ open Ionide.LanguageServerProtocol.Types
 open System.IO
 open Xunit
 
-open Marksman.Misc
-open Marksman.Helpers
 open Marksman.Cst
-open Marksman.Workspace
+open Marksman.Helpers
+open Marksman.Misc
+open Marksman.Paths
 open Marksman.Refs
+open Marksman.Workspace
 
 module InternNameTests =
     [<Fact>]

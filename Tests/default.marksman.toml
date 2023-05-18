@@ -13,5 +13,5 @@ toc.enable = true # Enable/disable "Table of Contents" code action
 # The style of wiki links completion.
 # Other values include: 
 # * "file-stem" to complete using file name without an extension,
-# * "file-path-stem" same as above but will using path.
+# * "file-path-stem" same as above but using file path.
 wiki.style = "title-slug"

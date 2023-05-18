@@ -11,6 +11,7 @@ open Ionide.LanguageServerProtocol.Types
 open Marksman.Cst
 open Marksman.Index
 open Marksman.Misc
+open Marksman.Paths
 open Marksman.Workspace
 
 type InternName = InternName of string

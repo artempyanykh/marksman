@@ -7,7 +7,7 @@ open FSharpPlus.GenericBuilders
 
 open Marksman.Diag
 open Marksman.Workspace
-open Marksman.Misc
+open Marksman.Paths
 open Marksman.Config
 open Newtonsoft.Json.Linq
 

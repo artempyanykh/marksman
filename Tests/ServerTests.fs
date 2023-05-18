@@ -3,9 +3,10 @@ module Marksman.ServerTests
 open Xunit
 
 open Marksman.Config
+open Marksman.Paths
+open Marksman.Server
 open Marksman.State
 open Marksman.Workspace
-open Marksman.Server
 
 open Marksman.Helpers
 

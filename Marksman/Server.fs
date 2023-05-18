@@ -16,10 +16,10 @@ open Marksman.Cst
 open Marksman.Diag
 open Marksman.Index
 open Marksman.Misc
+open Marksman.Paths
 open Marksman.Refs
 open Marksman.State
 open Marksman.Workspace
-open Newtonsoft.Json.Linq
 
 module ServerUtil =
     let logger = LogProvider.getLoggerByName "ServerUtil"

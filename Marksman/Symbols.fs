@@ -3,6 +3,7 @@ module Marksman.Symbols
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
+open Marksman.Paths
 open Marksman.Cst
 open Marksman.Workspace
 open Marksman.Index

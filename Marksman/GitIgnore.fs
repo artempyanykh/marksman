@@ -3,7 +3,6 @@ module Marksman.GitIgnore
 open System
 open System.IO
 open GlobExpressions
-open Marksman.Misc
 
 type GlobPattern =
     | Include of Glob

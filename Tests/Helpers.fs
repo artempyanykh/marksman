@@ -3,6 +3,7 @@ module Marksman.Helpers
 open System.Runtime.InteropServices
 open Snapper
 open Marksman.Misc
+open Marksman.Paths
 open Marksman.Workspace
 open Marksman.CodeActions
 

@@ -1,14 +1,15 @@
 module Marksman.Diag
 
-open System.IO
 open Ionide.LanguageServerProtocol.Types
+
 open Marksman.Workspace
+open Marksman.Paths
 
 module Lsp = Ionide.LanguageServerProtocol.Types
 
-open Marksman.Misc
 open Marksman.Cst
 open Marksman.Index
+open Marksman.Misc
 open Marksman.Refs
 
 type Entry =

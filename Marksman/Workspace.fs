@@ -12,6 +12,7 @@ open Marksman.Config
 open Marksman.Parser
 open Marksman.Text
 open Marksman.Misc
+open Marksman.Paths
 open Marksman.Cst
 open Marksman.Index
 
@@ -23,12 +24,6 @@ module FolderId =
     let ofPath path = FolderId path
     let path (FolderId p) = p
 
-type RootPath = RootPath of PathUri
-
-module RootPath =
-    let ofPath path = RootPath path
-    let ofString s = ofPath (PathUri.ofString s)
-    let path (RootPath p) = p
 
 type Doc =
     { path: PathUri

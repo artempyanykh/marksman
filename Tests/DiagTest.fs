@@ -1,13 +1,13 @@
 module Marksman.DiagTest
 
 open System.IO
-open Marksman.Index
-open Marksman.Misc
 open Xunit
 
-open Marksman.Workspace
 open Marksman.Diag
 open Marksman.Helpers
+open Marksman.Index
+open Marksman.Paths
+open Marksman.Workspace
 
 let entryToHuman (entry: Entry) =
     let lsp = diagToLsp entry

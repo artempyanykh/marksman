@@ -1,10 +1,11 @@
 module Marksman.SematoTests
 
-open Marksman.Misc
-open Marksman.Helpers
-open Marksman.Workspace
-open Marksman.Semato
 open Xunit
+
+open Marksman.Helpers
+open Marksman.Paths
+open Marksman.Semato
+open Marksman.Workspace
 
 let folderPath = (dummyRootPath [ "folder" ]) |> RootPath.ofString
 

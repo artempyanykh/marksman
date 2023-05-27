@@ -2,6 +2,7 @@ module Marksman.Misc
 
 open System
 open System.IO
+open System.Runtime.InteropServices
 open System.Text
 open System.Text.RegularExpressions
 
@@ -16,6 +17,8 @@ let concatLines (lines: array<string>) : string = String.concat Environment.NewL
 let mkWatchGlob (configuredExts: seq<string>) : string =
     let ext_pattern = "{" + (String.concat "," (configuredExts)) + "}"
     $"**/*.{ext_pattern}"
+
+let isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
 
 let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
     let isEmacsBackup =

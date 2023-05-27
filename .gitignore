@@ -5,3 +5,5 @@ Marksman.sln.DotSettings.user
 **/obj
 
 .fake
+
+BenchmarkDotNet.Artifacts

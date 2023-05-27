@@ -175,6 +175,11 @@ module LocalPath =
         | Abs _ -> true
         | Rel _ -> false
 
+    let asAbsolute =
+        function
+        | Abs path -> path
+        | Rel path -> failwith $"Path {path} is not absolute"
+
     let isRelative =
         function
         | Abs _ -> false
@@ -184,6 +189,17 @@ module LocalPath =
         let raw = toSystem path
         let components = raw.Split([| '\\'; '/' |])
         Array.filter (String.IsNullOrEmpty >> not) components
+
+    let ofComponents comps =
+        assert (Array.length comps > 0)
+
+        let sysPath =
+            if comps[0] = "/" then
+                "/" + String.Join(Path.DirectorySeparatorChar, comps[1..])
+            else
+                String.Join(Path.DirectorySeparatorChar, comps)
+
+        ofSystem sysPath
 
     // TODO: this is pretty ridiculous. Think of a better way.
     let dominatingDirectorySeparator path =

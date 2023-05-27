@@ -82,10 +82,15 @@ clean:
 run:
 	dotnet run --project Marksman -- $(ARGS)
 
+.PHONY: bench
+bench:
+	dotnet run -c Release --project Benchmarks -- $(ARGS)
+
 .PHONY: fmt
 fmt: setup
 	dotnet fantomas Marksman
 	dotnet fantomas Tests
+	dotnet fantomas Benchmarks
 ifneq ($(OS_ID),win)
 	xmllint Marksman/Marksman.fsproj -o Marksman/Marksman.fsproj
 endif

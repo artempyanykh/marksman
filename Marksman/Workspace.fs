@@ -194,6 +194,15 @@ module Folder =
             let rooted = (RootedRelPath.mk root.data (Abs uri))
             Map.tryFind rooted.path docs
 
+    let tryFindDocByRelPath (path: RelPath) : Folder -> option<Doc> =
+        function
+        | SingleFile { doc = doc } ->
+            Some doc
+            |> Option.filter (fun x ->
+                let sysPath = ((Doc.path x) |> AbsPath.toSystem)
+                sysPath.EndsWith(path |> RelPath.toSystem))
+        | MultiFile { docs = docs } -> Map.tryFind path docs
+
     let private readIgnoreFiles (root: LocalPath) : array<string> =
         let lines = ResizeArray()
 

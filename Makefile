@@ -85,6 +85,7 @@ run:
 .PHONY: fmt
 fmt: setup
 	dotnet fantomas Marksman
+	dotnet fantomas Tests
 ifneq ($(OS_ID),win)
 	xmllint Marksman/Marksman.fsproj -o Marksman/Marksman.fsproj
 endif

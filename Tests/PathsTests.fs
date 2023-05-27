@@ -9,52 +9,56 @@ module LocalPathTests =
     let testWinPath () =
         let p = LocalPath.ofSystem "C:/Program Data"
         Assert.Equal("C:/Program Data", LocalPath.toSystem p)
-        Assert.Equal<string>([|"C:"; "Program Data"|], LocalPath.components p)
-        
+        Assert.Equal<string>([| "C:"; "Program Data" |], LocalPath.components p)
+
         let p = LocalPath.ofSystem "C:\\Program Data\\notes.txt"
         Assert.Equal("C:\\Program Data\\notes.txt", LocalPath.toSystem p)
-        Assert.Equal<string>([|"C:"; "Program Data"; "notes.txt"|], LocalPath.components p)
-        
+        Assert.Equal<string>([| "C:"; "Program Data"; "notes.txt" |], LocalPath.components p)
+
     [<Fact>]
     let testUnixPath () =
         let p = LocalPath.ofSystem "/"
         Assert.Equal("/", LocalPath.toSystem p)
         Assert.Equal<string>([||], LocalPath.components p)
-        
+
         let p = LocalPath.ofSystem "/home/user"
         Assert.Equal("/home/user", LocalPath.toSystem p)
-        Assert.Equal<string>([|"home"; "user"|], LocalPath.components p)
-        
+        Assert.Equal<string>([| "home"; "user" |], LocalPath.components p)
+
         let p = LocalPath.ofSystem "/home/user/"
         Assert.Equal("/home/user/", LocalPath.toSystem p)
-        Assert.Equal<string>([|"home"; "user"|], LocalPath.components p)
-        
+        Assert.Equal<string>([| "home"; "user" |], LocalPath.components p)
+
         let p = LocalPath.ofSystem "/home/user/data/../notes/notes.txt"
         Assert.Equal("/home/user/data/../notes/notes.txt", LocalPath.toSystem p)
-        Assert.Equal<string>([|"home"; "user"; "data"; ".."; "notes"; "notes.txt"|], LocalPath.components p)
-        
+
+        Assert.Equal<string>(
+            [| "home"; "user"; "data"; ".."; "notes"; "notes.txt" |],
+            LocalPath.components p
+        )
+
     [<Fact>]
     let testNormalize () =
         let p = LocalPath.ofSystem "/home/user/data/../notes/notes.txt"
         let np = LocalPath.normalize p
         Assert.Equal("/home/user/notes/notes.txt", LocalPath.toSystem np)
-        
+
         let p = LocalPath.ofSystem "/../../notes/notes.txt"
         let np = LocalPath.normalize p
         Assert.Equal("/notes/notes.txt", LocalPath.toSystem np)
-        
+
         let p = LocalPath.ofSystem "./../../notes/notes.txt"
         let np = LocalPath.normalize p
         Assert.Equal("../../notes/notes.txt", LocalPath.toSystem np)
-        
+
         let p = LocalPath.ofSystem "../data/../../notes/notes.txt"
         let np = LocalPath.normalize p
         Assert.Equal("../../notes/notes.txt", LocalPath.toSystem np)
-        
+
         let p = LocalPath.ofSystem "C:\\data\\..\\..\\notes\\notes.txt"
         let np = LocalPath.normalize p
         Assert.Equal("C:\\notes\\notes.txt", LocalPath.toSystem np)
-    
+
 module PathUriTests =
     [<Fact>]
     let testWinPathFromUri () =
@@ -81,4 +85,3 @@ module PathUriTests =
         let uri = "file:///E%3A/notes"
         let puri = UriWith.mkAbs (systemPathToUriString path)
         Assert.Equal(uri, puri.uri)
-

@@ -16,11 +16,15 @@ module InternNameTests =
     let internAsPath docId name =
         InternName.tryAsPath (InternName.mkUnchecked docId name)
         |> Option.map (fun x -> x.path |> RelPath.toSystem)
-    
+
     [<Fact>]
     let relPath_1 () =
         let folder = dummyRootPath [ "rootFolder" ] |> mkFolderId
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ] |> mkDocId folder
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> mkDocId folder
+
         let actual = internAsPath docPath "../doc.md" |> Option.get
 
         Assert.Equal("doc.md", actual)
@@ -43,7 +47,11 @@ module InternNameTests =
     [<Fact>]
     let rootPath () =
         let folder = dummyRootPath [ "rootFolder" ] |> mkFolderId
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ] |> mkDocId folder
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> mkDocId folder
+
         let actual = internAsPath docPath "/doc.md" |> Option.get
 
         Assert.Equal("doc.md", actual)
@@ -51,7 +59,11 @@ module InternNameTests =
     [<Fact>]
     let url_no_schema_FP () =
         let folder = dummyRootPath [ "rootFolder" ] |> mkFolderId
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ] |> mkDocId folder
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> mkDocId folder
+
         let actual = internAsPath docPath "www.google.com" |> Option.get
 
         Assert.Equal("subfolder/www.google.com", actual)
@@ -59,7 +71,11 @@ module InternNameTests =
     [<Fact>]
     let url_schema () =
         let folder = dummyRootPath [ "rootFolder" ] |> mkFolderId
-        let docPath = dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ] |> mkDocId folder
+
+        let docPath =
+            dummyRootPath [ "rootFolder"; "subfolder"; "sub.md" ]
+            |> mkDocId folder
+
         let actual = internAsPath docPath "http://www.google.com"
 
         Assert.Equal(None, actual)
@@ -76,16 +92,21 @@ let stripRefs (refs: seq<Doc * Element * array<Dest>>) =
 
 module FileLinkTests =
     let doc1 = FakeDoc.Mk(path = "doc1.md", contentLines = [| "# Horses" |])
-    let subDoc1 = FakeDoc.Mk(path = "sub/doc1.md", contentLines = [|"# Sub Horses"|])
-    let subSubDoc1 = FakeDoc.Mk(path = "sub/sub/doc1.md", contentLines = [|"# Sub Sub Horses"|])
+
+    let subDoc1 =
+        FakeDoc.Mk(path = "sub/doc1.md", contentLines = [| "# Sub Horses" |])
+
+    let subSubDoc1 =
+        FakeDoc.Mk(path = "sub/sub/doc1.md", contentLines = [| "# Sub Sub Horses" |])
 
     let doc2 =
         FakeDoc.Mk(path = "doc2.md", contentLines = [| "# Riding Horses" |])
-    let subDoc2 = FakeDoc.Mk(path = "sub/doc2.md", contentLines = [|"# Sub Riding Horses"|])
 
-    let doc3 =
-        FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Fruit" |])
-        
+    let subDoc2 =
+        FakeDoc.Mk(path = "sub/doc2.md", contentLines = [| "# Sub Riding Horses" |])
+
+    let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Fruit" |])
+
     let doc4 =
         FakeDoc.Mk(path = "file with spaces.md", contentLines = [| "# File with spaces" |])
 
@@ -97,7 +118,9 @@ module FileLinkTests =
                 { Config.Config.Default with complWikiStyle = Some Config.FileStem }
             )
 
-        let partial = FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "doc")
+        let partial =
+            FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "doc")
+
         Assert.Empty(partial)
 
         let full =
@@ -106,16 +129,20 @@ module FileLinkTests =
 
         Assert.Equal(1, full.Length)
         Assert.Equal(doc2, full[0].dest)
-        
+
         let fullWithSpacesEncoded =
-            FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc2.Id "file%20with%20spaces.md")
+            FileLink.filterMatchingDocs
+                folder
+                (InternName.mkUnchecked doc2.Id "file%20with%20spaces.md")
             |> Array.ofSeq
 
         Assert.Equal(1, fullWithSpacesEncoded.Length)
         Assert.Equal(doc4, fullWithSpacesEncoded[0].dest)
-        
+
         let fullWithSpacesNotEncoded =
-            FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc2.Id "file with spaces.md")
+            FileLink.filterMatchingDocs
+                folder
+                (InternName.mkUnchecked doc2.Id "file with spaces.md")
             |> Array.ofSeq
 
         Assert.Equal(1, fullWithSpacesNotEncoded.Length)
@@ -123,16 +150,32 @@ module FileLinkTests =
 
     [<Fact>]
     let fileName_RelativeAsAbs () =
-        let folder = FakeFolder.Mk([doc1; subDoc1; subSubDoc1; doc2; subDoc2], {Config.Config.Default with complWikiStyle = Some Config.FilePathStem})
-        
-        let actual = FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "doc1") |> Seq.map FileLink.dest |> Array.ofSeq
-        Assert.Equal<Doc>(actual, [|doc1; subDoc1; subSubDoc1|])
-        
-        let actual = FileLink.filterMatchingDocs folder (InternName.mkUnchecked subDoc1.Id "doc2") |> Seq.map FileLink.dest |> Array.ofSeq
-        Assert.Equal<Doc>(actual, [|doc2; subDoc2|])
-        
-        let actual = FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "sub/doc1") |> Seq.map FileLink.dest |> Array.ofSeq
-        Assert.Equal<Doc>(actual, [|subDoc1; subSubDoc1|])
+        let folder =
+            FakeFolder.Mk(
+                [ doc1; subDoc1; subSubDoc1; doc2; subDoc2 ],
+                { Config.Config.Default with complWikiStyle = Some Config.FilePathStem }
+            )
+
+        let actual =
+            FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "doc1")
+            |> Seq.map FileLink.dest
+            |> Array.ofSeq
+
+        Assert.Equal<Doc>(actual, [| doc1; subDoc1; subSubDoc1 |])
+
+        let actual =
+            FileLink.filterMatchingDocs folder (InternName.mkUnchecked subDoc1.Id "doc2")
+            |> Seq.map FileLink.dest
+            |> Array.ofSeq
+
+        Assert.Equal<Doc>(actual, [| doc2; subDoc2 |])
+
+        let actual =
+            FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "sub/doc1")
+            |> Seq.map FileLink.dest
+            |> Array.ofSeq
+
+        Assert.Equal<Doc>(actual, [| subDoc1; subSubDoc1 |])
 
     [<Fact>]
     let heading_Partial () =

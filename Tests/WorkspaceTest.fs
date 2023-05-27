@@ -23,10 +23,10 @@ module FolderTest =
 module DocTest =
     [<Fact>]
     let applyLspChange () =
-        let dummyPath = (dummyRootPath [ "dummy.md" ]) |> mkDocId (mkFolderId dummyRoot)
+        let dummyPath =
+            (dummyRootPath [ "dummy.md" ]) |> mkDocId (mkFolderId dummyRoot)
 
-        let empty =
-            Doc.mk dummyPath None (Text.mkText "")
+        let empty = Doc.mk dummyPath None (Text.mkText "")
 
         let insertChange =
             { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.data; Version = Some 1 }
@@ -37,7 +37,7 @@ module DocTest =
 
         let updated = Doc.applyLspChange insertChange empty
         Assert.Equal("[", (Doc.text updated).content)
-        
+
     [<Fact(Skip = "Uri and # don't mix well")>]
     let pathFromRoot_SpecialChars () =
         let doc = FakeDoc.Mk(path = "blah#blah.md", contentLines = [||])

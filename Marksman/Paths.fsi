@@ -31,8 +31,10 @@ module LocalPath =
     val tryOfSystem: string -> Option<LocalPath>
     val ofSystem: string -> LocalPath
     val ofUri: DocumentUri -> LocalPath
+    val ofComponents: array<string> -> LocalPath
     val toSystem: LocalPath -> string
     val isAbsolute: LocalPath -> bool
+    val asAbsolute: LocalPath -> AbsPath
     val isRelative: LocalPath -> bool
     val components: LocalPath -> array<string>
     val normalize: LocalPath -> LocalPath

@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarkdigPatches", "MarkdigPa
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LanguageServerProtocol", "LanguageServerProtocol\LanguageServerProtocol.fsproj", "{0818D3FB-F6FA-4C0F-B681-8BCB03680562}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Benchmarks", "Benchmarks\Benchmarks.fsproj", "{4A518AAD-F243-41A8-A999-D44031DF587C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{0818D3FB-F6FA-4C0F-B681-8BCB03680562}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0818D3FB-F6FA-4C0F-B681-8BCB03680562}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0818D3FB-F6FA-4C0F-B681-8BCB03680562}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4A518AAD-F243-41A8-A999-D44031DF587C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A518AAD-F243-41A8-A999-D44031DF587C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A518AAD-F243-41A8-A999-D44031DF587C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A518AAD-F243-41A8-A999-D44031DF587C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

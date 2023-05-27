@@ -29,7 +29,7 @@ let mkFolderId str =
 let mkDocId folderId str =
     let path = LocalPath.ofSystem str
     UriWith.mkRooted folderId path
- 
+
 let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<string>) =
     let lines = Seq.map (fun x -> (fmt x).Lines()) things |> Seq.concat
 
@@ -57,7 +57,9 @@ type FakeDoc =
             let pathUri = pathToUri (dummyRootPath (pathComps path))
             let root = Option.map pathComps root |> Option.defaultValue []
             let rootUri = dummyRootPath root |> pathToUri
-            let docId = UriWith.mkRooted (UriWith.mkRoot rootUri) (LocalPath.ofUri pathUri)
+
+            let docId =
+                UriWith.mkRooted (UriWith.mkRoot rootUri) (LocalPath.ofUri pathUri)
 
             Doc.mk docId None text
 
@@ -69,7 +71,9 @@ type FakeDoc =
 type FakeFolder =
     class
         static member Mk(docs: seq<Doc>, ?config: Config.Config) : Folder =
-            let docsMap = docs |> Seq.map (fun d -> Doc.pathFromRoot d, d) |> Map.ofSeq
+            let docsMap =
+                docs |> Seq.map (fun d -> Doc.pathFromRoot d, d) |> Map.ofSeq
+
             let folderId = UriWith.mkRoot dummyRootUri
             Folder.multiFile "dummy" folderId docsMap config
     end

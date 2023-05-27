@@ -88,13 +88,10 @@ let noDiagOnNonMarkdownFiles () =
 let crossFileDiagOnBrokenWikiLinks () =
     let doc = FakeDoc.Mk([| "[[bad]]" |])
 
-    let folder = FakeFolder.Mk([doc])
+    let folder = FakeFolder.Mk([ doc ])
     let diag = checkFolder folder |> diagToHuman
 
-    Assert.Equal<string * string>(
-        [ "fake.md", "Link to non-existent document 'bad'" ],
-        diag
-    )
+    Assert.Equal<string * string>([ "fake.md", "Link to non-existent document 'bad'" ], diag)
 
 [<Fact>]
 let noCrossFileDiagOnSingleFileFolders () =

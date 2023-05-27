@@ -340,7 +340,8 @@ module TagsTests =
               "T: name=tag2; range=(0,7)-(0,11) @ (0,6)-(0,11)" ]
 
 module DocUrlTests =
-    let mkUrlNode str = Node.mk str (Range.Mk(0, 0, 0, str.Length)) (UrlEncoded.mkUnchecked str)
+    let mkUrlNode str =
+        Node.mk str (Range.Mk(0, 0, 0, str.Length)) (UrlEncoded.mkUnchecked str)
 
     [<Fact>]
     let test1 () =

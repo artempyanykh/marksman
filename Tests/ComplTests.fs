@@ -501,16 +501,13 @@ module Candidates =
         let folder = FakeFolder.Mk([ doc1; doc2; doc3; doc4 ])
 
         [<Fact>]
-        let test1 () =
-            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(0, 3)))
+        let test1 () = checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(0, 3)))
 
         [<Fact>]
-        let test2 () =
-            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(1, 5)))
+        let test2 () = checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(1, 5)))
 
         [<Fact>]
-        let test3 () =
-            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(2, 5)))
+        let test3 () = checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(2, 5)))
 
     [<StoreSnapshotsPerClass>]
     module WikiWithSpaces_FileStem =
@@ -530,29 +527,29 @@ module Candidates =
             )
 
         [<Fact>]
-        let test1 () =
-            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(0, 4)))
+        let test1 () = checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(0, 4)))
 
         [<Fact>]
-        let test2 () =
-            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(1, 7)))
+        let test2 () = checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(1, 7)))
 
         [<Fact>]
-        let test3 () =
-            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(2, 5)))
-            
+        let test3 () = checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(2, 5)))
+
     [<Fact>]
     let wiki_HeadingWithSpecialChars_NotEncoded () =
-        let doc1 = FakeDoc.Mk(
-            path = "doc1.md",
-            contentLines = [|
-                "# Doc 1"
-                "## Foo / Bar"
-                "## Baz"
-                //1234
-                "[[#f"
-                "" |])
-        let folder = FakeFolder.Mk([doc1])
+        let doc1 =
+            FakeDoc.Mk(
+                path = "doc1.md",
+                contentLines =
+                    [| "# Doc 1"
+                       "## Foo / Bar"
+                       "## Baz"
+                       //1234
+                       "[[#f"
+                       "" |]
+            )
+
+        let folder = FakeFolder.Mk([ doc1 ])
         checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(3, 4)))
 
     [<Fact>]
@@ -596,9 +593,7 @@ module Candidates =
         let folder = FakeFolder.Mk([ doc1; doc2 ])
 
         [<Fact>]
-        let tagOpening () =
-            checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 16)))
+        let tagOpening () = checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 16)))
 
         [<Fact>]
-        let tagWithName () =
-            checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(2, 15)))
+        let tagWithName () = checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(2, 15)))

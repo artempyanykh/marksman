@@ -16,6 +16,7 @@ open Marksman.Cst
 open Marksman.Diag
 open Marksman.Index
 open Marksman.Misc
+open Marksman.Names
 open Marksman.Paths
 open Marksman.Refs
 open Marksman.State
@@ -24,7 +25,9 @@ open Marksman.Workspace
 module ServerUtil =
     let logger = LogProvider.getLoggerByName "ServerUtil"
 
-    let private isRealWorkspaceFolder (root: string) : bool =
+    let private isRealWorkspaceFolder (root: RootPath) : bool =
+        let root = RootPath.toSystem root
+
         if Directory.Exists(root) then
             let markerFiles = [| ".marksman.toml" |]
             let markerDirs = [| ".git"; ".hg"; ".svn" |]
@@ -40,43 +43,43 @@ module ServerUtil =
             false
 
     // Remove this and related logic when https://github.com/helix-editor/helix/issues/4436 is resolved.
-    let checkWorkspaceFolderWithWarn (root: PathUri) : bool =
-        if isRealWorkspaceFolder root.LocalPath then
+    let checkWorkspaceFolderWithWarn (folderId: FolderId) : bool =
+        if isRealWorkspaceFolder folderId.data then
             true
         else
             logger.warn (
                 Log.setMessage "Workspace folder is bogus"
-                >> Log.addContext "root" root
+                >> Log.addContext "root" folderId.data
             )
 
             false
 
-    let extractWorkspaceFolders (par: InitializeParams) : Map<string, RootPath> =
+    let extractWorkspaceFolders (par: InitializeParams) : Map<string, FolderId> =
         match par.WorkspaceFolders with
         | Some folders ->
             folders
-            |> Array.map (fun { Name = name; Uri = uri } -> name, RootPath.ofString uri)
-            |> Array.filter (fun (_, rootPath) ->
-                checkWorkspaceFolderWithWarn (RootPath.path rootPath))
+            |> Array.map (fun { Name = name; Uri = uri } -> name, UriWith.mkRoot uri)
+            |> Array.filter (fun (_, folderId) -> checkWorkspaceFolderWithWarn folderId)
             |> Map.ofArray
         | _ ->
-            let rootPath = par.RootUri |> Option.orElse par.RootPath
+            let rootUri =
+                par.RootUri
+                |> Option.orElseWith (fun () -> par.RootPath |> Option.map systemPathToUriString)
+                |> Option.map UriWith.mkRoot
 
-            match rootPath with
+            match rootUri with
             | None ->
                 // No folders are configured. The client can still add folders later using a notification.
                 Map.empty
-            | Some rootPath ->
-                let rootUri = PathUri.ofString rootPath
-
+            | Some rootUri ->
                 if checkWorkspaceFolderWithWarn rootUri then
-                    let rootName = Path.GetFileName(rootUri.LocalPath)
+                    let rootName = RootPath.filename rootUri.data
 
-                    Map.ofList [ rootName, RootPath.ofPath rootUri ]
+                    Map.ofList [ rootName, rootUri ]
                 else
                     Map.empty
 
-    let readWorkspace (userConfig: option<Config>) (roots: Map<string, RootPath>) : list<Folder> =
+    let readWorkspace (userConfig: option<Config>) (roots: Map<string, FolderId>) : list<Folder> =
         seq {
             for KeyValue (name, root) in roots do
                 match Folder.tryLoad userConfig name root with
@@ -229,7 +232,8 @@ let calcDiagnosticsUpdate
             )
 
             for docUri in allDocs do
-                let existingDoc = prevState |> Option.bind (State.tryFindDoc docUri)
+                let docPath = UriWith.rootedRelToAbs docUri
+                let existingDoc = prevState |> Option.bind (State.tryFindDoc docPath)
                 let existingDocVersion = Option.bind Doc.version existingDoc
 
                 let existingDocDiag =
@@ -238,7 +242,7 @@ let calcDiagnosticsUpdate
                     |> Option.map snd
                     |> Option.defaultValue [||]
 
-                let newDoc = State.tryFindDoc docUri newState
+                let newDoc = State.tryFindDoc docPath newState
                 let newDocVersion = Option.bind Doc.version newDoc
 
                 let newDocDiag =
@@ -260,7 +264,7 @@ let calcDiagnosticsUpdate
                         >> Log.addContext "doc" docUri
                     )
 
-                    let publishParams = { Uri = docUri.DocumentUri; Diagnostics = newDocDiag }
+                    let publishParams = { Uri = docUri.uri; Diagnostics = newDocDiag }
 
                     yield publishParams
     }
@@ -610,10 +614,10 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDidChange(par: DidChangeTextDocumentParams) =
         withStateExclusive
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.ofString
+            let docPath = par.TextDocument.Uri |> UriWith.mkAbs
 
             let newState =
-                match State.tryFindFolderAndDoc docUri state with
+                match State.tryFindFolderAndDoc docPath state with
                 | Some (folder, doc) ->
                     let newDoc = Doc.applyLspChange par doc
                     let newFolder = Folder.withDoc newDoc folder
@@ -623,7 +627,7 @@ type MarksmanServer(client: MarksmanClient) =
                     logger.warn (
                         Log.setMessage "Document not found"
                         >> Log.addContext "method" "textDocumentDidChange"
-                        >> Log.addContext "uri" docUri
+                        >> Log.addContext "uri" docPath
                     )
 
                     None
@@ -633,24 +637,22 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDidClose(par: DidCloseTextDocumentParams) =
         withStateExclusive
         <| fun state ->
-            let path = par.TextDocument.Uri |> PathUri.ofString
-            let folder = State.tryFindFolderEnclosing path state
+            let path = par.TextDocument.Uri |> UriWith.mkAbs
 
-            match folder with
+            match State.tryFindFolderAndDoc path state with
             | None -> Mutation.empty
-            | Some folder ->
+            | Some (folder, doc) ->
                 let newState =
-                    match Folder.closeDoc path folder with
+                    match Folder.closeDoc (Doc.id doc) folder with
                     | Some folder -> State.updateFolder folder state
                     | _ -> State.removeFolder (Folder.id folder) state
 
                 Mutation.state newState
 
-
     override this.TextDocumentDidOpen(par: DidOpenTextDocumentParams) =
         withStateExclusive
         <| fun state ->
-            let path = par.TextDocument.Uri |> PathUri.ofString
+            let path = par.TextDocument.Uri |> UriWith.mkAbs
 
             let newState =
                 match State.tryFindFolderEnclosing path state with
@@ -658,9 +660,8 @@ type MarksmanServer(client: MarksmanClient) =
                     let configuredExts =
                         (State.userConfigOrDefault state).CoreMarkdownFileExtensions()
 
-                    if isMarkdownFile configuredExts path.LocalPath then
-                        let singletonRoot =
-                            Path.GetDirectoryName path.LocalPath |> RootPath.ofString
+                    if isMarkdownFile configuredExts (AbsPath.toSystem path.data) then
+                        let singletonRoot = UriWith.mkRoot par.TextDocument.Uri
 
                         let doc = Doc.fromLsp singletonRoot par.TextDocument
                         let userConfig = (State.workspace state) |> Workspace.userConfig
@@ -672,8 +673,8 @@ type MarksmanServer(client: MarksmanClient) =
                     let configuredExts =
                         (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-                    if isMarkdownFile configuredExts path.LocalPath then
-                        let doc = Doc.fromLsp (Folder.rootPath folder) par.TextDocument
+                    if isMarkdownFile configuredExts (AbsPath.toSystem path.data) then
+                        let doc = Doc.fromLsp (Folder.id folder) par.TextDocument
                         let newFolder = Folder.withDoc doc folder
                         State.updateFolder newFolder state
                     else
@@ -693,7 +694,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.WorkspaceDidCreateFiles(par: CreateFilesParams) =
         withStateExclusive
         <| fun state ->
-            let docUris = par.Files |> Array.map (fun fc -> PathUri.ofString fc.Uri)
+            let docUris = par.Files |> Array.map (fun fc -> UriWith.mkAbs fc.Uri)
 
             let mutable newState = state
 
@@ -709,8 +710,8 @@ type MarksmanServer(client: MarksmanClient) =
                     let configuredExts =
                         (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-                    if isMarkdownFile configuredExts docUri.LocalPath then
-                        match Doc.tryLoad (Folder.rootPath folder) docUri with
+                    if isMarkdownFile configuredExts (AbsPath.toSystem docUri.data) then
+                        match Doc.tryLoad (Folder.id folder) (Abs docUri.data) with
                         | Some doc ->
                             let newFolder = Folder.withDoc doc folder
                             newState <- State.updateFolder newFolder newState
@@ -729,7 +730,7 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let mutable newState = state
 
-            let deletedUris = par.Files |> Array.map (fun x -> PathUri.ofString x.Uri)
+            let deletedUris = par.Files |> Array.map (fun x -> UriWith.mkAbs x.Uri)
 
             for uri in deletedUris do
                 logger.trace (
@@ -740,7 +741,7 @@ type MarksmanServer(client: MarksmanClient) =
                 match State.tryFindFolderAndDoc uri state with
                 | None -> ()
                 | Some (folder, doc) ->
-                    match Folder.withoutDoc (Doc.path doc) folder with
+                    match Folder.withoutDoc (Doc.id doc) folder with
                     | None -> newState <- State.removeFolder (Folder.id folder) newState
                     | Some newFolder -> newState <- State.updateFolder newFolder newState
 
@@ -757,7 +758,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.ofString
+            let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
             let client = (State.client state)
 
@@ -773,13 +774,13 @@ type MarksmanServer(client: MarksmanClient) =
             logger.trace (Log.setMessage "Completion request start")
 
             let pos = par.Position
-            let docUri = par.TextDocument.Uri |> PathUri.ofString
+            let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
             let candidates =
                 monad' {
-                    let! folder = State.tryFindFolderEnclosing docUri state
+                    let! folder, doc = State.tryFindFolderAndDoc docUri state
 
-                    match Compl.findCandidates folder docUri pos with
+                    match Compl.findCandidatesInDoc folder doc pos with
                     | [||] -> return! None
                     | candidates -> { IsIncomplete = true; Items = candidates }
                 }
@@ -789,18 +790,17 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentDefinition(par: TextDocumentPositionParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.ofString
+            let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
             let goto =
-                monad {
-                    let! folder = State.tryFindFolderEnclosing docUri state
+                monad' {
+                    let! folder, srcDoc = State.tryFindFolderAndDoc docUri state
 
                     let configuredExts =
                         (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-                    let! srcDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let! uref = Uref.ofElement configuredExts atPos
+                    let! uref = Uref.ofElement configuredExts (Doc.id srcDoc) atPos
 
                     let refs = Dest.tryResolveUref uref srcDoc folder
 
@@ -820,18 +820,17 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentHover(par: TextDocumentPositionParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.ofString
+            let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
             let hover =
                 monad {
-                    let! folder = State.tryFindFolderEnclosing docUri state
+                    let! folder, srcDoc = State.tryFindFolderAndDoc docUri state
 
                     let configuredExts =
                         (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-                    let! srcDoc = Folder.tryFindDocByPath docUri folder
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let! uref = Uref.ofElement configuredExts atPos
+                    let! uref = Uref.ofElement configuredExts (Doc.id srcDoc) atPos
                     // NOTE: Due to ambiguity there may be several sources for hover. Since hover
                     // request requires a single result we return the first. When links are not
                     // ambiguous this is OK, otherwise the author is to blame for ambiguity anyway.
@@ -856,12 +855,11 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentReferences(par: ReferenceParams) =
         withState
         <| fun state ->
-            let docUri = par.TextDocument.Uri |> PathUri.ofString
+            let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
             let locs =
                 monad' {
-                    let! folder = State.tryFindFolderEnclosing docUri state
-                    let! curDoc = Folder.tryFindDocByPath docUri folder
+                    let! folder, curDoc = State.tryFindFolderAndDoc docUri state
                     let! atPos = Cst.elementAtPos par.Position (Doc.cst curDoc)
 
                     let referencingEls =
@@ -879,12 +877,11 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentSemanticTokensFull(par: SemanticTokensParams) =
         withState
         <| fun state ->
-            let docPath = par.TextDocument.Uri |> PathUri.ofString
+            let docPath = par.TextDocument.Uri |> UriWith.mkAbs
 
             let tokens =
                 monad' {
-                    let! folder = State.tryFindFolderEnclosing docPath state
-                    let! doc = Folder.tryFindDocByPath docPath folder
+                    let! _, doc = State.tryFindFolderAndDoc docPath state
                     let data = Semato.Token.ofIndexEncoded (Doc.index doc)
                     { ResultId = None; Data = data }
                 }
@@ -894,13 +891,12 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentSemanticTokensRange(par: SemanticTokensRangeParams) =
         withState
         <| fun state ->
-            let docPath = par.TextDocument.Uri |> PathUri.ofString
+            let docPath = par.TextDocument.Uri |> UriWith.mkAbs
             let range = par.Range
 
             let tokens =
                 monad' {
-                    let! folder = State.tryFindFolderEnclosing docPath state
-                    let! doc = Folder.tryFindDocByPath docPath folder
+                    let! _, doc = State.tryFindFolderAndDoc docPath state
                     let data = Semato.Token.ofIndexEncodedInRange (Doc.index doc) range
                     { ResultId = None; Data = data }
                 }
@@ -910,7 +906,7 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentCodeAction(opts: CodeActionParams) =
         withStateExclusive
         <| fun state ->
-            let docPath = opts.TextDocument.Uri |> PathUri.ofString
+            let docPath = opts.TextDocument.Uri |> UriWith.mkAbs
 
             let codeAction title edit =
                 { Title = title
@@ -948,12 +944,11 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentRename(pars) =
         withStateExclusive
         <| fun state ->
-            let docPath = pars.TextDocument.Uri |> PathUri.ofString
+            let docPath = pars.TextDocument.Uri |> UriWith.mkAbs
 
             let edit: option<LspResult<option<WorkspaceEdit>>> =
                 monad' {
-                    let! folder = State.tryFindFolderEnclosing docPath state
-                    let! srcDoc = Folder.tryFindDocByPath docPath folder
+                    let! folder, srcDoc = State.tryFindFolderAndDoc docPath state
 
                     let renameResult =
                         Refactor.rename
@@ -973,12 +968,11 @@ type MarksmanServer(client: MarksmanClient) =
     override this.TextDocumentPrepareRename(pars) =
         withStateExclusive
         <| fun state ->
-            let docPath = pars.TextDocument.Uri |> PathUri.ofString
+            let docPath = pars.TextDocument.Uri |> UriWith.mkAbs
 
             let renameRange =
                 monad' {
-                    let! folder = State.tryFindFolderEnclosing docPath state
-                    let! srcDoc = Folder.tryFindDocByPath docPath folder
+                    let! _, srcDoc = State.tryFindFolderAndDoc docPath state
                     return! Refactor.renameRange srcDoc pars.Position
                 }
 

@@ -27,6 +27,8 @@
         <Compile Include="Misc.fs"/>
         <Compile Include="Paths.fsi"/>
         <Compile Include="Paths.fs"/>
+        <Compile Include="Names.fsi"/>
+        <Compile Include="Names.fs"/>
         <Compile Include="GitIgnore.fs"/>
         <Compile Include="Config.fs"/>
         <Compile Include="Text.fs"/>

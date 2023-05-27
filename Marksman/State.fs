@@ -8,6 +8,7 @@ open FSharpPlus.GenericBuilders
 open Marksman.Diag
 open Marksman.Workspace
 open Marksman.Paths
+open Marksman.Names
 open Marksman.Config
 open Newtonsoft.Json.Linq
 
@@ -125,20 +126,20 @@ module State =
 
     let diag (s: State) = s.Diag()
 
-    let tryFindFolderEnclosing (uri: PathUri) (state: State) : option<Folder> =
-        Workspace.tryFindFolderEnclosing uri state.workspace
+    let tryFindFolderEnclosing (uri: UriWith<AbsPath>) (state: State) : option<Folder> =
+        Workspace.tryFindFolderEnclosing uri.data state.workspace
 
-    let findFolderEnclosing (uri: PathUri) (state: State) : Folder =
+    let findFolderEnclosing (uri: UriWith<AbsPath>) (state: State) : Folder =
         tryFindFolderEnclosing uri state
         |> Option.defaultWith (fun _ -> failwith $"Expected folder not found: {uri}")
 
-    let tryFindFolderAndDoc (uri: PathUri) (state: State) : option<Folder * Doc> =
+    let tryFindFolderAndDoc (uri: UriWith<AbsPath>) (state: State) : option<Folder * Doc> =
         tryFindFolderEnclosing uri state
         |> Option.bind (fun folder ->
-            Folder.tryFindDocByPath uri folder
+            Folder.tryFindDocByPath uri.data folder
             |> Option.map (fun doc -> folder, doc))
 
-    let tryFindDoc (uri: PathUri) (state: State) : option<Doc> =
+    let tryFindDoc (uri: UriWith<AbsPath>) (state: State) : option<Doc> =
         match tryFindFolderAndDoc uri state with
         | None -> None
         | Some (_, doc) -> Some doc
@@ -154,16 +155,14 @@ module State =
             >> Log.addContext "numRemoved" removed.Length
         )
 
-        let removedUris =
-            removed
-            |> Array.map (fun f -> PathUri.ofString f.Uri |> FolderId.ofPath)
+        let removedUris = removed |> Array.map (fun f -> UriWith.mkRoot f.Uri)
 
         let userConfig = workspace state |> Workspace.userConfig
 
         let addedFolders =
             seq {
                 for f in added do
-                    let rootUri = RootPath.ofString f.Uri
+                    let rootUri = UriWith.mkRoot f.Uri
 
                     let folder = Folder.tryLoad userConfig f.Name rootUri
 

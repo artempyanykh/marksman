@@ -6,30 +6,38 @@ open FSharpPlus.Operators
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
+open Marksman.Names
 
 type Node<'A> = { text: string; range: Range; data: 'A }
 
 type TextNode = Node<unit>
+type UrlEncodedNode = Node<UrlEncoded>
+type WikiEncodedNode = Node<WikiEncoded>
 
 module Node =
     let mk text range inner = { text = text; range = range; data = inner }
     let mkText text range : TextNode = mk text range ()
+    let asText node = mkText node.text node.range
     let text node = node.text
     let textOpt nodeOpt def = Option.map text nodeOpt |> Option.defaultValue def
     let range node = node.range
     let data node = node.data
     let inner node = node.data
     let fmtText (node: TextNode) : string = $"{node.text} @ {node.range}"
+    let fmtUrl (node: UrlEncodedNode) : string = $"{node.text} @ {node.range}"
+    let fmtWiki (node: WikiEncodedNode) : string = $"{node.text} @ {node.range}"
 
     let fmtOptText (node: option<TextNode>) : string = fmtOption fmtText node
+    let fmtOptUrl (node: option<UrlEncodedNode>) : string = fmtOption fmtUrl node
+    let fmtOptWiki (node: option<WikiEncodedNode>) : string = fmtOption fmtWiki node
 
 [<RequireQualifiedAccess>]
-type WikiLink = { doc: option<TextNode>; heading: option<TextNode> }
+type WikiLink = { doc: option<WikiEncodedNode>; heading: option<WikiEncodedNode> }
 
 module WikiLink =
-    let destDoc (dest: WikiLink) : option<string> = dest.doc |> Option.map Node.text
+    let destDoc (dest: WikiLink) : option<WikiEncoded> = dest.doc |> Option.map Node.data
 
-    let destHeading (dest: WikiLink) : option<string> = dest.heading |> Option.map Node.text
+    let destHeading (dest: WikiLink) : option<WikiEncoded> = dest.heading |> Option.map Node.data
 
     let fmt (wl: WikiLink) : string =
         let lines = ResizeArray()
@@ -42,11 +50,17 @@ module WikiLink =
 
         String.Join(Environment.NewLine, lines)
 
-    let render (doc: option<string>) (heading: option<string>) (includeBraces: bool) : string =
-        let docText = doc |> Option.defaultValue ""
+    let render
+        (doc: option<WikiEncoded>)
+        (heading: option<WikiEncoded>)
+        (includeBraces: bool)
+        : string =
+        let docText = doc |> Option.map WikiEncoded.raw |> Option.defaultValue ""
 
         let headingText =
-            heading |> Option.map (fun h -> "#" + h) |> Option.defaultValue ""
+            heading
+            |> Option.map (fun h -> "#" + (WikiEncoded.raw h))
+            |> Option.defaultValue ""
 
         let linkText = $"{docText}{headingText}"
         if includeBraces then $"[[{linkText}]]" else linkText
@@ -62,7 +76,7 @@ module WikiLink =
 [<RequireQualifiedAccess>]
 type MdLink =
     // inline
-    | IL of text: TextNode * url: option<TextNode> * title: option<TextNode>
+    | IL of text: TextNode * url: option<UrlEncodedNode> * title: option<TextNode>
     // reference full
     | RF of text: TextNode * label: TextNode
     // reference collapsed
@@ -70,38 +84,37 @@ type MdLink =
     // reference shortcut
     | RS of label: TextNode
 
-type Url =
-    { url: Option<TextNode>
-      anchor: Option<TextNode> }
+type Url<'T> =
+    { url: Option<Node<'T>>
+      anchor: Option<Node<'T>> }
 
     override this.ToString() : string =
         let parts =
             [ this.url
-              |> Option.map Node.fmtText
-              |> Option.map (fun x -> $"docUrl={x}")
+              |> Option.map (fun x -> x.text, x.range)
+              |> Option.map (fun (text, range) -> $"docUrl={text} @ {range}")
               |> Option.toList
               this.anchor
-              |> Option.map Node.fmtText
-              |> Option.map (fun x -> $"anchor={x}")
+              |> Option.map (fun x -> x.text, x.range)
+              |> Option.map (fun (text, range) -> $"anchor={text} @ {range}")
               |> Option.toList ]
             |> List.concat
 
         String.Join(';', parts)
 
 module Url =
-    let anchor (x: Url) = x.anchor
+    let anchor (x: Url<'T>) = x.anchor
 
-    let ofUrlNode (url: TextNode) : Url =
+    let ofTextNode (coder: string -> 'T) (url: TextNode) : Url<'T> =
         let offsetHash = url.text.IndexOf('#')
 
         if offsetHash < 0 then
+            let url = Node.mk url.text url.range (coder url.text)
             { url = Some url; anchor = None }
         else if offsetHash = 0 then
-            let anchor =
-                { url with
-                    text = url.text.TrimStart('#')
-                    range = { url.range with Start = url.range.Start.NextChar(1) } }
-
+            let text = url.text.TrimStart('#')
+            let range = { url.range with Start = url.range.Start.NextChar(1) }
+            let anchor = Node.mk text range (coder text)
             { url = None; anchor = Some anchor }
         else
             let docText = url.text.Substring(0, offsetHash)
@@ -110,7 +123,7 @@ module Url =
                 { url.range with
                     End = Position.Mk(url.range.Start.Line, url.range.Start.Character + offsetHash) }
 
-            let docUrl = Node.mkText docText docRange
+            let docUrl = Node.mk docText docRange (coder docText)
 
             let anchorText = url.text.Substring(offsetHash + 1)
 
@@ -122,16 +135,19 @@ module Url =
                             url.range.Start.Character + offsetHash + 1
                         ) }
 
-            let anchor = Node.mkText anchorText anchorRange
+            let anchor = Node.mk anchorText anchorRange (coder anchorText)
 
             { url = Some docUrl; anchor = Some anchor }
+
+    let ofUrlNode (url: UrlEncodedNode) : Url<UrlEncoded> =
+        ofTextNode UrlEncoded.mkUnchecked (Node.asText url)
 
 module MdLink =
     let fmt (ml: MdLink) : string =
         match ml with
         | MdLink.IL (label, url, title) ->
             let fmtLabel = Node.fmtText label
-            let fmtUrl = Option.map Node.fmtText url |> Option.defaultValue "∅"
+            let fmtUrl = Option.map Node.fmtUrl url |> Option.defaultValue "∅"
             let fmtTitle = Option.map Node.fmtText title |> Option.defaultValue "∅"
             $"IL: label={fmtLabel}; url={fmtUrl}; title={fmtTitle}"
         | MdLink.RF (text, label) ->
@@ -163,7 +179,11 @@ module MdLink =
 
         $"[{text}]({path}{anchor})"
 
-type MdLinkDef = private { label: TextNode; url: TextNode; title: option<TextNode> }
+type MdLinkDef =
+    private
+        { label: TextNode
+          url: UrlEncodedNode
+          title: option<TextNode> }
 
 module MdLinkDef =
     let mk label url title = { label = label; url = url; title = title }
@@ -179,7 +199,7 @@ module MdLinkDef =
 
     let fmt (mld: MdLinkDef) =
         let fmtLabel = Node.fmtText mld.label
-        let fmtUrl = Node.fmtText mld.url
+        let fmtUrl = Node.fmtUrl mld.url
 
         let fmtTitle =
             mld.title |> Option.map Node.fmtText |> Option.defaultValue "∅"

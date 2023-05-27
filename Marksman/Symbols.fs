@@ -4,16 +4,17 @@ open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 open Marksman.Paths
+open Marksman.Names
 open Marksman.Cst
 open Marksman.Workspace
 open Marksman.Index
 
-let headingToSymbolInfo (docUri: PathUri) (h: Node<Heading>) : SymbolInformation =
+let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
     let name = Heading.name h.data
     let name = $"H{h.data.level}: {name}"
     let kind = SymbolKind.String
 
-    let location = { Uri = docUri.DocumentUri; Range = h.range }
+    let location = { Uri = docUri.uri; Range = h.range }
 
     let sym =
         { Name = name
@@ -76,7 +77,7 @@ let docSymbols
         let allHeadings = Doc.index >> Index.headings <| doc
 
         allHeadings
-        |> Seq.map (headingToSymbolInfo (Doc.path doc))
+        |> Seq.map (headingToSymbolInfo (Doc.id doc))
         |> Array.ofSeq
         |> First
 
@@ -91,7 +92,7 @@ let workspaceSymbols (query: string) (ws: Workspace) : array<SymbolInformation> 
                     |> Seq.filter (fun { data = h } -> query.IsSubSequenceOf(Heading.name h))
 
                 let matchingSymbols =
-                    matchingHeadings |> Seq.map (headingToSymbolInfo (Doc.path doc))
+                    matchingHeadings |> Seq.map (headingToSymbolInfo (Doc.id doc))
 
                 yield! matchingSymbols
     }

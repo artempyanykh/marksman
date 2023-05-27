@@ -2,6 +2,7 @@ module Marksman.ParserTests
 
 open Ionide.LanguageServerProtocol.Types
 
+open Marksman.Names
 open Snapper
 open Snapper.Attributes
 open Xunit
@@ -339,16 +340,16 @@ module TagsTests =
               "T: name=tag2; range=(0,7)-(0,11) @ (0,6)-(0,11)" ]
 
 module DocUrlTests =
-    let mkTextNode str = Node.mkText str (Range.Mk(0, 0, 0, str.Length))
+    let mkUrlNode str = Node.mk str (Range.Mk(0, 0, 0, str.Length)) (UrlEncoded.mkUnchecked str)
 
     [<Fact>]
     let test1 () =
-        let actual = mkTextNode "/some.md" |> Url.ofUrlNode
+        let actual = mkUrlNode "/some.md" |> Url.ofUrlNode
         Assert.Equal("docUrl=/some.md @ (0,0)-(0,8)", actual.ToString())
 
     [<Fact>]
     let test2 () =
-        let actual = mkTextNode "/some.md#anchor" |> Url.ofUrlNode
+        let actual = mkUrlNode "/some.md#anchor" |> Url.ofUrlNode
 
         Assert.Equal(
             "docUrl=/some.md @ (0,0)-(0,8);anchor=anchor @ (0,9)-(0,15)",
@@ -358,7 +359,7 @@ module DocUrlTests =
     [<Fact>]
     let test3 () =
         //                       01234567
-        let actual = mkTextNode "#anchor" |> Url.ofUrlNode
+        let actual = mkUrlNode "#anchor" |> Url.ofUrlNode
 
         Assert.Equal("anchor=anchor @ (0,1)-(0,7)", actual.ToString())
 

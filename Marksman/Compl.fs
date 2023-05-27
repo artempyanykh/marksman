@@ -11,6 +11,7 @@ open Marksman.Cst
 open Marksman.Index
 open Marksman.Misc
 open Marksman.Paths
+open Marksman.Names
 open Marksman.Refs
 open Marksman.Text
 open Marksman.Workspace
@@ -19,11 +20,11 @@ let private logger = LogProvider.getLoggerByName "Compl"
 
 [<RequireQualifiedAccess>]
 type PartialElement =
-    | WikiLink of dest: option<TextNode> * heading: option<TextNode> * range: Range
+    | WikiLink of dest: option<WikiEncodedNode> * heading: option<WikiEncodedNode> * range: Range
     | InlineLink of
         text: option<TextNode> *
-        path: option<TextNode> *
-        anchor: option<TextNode> *
+        path: option<UrlEncodedNode> *
+        anchor: option<UrlEncodedNode> *
         range: Range
     | ReferenceLink of label: option<TextNode> * range: Range
     // TODO: consider moving tag opening out of PartialElement due to
@@ -33,9 +34,9 @@ type PartialElement =
     override this.ToString() =
         match this with
         | PartialElement.WikiLink (dest, heading, range) ->
-            $"WL {range}: dest={Node.fmtOptText dest}; heading={Node.fmtOptText heading}"
+            $"WL {range}: dest={Node.fmtOptWiki dest}; heading={Node.fmtOptWiki heading}"
         | PartialElement.InlineLink (text, path, anchor, range) ->
-            $"IL {range}: text={Node.fmtOptText text}; path={Node.fmtOptText path}; anchor={Node.fmtOptText anchor}"
+            $"IL {range}: text={Node.fmtOptText text}; path={Node.fmtOptUrl path}; anchor={Node.fmtOptUrl anchor}"
         | PartialElement.ReferenceLink (label, range) ->
             $"RL {range}: label={Node.fmtOptText label}"
         | TagOpening pos -> $"TO: cursorPos={pos}"
@@ -99,8 +100,12 @@ module PartialElement =
                             inputEnd |>> Cursor.pos |> Option.defaultValue lineRange.End
 
                         let inputRange = Range.Mk(inputRangeStart, inputRangeEnd)
-                        let inputNode = Node.mkText (line.text.Substring(inputRange)) inputRange
-                        let url = Url.ofUrlNode inputNode
+
+                        let inputNode =
+                            let text = line.text.Substring(inputRange)
+                            Node.mkText text inputRange
+
+                        let url = Url.ofTextNode WikiEncoded.mkUnchecked inputNode
                         url.url, url.anchor
                     }
                     |> Option.defaultValue (None, None)
@@ -196,7 +201,9 @@ module PartialElement =
                         Node.mkText text labelRange |> Some
 
                 let path, anchor =
-                    labelNode |>> Url.ofUrlNode |>> (fun url -> url.url, url.anchor)
+                    labelNode
+                    |>> Url.ofTextNode UrlEncoded.mkUnchecked
+                    |>> (fun url -> url.url, url.anchor)
                     |> Option.defaultValue (None, None)
 
                 let elementEnd =
@@ -314,18 +321,21 @@ module Prompt =
             | PE (PartialElement.TagOpening _) -> Some(Tag String.Empty)
 
 module CompletionHelpers =
-    let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) =
-        let docPath = Doc.pathFromRoot doc
+    let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) : WikiEncoded =
+        let docPath = Doc.pathFromRoot doc |> RelPath.toSystem
 
-        match style with
-        | TitleSlug -> Slug.str (Doc.name doc)
-        | FileStem ->
-            let name = docPath |> Path.GetFileNameWithoutExtension
-            name.EncodeForWiki()
-        | FilePathStem ->
-            let extension = docPath |> Path.GetExtension
-            let name = docPath.TrimSuffix(extension)
-            name.EncodePathForWiki()
+        let output =
+            match style with
+            | TitleSlug -> Slug.str (Doc.name doc)
+            | FileStem ->
+                let name = docPath |> Path.GetFileNameWithoutExtension
+                name
+            | FilePathStem ->
+                let extension = docPath |> Path.GetExtension
+                let name = docPath.TrimSuffix(extension)
+                name
+
+        WikiEncoded.encode output
 
 module Completions =
     let wikiDoc
@@ -348,27 +358,30 @@ module Completions =
             match heading with
             | None ->
                 let newText =
-                    WikiLink.render (Some targetLink) None (Completable.isPartial compl)
+                    WikiLink.render (targetLink |> Some) None (Completable.isPartial compl)
 
                 let filterText =
-                    WikiLink.render (Some targetName) None (Completable.isPartial compl)
+                    WikiLink.render
+                        (targetName |> WikiEncoded.mkUnchecked |> Some)
+                        None
+                        (Completable.isPartial compl)
 
                 let range = if Completable.isPartial compl then range else inputRange
                 let textEdit = { Range = range; NewText = newText }
 
                 Some
                     { CompletionItem.Create(targetName) with
-                        Detail = Some(Doc.pathFromRoot doc)
+                        Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                         TextEdit = Some textEdit
                         FilterText = Some filterText }
             | Some _ ->
                 let newText = targetLink
                 let range = inputRange
-                let textEdit = { Range = range; NewText = newText }
+                let textEdit = { Range = range; NewText = WikiEncoded.raw newText }
 
                 Some
                     { CompletionItem.Create(targetName) with
-                        Detail = Some(Doc.pathFromRoot doc)
+                        Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                         TextEdit = Some textEdit
                         FilterText = Some targetName }
         | _ -> None
@@ -385,7 +398,7 @@ module Completions =
             let newText =
                 WikiLink.render
                     None
-                    (completionHeading.EncodeForWiki() |> Some)
+                    (completionHeading |> WikiEncoded.encode |> Some)
                     (Completable.isPartial compl)
 
             let range = if Completable.isPartial compl then range else input.range
@@ -414,12 +427,15 @@ module Completions =
             let newText =
                 WikiLink.render
                     (targetLink |> Some)
-                    (heading.EncodeForWiki() |> Some)
+                    (WikiEncoded.encode heading |> Some)
                     (Completable.isPartial compl)
 
 
             let filterText =
-                WikiLink.render (Some targetLink) (Some heading) (Completable.isPartial compl)
+                WikiLink.render
+                    (Some targetLink)
+                    (heading |> WikiEncoded.mkUnchecked |> Some)
+                    (Completable.isPartial compl)
 
             let range =
                 if Completable.isPartial compl then
@@ -431,7 +447,7 @@ module Completions =
 
             Some
                 { CompletionItem.Create(label) with
-                    Detail = Some(Doc.pathFromRoot doc)
+                    Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                     TextEdit = Some textEdit
                     FilterText = Some filterText }
         | _ -> None
@@ -472,7 +488,7 @@ module Completions =
                     FilterText = Some newText }
 
     let inlineDoc (pos: Position) (compl: Completable) (doc: Doc) : option<CompletionItem> =
-        let targetPath = (Doc.pathFromRoot doc)
+        let targetPath = (Doc.pathFromRoot doc) |> RelPath.toSystem
         let targetPathEncoded = targetPath.AbsPathUrlEncode()
 
         let detail =
@@ -547,7 +563,7 @@ module Completions =
         (compl: Completable)
         (targetDoc: Doc, targetHeading: string)
         : option<CompletionItem> =
-        let targetPath = Doc.pathFromRoot targetDoc
+        let targetPath = Doc.pathFromRoot targetDoc |> RelPath.toSystem
         let targetPathEncoded = targetPath.AbsPathUrlEncode()
         let label = $"{targetPath} / {targetHeading}"
 
@@ -618,7 +634,7 @@ module Candidates =
         let candidates =
             match destPart with
             | None -> Folder.docs folder
-            | Some name -> FileLink.filterFuzzyMatchingDocs folder srcDoc name
+            | Some name -> FileLink.filterFuzzyMatchingDocs folder name
 
         candidates |> Seq.filter (fun d -> d <> srcDoc) |> Array.ofSeq
 
@@ -630,7 +646,7 @@ module Candidates =
         : array<Doc * string> =
         let targetDocs =
             destPart
-            |> Option.map (FileLink.filterFuzzyMatchingDocs folder srcDoc)
+            |> Option.map (FileLink.filterFuzzyMatchingDocs folder)
             |> Option.defaultValue [ srcDoc ]
 
         let targetDocs =
@@ -719,7 +735,7 @@ let findCandidatesForCompl
     match Prompt.ofCompletable pos compl with
     | None -> [||]
     | Some (WikiDoc input) ->
-        let destPart = Some(InternName input)
+        let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
 
         cand
@@ -731,7 +747,7 @@ let findCandidatesForCompl
         |> Array.map snd
         |> Array.choose (Completions.wikiHeadingInSrcDoc (config.ComplWikiStyle()) pos compl)
     | Some (WikiHeadingInOtherDoc (destPart, headingPart)) ->
-        let destPart = Some(InternName destPart)
+        let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) destPart)
 
         let cand =
             Candidates.findHeadingCandidates folder srcDoc destPart headingPart
@@ -743,7 +759,9 @@ let findCandidatesForCompl
         cand |> Array.choose (Completions.reference pos compl)
     | Some (InlineDoc input) ->
         let cand =
-            match InternName.ofUrl (config.CoreMarkdownFileExtensions()) input with
+            match
+                InternName.mkChecked (config.CoreMarkdownFileExtensions()) (Doc.id srcDoc) input
+            with
             | None when input.IsEmpty() -> Candidates.findDocCandidates folder srcDoc None
             | None -> [||]
             | Some destPart -> Candidates.findDocCandidates folder srcDoc (Some destPart)
@@ -757,7 +775,9 @@ let findCandidatesForCompl
         |> Array.choose (Completions.inlineAnchorInSrcDoc pos compl)
     | Some (InlineAnchorInOtherDoc (pathPart, anchorPart)) ->
         let cand =
-            match InternName.ofUrl (config.CoreMarkdownFileExtensions()) pathPart with
+            match
+                InternName.mkChecked (config.CoreMarkdownFileExtensions()) (Doc.id srcDoc) pathPart
+            with
             | None -> [||]
             | Some destPart ->
                 Candidates.findHeadingCandidates folder srcDoc (Some destPart) anchorPart
@@ -775,10 +795,3 @@ let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) : array<Comp
     | Some compl ->
         logger.trace (Log.setMessage "Found completion point" >> Log.addContext "comp" compl)
         findCandidatesForCompl folder doc pos compl
-
-let findCandidates (folder: Folder) (docUri: PathUri) (pos: Position) : array<CompletionItem> =
-    let doc = Folder.tryFindDocByPath docUri folder
-
-    match doc with
-    | None -> [||]
-    | Some doc -> findCandidatesInDoc folder doc pos

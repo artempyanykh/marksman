@@ -7,13 +7,13 @@ open Marksman.Paths
 open Marksman.Semato
 open Marksman.Workspace
 
-let folderPath = (dummyRootPath [ "folder" ]) |> RootPath.ofString
+let folderPath = (dummyRootPath [ "folder" ]) |> mkFolderId
 
 let nthToken (data: array<uint32>) n = data[n * 5 .. n * 5 + 4]
 
 [<Fact>]
 let testEncoding () =
-    let docPath = dummyRootPath [ "folder"; "doc1.md" ] |> PathUri.ofString
+    let docPath = dummyRootPath [ "folder"; "doc1.md" ] |> mkDocId folderPath
 
     let content =
         """# Title
@@ -22,7 +22,7 @@ Start with [[a-wiki-link]]. Then a [ref-link].
 <blank>
 End with [[wiki-link-no-eol]] and #tag."""
 
-    let doc = Doc.mk docPath folderPath None (Text.mkText content)
+    let doc = Doc.mk docPath None (Text.mkText content)
     let data = Token.ofIndexEncoded (Doc.index doc)
     Assert.Equal(5 * 5, data.Length)
 

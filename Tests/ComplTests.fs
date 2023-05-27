@@ -8,7 +8,6 @@ open Snapper
 open Marksman.Helpers
 open Marksman.Compl
 open Marksman.Misc
-open Marksman.Workspace
 
 let tryParsePartialElement text line col = PartialElement.inText text (Position.Mk(line, col))
 let parsePartialElement text line col = tryParsePartialElement text line col |> Option.get
@@ -306,15 +305,15 @@ module Candidates =
 
     [<Fact>]
     let noDupsOnAchor_intraFile () =
-        checkSnapshot (findCandidates globalFolder (Doc.path globalDoc1) (Position.Mk(1, 3)))
+        checkSnapshot (findCandidatesInDoc globalFolder globalDoc1 (Position.Mk(1, 3)))
 
     [<Fact>]
     let noDupsOnAchor_crossFile () =
-        checkSnapshot (findCandidates globalFolder (Doc.path globalDoc2) (Position.Mk(1, 5)))
+        checkSnapshot (findCandidatesInDoc globalFolder globalDoc2 (Position.Mk(1, 5)))
 
     [<Fact>]
     let fileWithSpaces_anchor () =
-        checkSnapshot (findCandidates globalFolder (Doc.path globalDoc1) (Position.Mk(6, 15)))
+        checkSnapshot (findCandidatesInDoc globalFolder globalDoc1 (Position.Mk(6, 15)))
 
     [<Fact>]
     let docAndHeadingFuzzy () =
@@ -330,7 +329,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 5)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 5)))
 
     [<Fact>]
     let referenceEmptyBrackets () =
@@ -342,7 +341,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 1)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 1)))
 
     [<Fact>]
     let referenceNonEmptyBrackets () =
@@ -354,7 +353,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 2)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 2)))
 
     [<Fact>]
     let inlineEmpty () =
@@ -365,7 +364,7 @@ module Candidates =
         let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Doc 3" |])
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 3)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 3)))
 
     [<Fact>]
     let partialWikiDoc () =
@@ -376,7 +375,7 @@ module Candidates =
         let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Doc 3" |])
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 2)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 2)))
 
     [<Fact>]
     let partialWikiHeading () =
@@ -388,7 +387,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 3)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 3)))
 
     [<Fact>]
     let partialWikiDocHeading () =
@@ -403,7 +402,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 4)))
 
 
     [<Fact>]
@@ -422,7 +421,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 4)))
 
 
     [<Fact>]
@@ -441,7 +440,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 4)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 4)))
 
     [<Fact>]
     let partialWikiDoc_FileStem_ArbitraryPath () =
@@ -453,7 +452,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1; doc2 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 5)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 5)))
 
     [<Fact>]
     let partialReferenceEmpty () =
@@ -465,7 +464,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 1)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 1)))
 
     [<Fact>]
     let partialInlineHeading () =
@@ -477,7 +476,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 8)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 8)))
 
     [<Fact>]
     let partialInlineDoc () =
@@ -488,7 +487,7 @@ module Candidates =
         let doc3 = FakeDoc.Mk(path = "doc3.md", contentLines = [| "# Doc 3" |])
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 3)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 3)))
 
     [<StoreSnapshotsPerClass>]
     module WikiWithSpaces_TitleSlug =
@@ -503,15 +502,15 @@ module Candidates =
 
         [<Fact>]
         let test1 () =
-            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(0, 3)))
+            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(0, 3)))
 
         [<Fact>]
         let test2 () =
-            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(1, 5)))
+            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(1, 5)))
 
         [<Fact>]
         let test3 () =
-            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(2, 5)))
+            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(2, 5)))
 
     [<StoreSnapshotsPerClass>]
     module WikiWithSpaces_FileStem =
@@ -532,15 +531,15 @@ module Candidates =
 
         [<Fact>]
         let test1 () =
-            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(0, 4)))
+            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(0, 4)))
 
         [<Fact>]
         let test2 () =
-            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(1, 7)))
+            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(1, 7)))
 
         [<Fact>]
         let test3 () =
-            checkSnapshot (findCandidates folder (Doc.path doc4) (Position.Mk(2, 5)))
+            checkSnapshot (findCandidatesInDoc folder doc4 (Position.Mk(2, 5)))
             
     [<Fact>]
     let wiki_HeadingWithSpecialChars_NotEncoded () =
@@ -554,7 +553,7 @@ module Candidates =
                 "[[#f"
                 "" |])
         let folder = FakeFolder.Mk([doc1])
-        checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(3, 4)))
+        checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(3, 4)))
 
     [<Fact>]
     // # has a special meaning in URIs. Because of this Uri library doesn't handle
@@ -576,7 +575,7 @@ module Candidates =
 
         let folder = FakeFolder.Mk([ doc1; doc2 ], config)
 
-        checkSnapshot (findCandidates folder (Doc.path doc2) (Position.Mk(0, 14)))
+        checkSnapshot (findCandidatesInDoc folder doc2 (Position.Mk(0, 14)))
 
     [<StoreSnapshotsPerClass>]
     module Tags =
@@ -598,8 +597,8 @@ module Candidates =
 
         [<Fact>]
         let tagOpening () =
-            checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(1, 16)))
+            checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(1, 16)))
 
         [<Fact>]
         let tagWithName () =
-            checkSnapshot (findCandidates folder (Doc.path doc1) (Position.Mk(2, 15)))
+            checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(2, 15)))

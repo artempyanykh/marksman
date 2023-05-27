@@ -12,95 +12,51 @@ open Marksman.Cst
 open Marksman.Index
 open Marksman.Misc
 open Marksman.Paths
+open Marksman.Names
 open Marksman.Workspace
-
-type InternName = InternName of string
-
-module InternName =
-    let name (InternName s) = s
-
-    let ofUrl (configuredExts: array<string>) url : option<InternName> =
-        if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
-            None
-        else if isPotentiallyMarkdownFile configuredExts url then
-            Some(InternName url)
-        else
-            None
-
-    let tryResolveToRootPath
-        (folderPath: RootPath)
-        (srcDocPath: PathUri)
-        (url: string)
-        : option<string> =
-        if Uri.IsWellFormedUriString(url, UriKind.Absolute) then
-            None
-        else if url.StartsWith('/') then
-            Some(url.AbsPathUrlEncodedToRelPath())
-        else
-            try
-                let srcDirComponents =
-                    Path
-                        .GetDirectoryName(srcDocPath.LocalPath)
-                        .Split(Path.DirectorySeparatorChar)
-
-                // Make sure to retain the root component of the path
-                if srcDocPath.LocalPath.StartsWith('/') && srcDirComponents[0] = "" then
-                    srcDirComponents[0] <- "/"
-
-                let urlComponents = url.AbsPathUrlEncodedToRelPath().Split('\\', '/')
-                let allComponents = Array.append srcDirComponents urlComponents
-                let targetPath = Path.Combine(allComponents)
-                let targetPathNormalized = (PathUri.ofString targetPath).LocalPath
-                let folderPathNormalized = (RootPath.path folderPath).LocalPath
-
-                let rooted =
-                    if targetPathNormalized.StartsWith(folderPathNormalized) then
-                        let relPath =
-                            Path.GetRelativePath(folderPathNormalized, targetPathNormalized)
-
-                        let relPathNormalized =
-                            String.concat "/" (relPath.Split(Path.DirectorySeparatorChar))
-
-                        Some relPathNormalized
-                    else
-                        None
-
-                rooted
-            with
-            | :? UriFormatException
-            | :? InvalidOperationException -> None
 
 type InternNameNode = Node<InternName>
 
 module InternNameNode =
     let mk name range : InternNameNode = { text = InternName.name name; range = range; data = name }
 
-    let ofTextUnchecked { text = text; range = range } : InternNameNode = mk (InternName text) range
+    let ofTextUnchecked src { text = text; range = range } : InternNameNode =
+        mk (InternName.mkUnchecked src text) range
 
     let ofTextChecked
         (configuredExts: array<string>)
+        (src: DocId)
         { text = text; range = range }
         : option<InternNameNode> =
-        InternName.ofUrl configuredExts text
+        InternName.mkChecked configuredExts src text
         |> Option.map (fun sym -> mk sym range)
 
 /// Unresolved reference.
 [<RequireQualifiedAccess>]
 type Uref =
     | Doc of InternNameNode
-    | Heading of doc: option<InternNameNode> * heading: TextNode
+    | Heading of doc: option<InternNameNode> * heading: HeadingNode
     | LinkDef of TextNode
 
+and HeadingNode =
+    | Wiki of WikiEncodedNode
+    | Url of UrlEncodedNode
+
+    member this.Text =
+        match this with
+        | Wiki n -> n.text
+        | Url n -> n.text
+
 module Uref =
-    let ofElement (configuredExts: array<string>) (el: Element) : option<Uref> =
+    let ofElement (configuredExts: array<string>) (srcId: DocId) (el: Element) : option<Uref> =
         match el with
         | WL wl ->
             match wl.data.doc, wl.data.heading with
             | Some doc, Some heading ->
-                Uref.Heading(Some(InternNameNode.ofTextUnchecked doc), heading)
+                Uref.Heading(Some(InternNameNode.ofTextUnchecked srcId doc), Wiki heading)
                 |> Some
-            | Some doc, None -> Uref.Doc(InternNameNode.ofTextUnchecked doc) |> Some
-            | None, Some heading -> Uref.Heading(None, heading) |> Some
+            | Some doc, None -> Uref.Doc(InternNameNode.ofTextUnchecked srcId doc) |> Some
+            | None, Some heading -> Uref.Heading(None, Wiki heading) |> Some
             | None, None -> None
         | ML ml ->
             match ml.data with
@@ -109,11 +65,12 @@ module Uref =
 
                 match docUrl.url, docUrl.anchor with
                 | Some url, Some anchor ->
-                    InternNameNode.ofTextChecked configuredExts url
-                    |> Option.map (fun sym -> Uref.Heading(Some(sym), anchor))
+                    InternNameNode.ofTextChecked configuredExts srcId url
+                    |> Option.map (fun sym -> Uref.Heading(Some(sym), Url anchor))
                 | Some url, None ->
-                    InternNameNode.ofTextChecked configuredExts url |> Option.map Uref.Doc
-                | None, Some anchor -> Uref.Heading(None, anchor) |> Some
+                    InternNameNode.ofTextChecked configuredExts srcId url
+                    |> Option.map Uref.Doc
+                | None, Some anchor -> Uref.Heading(None, Url anchor) |> Some
                 | None, None -> None
             | MdLink.IL (_, None, _) -> None
             | MdLink.RS label
@@ -143,30 +100,36 @@ type FileLink = { link: string; kind: FileLinkKind; dest: Doc }
 module FileLink =
     let dest { dest = dest } = dest
 
-    let tryMatchDoc (folder: Folder) (srcDoc: Doc) (InternName name) (doc: Doc) : option<FileLink> =
+    // TODO: this should be redone
+    let tryMatchDoc (folder: Folder) (name: InternName) (doc: Doc) : option<FileLink> =
         let titleLink =
-            if (Slug.ofString name) = (Doc.slug doc) then
-                Some { link = name; kind = FileLinkKind.Title; dest = doc }
+            if (InternName.slug name) = (Doc.slug doc) then
+                Some { link = InternName.name name; kind = FileLinkKind.Title; dest = doc }
             else
                 None
 
-        let linkRootPath =
-            InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
+        let linkRootPath = InternName.tryAsPath name
 
         let fileStemLink, fileNameLink, filePathLink =
             match linkRootPath with
             | Some linkRootPath ->
-                let docFileStem = Path.GetFileNameWithoutExtension(Doc.pathFromRoot doc)
+                let docFileStem =
+                    Path.GetFileNameWithoutExtension(Doc.pathFromRoot doc |> RelPath.toSystem)
 
                 let fileStemLink =
+                    let name = InternName.name name
+
                     if name.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode() then
                         Some { link = name; kind = FileLinkKind.FileStem; dest = doc }
                     else
                         None
 
-                let docFileName = Path.GetFileName(Doc.pathFromRoot doc)
+                let docFileName =
+                    Path.GetFileName(Doc.pathFromRoot doc |> RelPath.toSystem)
 
                 let fileNameLink =
+                    let name = InternName.name name
+
                     if name.AbsPathUrlEncode() = docFileName.AbsPathUrlEncode() then
                         Some { link = name; kind = FileLinkKind.FileName; dest = doc }
                     else
@@ -174,13 +137,16 @@ module FileLink =
 
                 let filePathLink =
                     try
+                        let name = InternName.name name
                         let nameFileStem = Path.GetFileNameWithoutExtension(name)
 
                         if
                             nameFileStem.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode()
-                            && linkRootPath
+                            && (linkRootPath.path |> RelPath.toSystem)
                                 .AbsPathUrlEncode()
-                                .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
+                                .IsSubStringOf(
+                                    (Doc.pathFromRoot doc |> RelPath.toSystem).AbsPathUrlEncode()
+                                )
                         then
                             Some { link = name; kind = FileLinkKind.FilePath; dest = doc }
                         else
@@ -205,26 +171,24 @@ module FileLink =
         | Some _, Some _ when completionStyle = Config.TitleSlug -> titleLink
         | Some _, Some _ -> fileLink
 
-    let isFuzzyMatchDoc (folder: Folder) (srcDoc: Doc) (InternName name) (doc: Doc) : bool =
-        let byTitle = Slug.isSubString (Slug.ofString name) (Doc.slug doc)
+    let isFuzzyMatchDoc (folder: Folder) (name: InternName) (doc: Doc) : bool =
+        let byTitle = Slug.isSubString (InternName.slug name) (Doc.slug doc)
 
         let byPath () =
-            match
-                InternName.tryResolveToRootPath (Folder.rootPath folder) (Doc.path srcDoc) name
-            with
+            match InternName.tryAsPath name with
             | Some linkRootPath ->
-                linkRootPath
+                (linkRootPath.path |> RelPath.toSystem)
                     .AbsPathUrlEncode()
-                    .IsSubStringOf((Doc.pathFromRoot doc).AbsPathUrlEncode())
+                    .IsSubStringOf((Doc.pathFromRoot doc |> RelPath.toSystem).AbsPathUrlEncode())
             | None -> false
 
         byTitle || byPath ()
 
-    let filterMatchingDocs (folder: Folder) (srcDoc: Doc) (name: InternName) : seq<FileLink> =
-        Folder.docs folder |> Seq.choose (tryMatchDoc folder srcDoc name)
+    let filterMatchingDocs (folder: Folder) (name: InternName) : seq<FileLink> =
+        Folder.docs folder |> Seq.choose (tryMatchDoc folder name)
 
-    let filterFuzzyMatchingDocs (folder: Folder) (srcDoc: Doc) (name: InternName) : seq<Doc> =
-        Folder.docs folder |> Seq.filter (isFuzzyMatchDoc folder srcDoc name)
+    let filterFuzzyMatchingDocs (folder: Folder) (name: InternName) : seq<Doc> =
+        Folder.docs folder |> Seq.filter (isFuzzyMatchDoc folder name)
 
 type DocLink =
     | Explicit of FileLink
@@ -301,14 +265,13 @@ module Dest =
             | None -> Seq.empty
             | Some ld -> [ ld ]
         | Uref.Doc docName ->
-            let doc = FileLink.filterMatchingDocs folder srcDoc docName.data
+            let doc = FileLink.filterMatchingDocs folder docName.data
             doc |>> Dest.Doc
         | Uref.Heading (docName, heading) ->
             let matchingDocs =
                 docName
                 |> Option.map (fun docName ->
-                    FileLink.filterMatchingDocs folder srcDoc docName.data
-                    |> Seq.map Explicit)
+                    FileLink.filterMatchingDocs folder docName.data |> Seq.map Explicit)
                 |> Option.defaultValue [ Implicit srcDoc ]
 
             seq {
@@ -317,7 +280,7 @@ module Dest =
                         doc
                         |> DocLink.doc
                         |> Doc.index
-                        |> Index.filterHeadingBySlug (Slug.ofString heading.text)
+                        |> Index.filterHeadingBySlug (Slug.ofString heading.Text)
 
                     for h in headings do
                         yield Dest.Heading(doc, h)
@@ -327,7 +290,7 @@ module Dest =
         let configuredExts =
             (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-        match Uref.ofElement configuredExts element with
+        match Uref.ofElement configuredExts (Doc.id doc) element with
         | Some uref -> tryResolveUref uref doc folder
         | None -> Seq.empty
 

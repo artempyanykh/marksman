@@ -1,11 +1,11 @@
 module Marksman.DiagTest
 
-open System.IO
 open Xunit
 
 open Marksman.Diag
 open Marksman.Helpers
 open Marksman.Index
+open Marksman.Names
 open Marksman.Paths
 open Marksman.Workspace
 
@@ -13,11 +13,11 @@ let entryToHuman (entry: Entry) =
     let lsp = diagToLsp entry
     lsp.Message
 
-let diagToHuman (diag: seq<PathUri * list<Entry>>) : list<string * string> =
+let diagToHuman (diag: seq<DocId * list<Entry>>) : list<string * string> =
     seq {
-        for path, entries in diag do
+        for id, entries in diag do
             for e in entries do
-                yield Path.GetFileName path.LocalPath, entryToHuman e
+                yield id.data.path |> RelPath.toSystem, entryToHuman e
     }
     |> List.ofSeq
 

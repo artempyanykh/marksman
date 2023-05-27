@@ -5,6 +5,7 @@ open Ionide.LanguageServerProtocol.Types
 open Xunit
 
 open Marksman.Misc
+open Marksman.Names
 open Marksman.Paths
 open Marksman.Workspace
 open Marksman.Config
@@ -17,18 +18,18 @@ module FolderTest =
         let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a")
         let f1 = Folder.singleFile d1 None
 
-        Assert.Equal(dummyRootPath [ "a" ] |> RootPath.ofString, Folder.rootPath f1)
+        Assert.Equal((dummyRootPath [ "a" ] |> mkFolderId).data, Folder.rootPath f1)
 
 module DocTest =
     [<Fact>]
     let applyLspChange () =
-        let dummyPath = (dummyRootPath [ "dummy.md" ])
+        let dummyPath = (dummyRootPath [ "dummy.md" ]) |> mkDocId (mkFolderId dummyRoot)
 
         let empty =
-            Doc.mk (PathUri.ofString dummyPath) (RootPath.ofString dummyRoot) None (Text.mkText "")
+            Doc.mk dummyPath None (Text.mkText "")
 
         let insertChange =
-            { TextDocument = { Uri = pathToUri dummyPath; Version = Some 1 }
+            { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.data; Version = Some 1 }
               ContentChanges =
                 [| { Range = Some(Range.Mk(0, 0, 0, 0))
                      RangeLength = Some 0
@@ -40,7 +41,7 @@ module DocTest =
     [<Fact(Skip = "Uri and # don't mix well")>]
     let pathFromRoot_SpecialChars () =
         let doc = FakeDoc.Mk(path = "blah#blah.md", contentLines = [||])
-        Assert.Equal("blah#blah.md", Doc.pathFromRoot doc)
+        Assert.Equal("blah#blah.md", Doc.pathFromRoot doc |> RelPath.toSystem)
 
 module WorkspaceTest =
     [<Fact>]
@@ -52,8 +53,8 @@ module WorkspaceTest =
 
         let ws = Workspace.ofFolders None [ f1; f2 ]
 
-        let f0Path = dummyRootPath [ "a" ] |> PathUri.ofString
-        let f0 = Folder.multiFile "f0" (RootPath.ofPath f0Path) Map.empty None
+        let f0Path = dummyRootPath [ "a" ] |> mkFolderId
+        let f0 = Folder.multiFile "f0" f0Path Map.empty None
 
         let updWs = Workspace.withFolder f0 ws
 
@@ -64,10 +65,10 @@ module WorkspaceTest =
     [<Fact>]
     let folderConfig_noUserConfig () =
         let fConfig = Some { Config.Default with caTocEnable = Some false }
-        let fPath = dummyRootPath [ "a" ] |> PathUri.ofString
+        let fPath = dummyRootPath [ "a" ] |> mkFolderId
 
         // Multi-file
-        let f = (Folder.multiFile "f0" (RootPath.ofPath fPath) Map.empty fConfig)
+        let f = (Folder.multiFile "f0" fPath Map.empty fConfig)
         let ws = Workspace.ofFolders None [ f ]
         let f = (Workspace.folders ws) |> Seq.head
         let updatedConfig = Folder.config f
@@ -84,10 +85,10 @@ module WorkspaceTest =
     [<Fact>]
     let folderConfig_userConfig () =
         let wsConfig = Some { Config.Default with caTocEnable = Some false }
-        let fPath = dummyRootPath [ "a" ] |> PathUri.ofString
+        let fPath = dummyRootPath [ "a" ] |> mkFolderId
 
         // Multi-file
-        let f = (Folder.multiFile "f0" (RootPath.ofPath fPath) Map.empty None)
+        let f = (Folder.multiFile "f0" fPath Map.empty None)
         let ws = Workspace.ofFolders wsConfig [ f ]
         let f = (Workspace.folders ws) |> Seq.head
         let updatedConfig = Folder.config f
@@ -104,11 +105,11 @@ module WorkspaceTest =
     [<Fact>]
     let folderConfig_userConfig_folderAdd () =
         let wsConfig = Some { Config.Default with caTocEnable = Some false }
-        let fPath = dummyRootPath [ "a" ] |> PathUri.ofString
+        let fPath = dummyRootPath [ "a" ] |> mkFolderId
 
         // Multi-file
         let ws = Workspace.ofFolders wsConfig []
-        let f = (Folder.multiFile "f0" (RootPath.ofPath fPath) Map.empty None)
+        let f = (Folder.multiFile "f0" fPath Map.empty None)
         let ws = Workspace.withFolder f ws
         let f = (Workspace.folders ws) |> Seq.head
         let updatedConfig = Folder.config f

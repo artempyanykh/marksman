@@ -6,6 +6,7 @@ open Markdig.Syntax
 
 open Marksman.Cst
 open Marksman.Misc
+open Marksman.Names
 open Marksman.Text
 
 module Markdown =
@@ -236,13 +237,18 @@ module Markdown =
                 let doc =
                     match link.Doc, link.DocSpan with
                     | Some doc, Some docSpan ->
-                        Node.mkText doc (sourceSpanToRange text docSpan) |> Some
+                        Node.mk doc (sourceSpanToRange text docSpan) (WikiEncoded.mkUnchecked doc)
+                        |> Some
                     | _ -> None
 
                 let heading =
                     match link.Heading, link.HeadingSpan with
                     | Some heading, Some headingSpan ->
-                        Node.mkText heading (sourceSpanToRange text headingSpan) |> Some
+                        Node.mk
+                            heading
+                            (sourceSpanToRange text headingSpan)
+                            (WikiEncoded.mkUnchecked heading)
+                        |> Some
                     | _ -> None
 
                 let wikiLink: WikiLink = { doc = doc; heading = heading }
@@ -278,7 +284,12 @@ module Markdown =
                             if urlSpan.IsEmpty then
                                 None
                             else
-                                Some(Node.mkText url (sourceSpanToRange text urlSpan))
+                                Some(
+                                    Node.mk
+                                        url
+                                        (sourceSpanToRange text urlSpan)
+                                        (UrlEncoded.mkUnchecked url)
+                                )
 
                         let title =
                             if titleSpan.IsEmpty then
@@ -318,7 +329,9 @@ module Markdown =
 
                 let url = linkDef.Url
                 let urlSpan = linkDef.UrlSpan
-                let url = Node.mkText url (sourceSpanToRange text urlSpan)
+
+                let url =
+                    Node.mk url (sourceSpanToRange text urlSpan) (UrlEncoded.mkUnchecked url)
 
                 let title =
                     if linkDef.TitleSpan.IsEmpty then

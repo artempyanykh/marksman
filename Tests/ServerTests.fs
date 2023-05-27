@@ -33,13 +33,13 @@ module ServerUtilTests =
     [<Fact>]
     let textSync_NoConfigNonEmptyWS_PreferIncr () =
         let clientDesc = {ClientDescription.empty with opts = {preferredTextSyncKind = Some Incremental }}
-        let folder = Folder.multiFile "test" (dummyRootPath ["test"] |> RootPath.ofString) Map.empty None
+        let folder = Folder.multiFile "test" (dummyRootPath ["test"] |> mkFolderId) Map.empty None
         let ws = Workspace.ofFolders None [folder]
         Assert.Equal(("clientOption", Incremental), ServerUtil.calcTextSync None ws clientDesc)
         
     [<Fact>]
     let textSync_NonEmptyWS_PreferIncrButConfigTakesPrecedence () =
         let clientDesc = {ClientDescription.empty with opts = {preferredTextSyncKind = Some Incremental }}
-        let folder = Folder.multiFile "test" (dummyRootPath ["test"] |> RootPath.ofString) Map.empty (Some {Config.Empty with coreTextSync = Some Full })
+        let folder = Folder.multiFile "test" (dummyRootPath ["test"] |> mkFolderId) Map.empty (Some {Config.Empty with coreTextSync = Some Full })
         let ws = Workspace.ofFolders None [folder]
         Assert.Equal(("workspaceConfig", Full), ServerUtil.calcTextSync None ws clientDesc)

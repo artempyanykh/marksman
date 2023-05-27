@@ -3,7 +3,7 @@ module Marksman.Diag
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Workspace
-open Marksman.Paths
+open Marksman.Names
 
 module Lsp = Ionide.LanguageServerProtocol.Types
 
@@ -55,7 +55,7 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
     let configuredExts =
         (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-    let uref = Uref.ofElement configuredExts link
+    let uref = Uref.ofElement configuredExts (Doc.id doc) link
 
     match uref with
     | None -> []
@@ -73,10 +73,10 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
             | ML { data = MdLink.RS _ } -> []
             | ML { data = MdLink.IL _ } ->
                 match uref with
-                | Uref.Doc { data = InternName name } ->
+                | Uref.Doc { data = name } ->
                     // Inline links to docs that don't look like a markdown file should not
                     // produce diagnostics
-                    if isMarkdownFile configuredExts name then
+                    if isMarkdownFile configuredExts (InternName.name name) then
                         [ BrokenLink(link, uref) ]
                     else
                         []
@@ -89,7 +89,7 @@ let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
     let links = Doc.index >> Index.links <| doc
     links |> Seq.collect (checkLink folder doc)
 
-let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
+let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
     seq {
         for doc in Folder.docs folder do
             let docDiag =
@@ -99,7 +99,7 @@ let checkFolder (folder: Folder) : seq<PathUri * list<Entry>> =
                 }
                 |> List.ofSeq
 
-            Doc.path doc, docDiag
+            Doc.id doc, docDiag
     }
 
 let refToHuman (ref: Dest) : string =
@@ -109,15 +109,15 @@ let refToHuman (ref: Dest) : string =
         $"heading {Heading.name heading} in the document {Doc.name (DocLink.doc docLink)}"
     | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
 
-let docRefToHuman (InternName name) : string = $"document '{name}'"
+let docRefToHuman (name: InternName) : string = $"document '{name.name}'"
 
 let urefToHuman (uref: Uref) : string =
     match uref with
     | Uref.Doc { data = name } -> docRefToHuman name
     | Uref.Heading (docLink, heading) ->
         match docLink with
-        | None -> $"heading '{Node.text heading}'"
-        | Some { data = name } -> $"heading '{Node.text heading}' in {docRefToHuman name}"
+        | None -> $"heading '{heading.Text}'"
+        | Some { data = name } -> $"heading '{heading.Text}' in {docRefToHuman name}"
     | Uref.LinkDef ld -> $"link definition with the label '{Node.text ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
@@ -182,7 +182,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           Tags = None
           Data = None }
 
-type FolderDiag = array<PathUri * array<Lsp.Diagnostic>>
+type FolderDiag = array<DocId * array<Lsp.Diagnostic>>
 
 module FolderDiag =
     let mk (folder: Folder) : FolderDiag =

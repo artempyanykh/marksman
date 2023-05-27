@@ -1,17 +1,14 @@
 name: Release
-
 on:
   workflow_dispatch:
     inputs:
       name:
-        description: 'Release name'
+        description: "Release name"
         required: true
-
 jobs:
   build:
     name: Build the release for ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
-
     strategy:
       matrix:
         os:
@@ -19,39 +16,41 @@ jobs:
             exe: marksman.exe
             task: publishTo
           - runner: ubuntu-latest
-            exe: marksman
-            task: publishTo
+            exe: marksman-linux-x64
+            task: publishTo RID=linux-x64
+          - runner: ubuntu-latest
+            exe: marksman-linux-arm64
+            task: publishTo RID=linux-arm64
           - runner: macos-latest
             exe: marksman
             task: macosUniversalBinary
-
     steps:
       - uses: actions/checkout@v3
-
       - name: Setup dotnet
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '7.0.x'
-
+          dotnet-version: "7.0.x"
       - name: Install dependencies
         run: dotnet restore
-
       - name: Build the release binary
         run: make ${{ matrix.os.task }} DEST=out
-
+      - name: Rename linux binary
+        shell: python
+        run: |
+          import os
+          if ("${{ matrix.os.exe }}" == "marksman-linux-x64" or
+             "${{ matrix.os.exe }}" == "marksman-linux-arm64"):
+            os.rename("out/marksman", "out/${{ matrix.os.exe }}")
       - name: Upload the binary
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
+          name: ${{ matrix.os.exe }}
           path: out/${{ matrix.os.exe }}
           if-no-files-found: error
-
   release:
     name: Create the release for ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
-
     needs: build
-
     strategy:
       matrix:
         os:
@@ -59,25 +58,25 @@ jobs:
             exe: marksman.exe
             release_exe: marksman.exe
           - runner: ubuntu-latest
-            exe: marksman
-            release_exe: marksman-linux
+            exe: marksman-linux-x64
+            release_exe: marksman-linux-x64
+          - runner: ubuntu-latest
+            exe: marksman-linux-arm64
+            release_exe: marksman-linux-arm64
           - runner: macos-latest
             exe: marksman
             release_exe: marksman-macos
-
     steps:
       - id: download
         name: Download the release binary
         uses: actions/download-artifact@v3
         with:
-          name: ${{ matrix.os.runner }}-${{ matrix.os.exe }}
-
+          name: ${{ matrix.os.exe }}
       - name: Rename the binary
         shell: python
         run: |
           import os
           os.rename("${{ matrix.os.exe }}", "${{ matrix.os.release_exe }}")
-
       - name: Create a GH release
         uses: softprops/action-gh-release@v1
         with:

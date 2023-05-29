@@ -115,3 +115,28 @@ module WatchGlobTest =
     [<Fact>]
     let test1 () =
         Assert.Equal("**/*.{md,markdown,mdx}", mkWatchGlob [| "md"; "markdown"; "mdx" |])
+
+module SuffixTreeTests =
+    let tree =
+        SuffixTree.ofSeq [ [ "a"; "b"; "c" ], 1; [ "a"; "b"; "d" ], 2; [ "b" ], 3; [ "c" ], 4 ]
+
+    [<Fact>]
+    let filterTest () =
+        let actual = SuffixTree.filterMatchingValues [ "c" ] tree |> List.ofSeq
+        Assert.Equal<int>([ 4; 1 ], actual)
+
+        let actual = SuffixTree.filterMatchingValues [ "d" ] tree |> List.ofSeq
+        Assert.Equal<int>([ 2 ], actual)
+
+        let actual =
+            SuffixTree.filterMatchingValues [ "b"; "c" ] tree |> List.ofSeq
+
+        Assert.Equal<int>([ 1 ], actual)
+
+        let actual = SuffixTree.filterMatchingValues [ "e" ] tree |> List.ofSeq
+        Assert.Equal<int>([], actual)
+
+        let actual =
+            SuffixTree.filterMatchingValues [ "b"; "z" ] tree |> List.ofSeq
+
+        Assert.Equal<int>([], actual)

@@ -321,21 +321,17 @@ module Prompt =
             | PE (PartialElement.TagOpening _) -> Some(Tag String.Empty)
 
 module CompletionHelpers =
-    let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) : WikiEncoded =
-        let docPath = Doc.pathFromRoot doc |> RelPath.toSystem
+    let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) : WikiDest =
+        let docPath = Doc.pathFromRoot doc
 
-        let output =
-            match style with
-            | TitleSlug -> Slug.str (Doc.name doc)
-            | FileStem ->
-                let name = docPath |> Path.GetFileNameWithoutExtension
-                name
-            | FilePathStem ->
-                let extension = docPath |> Path.GetExtension
-                let name = docPath.TrimSuffix(extension)
-                name
-
-        WikiEncoded.encode output
+        match style with
+        | TitleSlug -> Slug.str (Doc.name doc) |> WTitle
+        | FileStem ->
+            let name = docPath |> RelPath.filenameStem
+            WPath(Approx(RelPath name))
+        | FilePathStem ->
+            let name = docPath |> RelPath.filepathStem
+            WPath(ExactAbs(RootedRelPath.mk (Doc.rootPath doc) (Rel name)))
 
 module Completions =
     let wikiDoc
@@ -358,7 +354,10 @@ module Completions =
             match heading with
             | None ->
                 let newText =
-                    WikiLink.render (targetLink |> Some) None (Completable.isPartial compl)
+                    WikiLink.render
+                        (WikiDest.encode targetLink |> Some)
+                        None
+                        (Completable.isPartial compl)
 
                 let filterText =
                     WikiLink.render
@@ -377,7 +376,9 @@ module Completions =
             | Some _ ->
                 let newText = targetLink
                 let range = inputRange
-                let textEdit = { Range = range; NewText = WikiEncoded.raw newText }
+
+                let textEdit =
+                    { Range = range; NewText = WikiEncoded.raw (WikiDest.encode newText) }
 
                 Some
                     { CompletionItem.Create(targetName) with
@@ -426,14 +427,14 @@ module Completions =
 
             let newText =
                 WikiLink.render
-                    (targetLink |> Some)
+                    (targetLink |> WikiDest.encode |> Some)
                     (WikiEncoded.encode heading |> Some)
                     (Completable.isPartial compl)
 
 
             let filterText =
                 WikiLink.render
-                    (Some targetLink)
+                    (targetLink |> WikiDest.encode |> Some)
                     (heading |> WikiEncoded.mkUnchecked |> Some)
                     (Completable.isPartial compl)
 

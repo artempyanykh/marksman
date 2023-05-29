@@ -7,6 +7,7 @@ open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 open Marksman.Names
+open Marksman.Paths
 
 type Node<'A> = { text: string; range: Range; data: 'A }
 
@@ -33,6 +34,18 @@ module Node =
 
 [<RequireQualifiedAccess>]
 type WikiLink = { doc: option<WikiEncodedNode>; heading: option<WikiEncodedNode> }
+
+type WikiDest =
+    | WTitle of string
+    | WPath of InternPath
+
+module WikiDest =
+    let encode wd =
+        match wd with
+        | WTitle t -> WikiEncoded.encode t
+        | WPath p ->
+            let relPath = (InternPath.toRel >> RelPath.toSystem) p
+            relPath.EncodePathForWiki() |> WikiEncoded.mkUnchecked
 
 module WikiLink =
     let destDoc (dest: WikiLink) : option<WikiEncoded> = dest.doc |> Option.map Node.data

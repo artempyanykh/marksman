@@ -15,7 +15,7 @@ open Marksman.Workspace
 module InternNameTests =
     let internAsPath docId name =
         InternName.tryAsPath (InternName.mkUnchecked docId name)
-        |> Option.map (fun x -> x.path |> RelPath.toSystem)
+        |> Option.map (InternPath.toRel >> RelPath.toSystem)
 
     [<Fact>]
     let relPath_1 () =
@@ -66,7 +66,7 @@ module InternNameTests =
 
         let actual = internAsPath docPath "www.google.com" |> Option.get
 
-        Assert.Equal("subfolder/www.google.com", actual)
+        Assert.Equal("www.google.com", actual)
 
     [<Fact>]
     let url_schema () =

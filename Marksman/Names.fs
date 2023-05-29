@@ -28,6 +28,18 @@ type DocId = UriWith<RootedRelPath>
 
 type InternName = { src: DocId; name: string }
 
+type InternPath =
+    | ExactAbs of RootedRelPath
+    | ExactRel of src: DocId * path: RootedRelPath
+    | Approx of RelPath
+
+module InternPath =
+    let toRel =
+        function
+        | ExactAbs { path = path }
+        | ExactRel (_, { path = path }) -> path
+        | Approx path -> path
+
 module InternName =
     let mkUnchecked src name = { src = src; name = name }
 
@@ -56,13 +68,20 @@ module InternName =
 
             let rootPath = src.data.root
             let namePath = RootedRelPath.mk rootPath relPath
-            Some(namePath)
+            Some(ExactAbs namePath)
         else
             try
                 let rawNamePath =
                     LocalPath.ofSystem (UrlEncoded.mkUnchecked name |> UrlEncoded.decode)
 
-                RootedRelPath.combine (RootedRelPath.directory src.data) rawNamePath
+                if LocalPath.hasDotComponents rawNamePath then
+                    RootedRelPath.combine (RootedRelPath.directory src.data) rawNamePath
+                    |> Option.map (fun x -> ExactRel(src, x))
+                else
+                    match rawNamePath with
+                    | Abs _ -> None
+                    | Rel path -> Some(Approx path)
+
             with
             | :? UriFormatException
             | :? InvalidOperationException -> None

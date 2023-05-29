@@ -5,6 +5,8 @@ open System.IO
 open System.Runtime.InteropServices
 open System.Text
 
+open Marksman.Misc
+
 open Ionide.LanguageServerProtocol.Types
 
 // https://github.dev/fsharp/FsAutoComplete/blob/d90597c2e073b7e88390f2b1933b031ff8a9a009/src/FsAutoComplete.Core/Utils.fs#L635
@@ -152,6 +154,11 @@ module RelPath =
     let toSystem (RelPath p) = p
     let filename (RelPath p) = Path.GetFileName(p)
     let filenameStem (RelPath p) = Path.GetFileNameWithoutExtension(p)
+
+    let filepathStem (RelPath p) =
+        let ext = Path.GetExtension(p)
+        RelPath(p.TrimSuffix(ext))
+
     let directory (RelPath p) = Path.GetDirectoryName(p) |> RelPath
 
 
@@ -189,6 +196,8 @@ module LocalPath =
         let raw = toSystem path
         let components = raw.Split([| '\\'; '/' |])
         Array.filter (String.IsNullOrEmpty >> not) components
+
+    let hasDotComponents path = components path |> Array.exists (fun x -> x = "." || x = "..")
 
     let ofComponents comps =
         assert (Array.length comps > 0)

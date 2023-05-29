@@ -26,6 +26,7 @@ module RelPath =
     val toSystem: RelPath -> string
     val filename: RelPath -> string
     val filenameStem: RelPath -> string
+    val filepathStem: RelPath -> RelPath
 
 module LocalPath =
     val tryOfSystem: string -> Option<LocalPath>
@@ -37,6 +38,7 @@ module LocalPath =
     val asAbsolute: LocalPath -> AbsPath
     val isRelative: LocalPath -> bool
     val components: LocalPath -> array<string>
+    val hasDotComponents: LocalPath -> bool
     val normalize: LocalPath -> LocalPath
     val appendFile: LocalPath -> filename: string -> LocalPath
     val combine: LocalPath -> LocalPath -> LocalPath

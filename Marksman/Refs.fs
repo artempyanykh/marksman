@@ -142,7 +142,7 @@ module FileLink =
 
                         if
                             nameFileStem.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode()
-                            && (linkRootPath.path |> RelPath.toSystem)
+                            && (linkRootPath |> InternPath.toRel |> RelPath.toSystem)
                                 .AbsPathUrlEncode()
                                 .IsSubStringOf(
                                     (Doc.pathFromRoot doc |> RelPath.toSystem).AbsPathUrlEncode()
@@ -177,7 +177,7 @@ module FileLink =
         let byPath () =
             match InternName.tryAsPath name with
             | Some linkRootPath ->
-                (linkRootPath.path |> RelPath.toSystem)
+                (linkRootPath |> InternPath.toRel |> RelPath.toSystem)
                     .AbsPathUrlEncode()
                     .IsSubStringOf((Doc.pathFromRoot doc |> RelPath.toSystem).AbsPathUrlEncode())
             | None -> false

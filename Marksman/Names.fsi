@@ -26,11 +26,19 @@ type DocId = UriWith<RootedRelPath>
 
 type InternName = { src: DocId; name: string }
 
+type InternPath =
+    | ExactAbs of RootedRelPath
+    | ExactRel of src: DocId * path: RootedRelPath
+    | Approx of RelPath
+
+module InternPath =
+    val toRel: InternPath -> RelPath
+
 module InternName =
     val mkUnchecked: DocId -> string -> InternName
     val mkChecked: exts: seq<string> -> DocId -> name: string -> option<InternName>
     val name: InternName -> string
     val slug: InternName -> Slug
     val src: InternName -> DocId
-    val tryAsPath: InternName -> option<RootedRelPath>
-    val asPath: InternName -> RootedRelPath
+    val tryAsPath: InternName -> option<InternPath>
+    val asPath: InternName -> InternPath

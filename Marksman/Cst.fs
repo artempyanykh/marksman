@@ -57,9 +57,12 @@ module WikiLink =
         : string =
         let docText = doc |> Option.map WikiEncoded.raw |> Option.defaultValue ""
 
+        let renderHeading h = "#" + (WikiEncoded.raw h)
+
         let headingText =
             heading
-            |> Option.map (fun h -> "#" + (WikiEncoded.raw h))
+            |> Option.map renderHeading
+
             |> Option.defaultValue ""
 
         let linkText = $"{docText}{headingText}"

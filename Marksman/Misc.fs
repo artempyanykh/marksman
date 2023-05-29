@@ -223,3 +223,47 @@ module LinkLabel =
         LinkLabel normWs
 
     let isSubSequenceOf (LinkLabel other) (LinkLabel this) = other.IsSubSequenceOf(this)
+
+type SuffixTree<'K, 'V> when 'K: comparison =
+    { nodes: Map<'K, SuffixTree<'K, 'V>>; value: option<'V> }
+
+module SuffixTree =
+    let empty = { nodes = Map.empty; value = None }
+
+    let add (key: list<'K>) (value: 'V) (st: SuffixTree<'K, 'V>) : SuffixTree<'K, 'V> =
+        let rec go key st =
+            match key with
+            | [] -> { st with value = Some value }
+            | keyHead :: keyTail ->
+                let tailTree = Map.tryFind keyHead st.nodes |> Option.defaultValue empty
+                let tailTree = go keyTail tailTree
+                { nodes = Map.add keyHead tailTree st.nodes; value = st.value }
+
+        go (List.rev key) st
+
+    let ofSeq (sx: seq<list<'K> * 'V>) : SuffixTree<'K, 'V> =
+        Seq.fold (fun st (key, value) -> add key value st) empty sx
+
+    let rec private findSubtree keyRev st =
+        match keyRev with
+        | [] -> st
+        | keyHead :: keyTail ->
+            match Map.tryFind keyHead st.nodes with
+            | None -> empty
+            | Some sub -> findSubtree keyTail sub
+
+    let rec collectValues (st: SuffixTree<'K, 'V>) =
+        seq {
+            match st.value with
+            | Some v -> yield v
+            | None -> ()
+
+            for sub in st.nodes |> Map.values do
+                yield! collectValues sub
+        }
+
+
+    let filterMatchingValues (key: list<'K>) (st: SuffixTree<'K, 'V>) : seq<'V> =
+        let key = List.rev key
+        let st = findSubtree key st
+        st |> collectValues

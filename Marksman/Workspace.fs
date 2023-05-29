@@ -138,64 +138,93 @@ type MultiFile =
 
     member this.RootPath = this.root.data
 
+
 type SingleFile = { doc: Doc; config: option<Config> }
 
-type Folder =
+type FolderData =
     | MultiFile of MultiFile
     | SingleFile of SingleFile
+
+type FolderLookup = { docsBySlug: Map<Slug, list<Doc>> }
+
+module FolderLookup =
+    let mk (data: FolderData) =
+        match data with
+        | SingleFile data ->
+            let bySlug = Map.ofList [ Doc.slug data.doc, [ data.doc ] ]
+            { docsBySlug = bySlug }
+        | MultiFile data ->
+            let bySlug =
+                Map.toSeq data.docs
+                |> Seq.map snd
+                |> Seq.groupBy Doc.slug
+                |> Seq.map (fun (slug, docs) -> slug, List.ofSeq docs)
+                |> Map.ofSeq
+
+            { docsBySlug = bySlug }
+
+type Folder = { data: FolderData; lookup: FolderLookup }
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
     let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
 
-    let singleFile doc config = SingleFile { doc = doc; config = config }
+    let mk data =
+        let lookup = FolderLookup.mk data
+        { data = data; lookup = lookup }
 
-    let isSingleFile =
-        function
+    let singleFile doc config : Folder =
+        let data = SingleFile { doc = doc; config = config }
+        mk data
+
+    let multiFile name root docs config =
+        let data =
+            MultiFile({ name = name; root = root; docs = docs; config = config })
+
+        mk data
+
+    let isSingleFile folder =
+        match folder.data with
         | SingleFile _ -> true
         | MultiFile _ -> false
 
-    let multiFile name root docs config =
-        MultiFile({ name = name; root = root; docs = docs; config = config })
-
-
-    let config =
-        function
+    let config folder =
+        match folder.data with
         | SingleFile { config = config } -> config
         | MultiFile { config = config } -> config
 
     let configOrDefault folder = config folder |> Option.defaultValue Config.Default
 
-    let withConfig config =
-        function
-        | SingleFile folder -> SingleFile { folder with config = config }
-        | MultiFile folder -> MultiFile { folder with config = config }
+    let withConfig config folder =
+        match folder.data with
+        | SingleFile folder -> SingleFile { folder with config = config } |> mk
+        | MultiFile folder -> MultiFile { folder with config = config } |> mk
 
-    let docs: Folder -> seq<Doc> =
-        function
+    let docs folder =
+        match folder.data with
         | SingleFile { doc = doc } -> Seq.singleton doc
         | MultiFile { docs = docs } -> Map.values docs
 
-    let id: Folder -> FolderId =
-        function
+    let id folder =
+        match folder.data with
         | MultiFile { root = root } -> root
         | SingleFile { doc = doc } -> { uri = Doc.uri doc; data = RootPath(Doc.path doc) }
 
-    let rootPath: Folder -> RootPath =
-        function
+    let rootPath folder : RootPath =
+        match folder.data with
         | MultiFile { root = root } -> root.data
         | SingleFile { doc = doc } -> Doc.rootPath doc
 
-    let tryFindDocByPath (uri: AbsPath) : Folder -> option<Doc> =
-        function
+    let tryFindDocByPath (uri: AbsPath) folder : option<Doc> =
+        match folder.data with
         | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> Doc.path x = uri)
         | MultiFile { root = root; docs = docs } ->
             let rooted = (RootedRelPath.mk root.data (Abs uri))
             Map.tryFind rooted.path docs
 
-    let tryFindDocByRelPath (path: RelPath) : Folder -> option<Doc> =
-        function
+    let tryFindDocByRelPath (path: RelPath) folder : option<Doc> =
+        match folder.data with
         | SingleFile { doc = doc } ->
             Some doc
             |> Option.filter (fun x ->
@@ -338,12 +367,7 @@ module Folder =
                 |> Map.ofSeq
 
 
-            MultiFile
-                { name = name
-                  root = folderId
-                  docs = documents
-                  config = folderConfig }
-            |> Some
+            multiFile name folderId documents folderConfig |> Some
         else
             logger.warn (
                 Log.setMessage "Folder path doesn't exist"
@@ -352,25 +376,29 @@ module Folder =
 
             None
 
-    let withDoc (newDoc: Doc) : Folder -> Folder =
-        function
+    let withDoc (newDoc: Doc) folder : Folder =
+        match folder.data with
         | MultiFile folder ->
             if newDoc.RootPath <> folder.RootPath then
                 failwith
                     $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.RootPath}"
 
-            MultiFile { folder with docs = Map.add newDoc.RelPath newDoc folder.docs }
+            let data =
+                MultiFile { folder with docs = Map.add newDoc.RelPath newDoc folder.docs }
+
+            mk data
         | SingleFile ({ doc = existingDoc } as folder) ->
             if newDoc.id <> existingDoc.id then
                 failwith
                     $"Updating a singleton folder with an unrelated doc: folder={existingDoc.RootPath}; doc={newDoc.RootPath}"
 
-            SingleFile { folder with doc = newDoc }
+            mk (SingleFile { folder with doc = newDoc })
 
-    let withoutDoc (docId: DocId) : Folder -> option<Folder> =
-        function
+    let withoutDoc (docId: DocId) folder : option<Folder> =
+        match folder.data with
         | MultiFile folder ->
             MultiFile { folder with docs = Map.remove docId.data.path folder.docs }
+            |> mk
             |> Some
         | SingleFile { doc = doc } ->
             if doc.id <> docId then
@@ -380,7 +408,7 @@ module Folder =
                 None
 
     let closeDoc (docId: DocId) (folder: Folder) : option<Folder> =
-        match folder with
+        match folder.data with
         | MultiFile { root = root } ->
             match Doc.tryLoad root (Abs <| RootedRelPath.toAbs docId.data) with
             | Some doc -> withDoc doc folder |> Some
@@ -395,18 +423,13 @@ module Folder =
     /// Find document matching a slug.
     /// First check for full match. When nothing matches, check fuzzy substring match.
     let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
-        let hasSameSlug doc = Doc.slug doc = slug
-        let hasMatchingSlug doc = Slug.isSubSequence slug (Doc.slug doc)
+        folder.lookup.docsBySlug
+        |> Map.tryFind slug
+        |> Option.defaultValue []
+        |> Seq.ofList
 
-        let filtered = docs folder |> Seq.filter hasSameSlug
-
-        let filtered =
-            if Seq.isEmpty filtered then
-                docs folder |> Seq.filter hasMatchingSlug
-            else
-                filtered
-
-        filtered
+    let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
+        failwith "not implemented"
 
     // TODO: rework
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
@@ -418,8 +441,8 @@ module Folder =
 
         docs folder |> Seq.tryFind isMatchingDoc
 
-    let docCount: Folder -> int =
-        function
+    let docCount folder : int =
+        match folder.data with
         | SingleFile _ -> 1
         | MultiFile { docs = docs } -> docs.Values.Count
 
@@ -427,7 +450,7 @@ type Workspace = { config: option<Config>; folders: Map<FolderId, Folder> }
 
 module Workspace =
     // TODO(arr): reconsider the need for this function (when we load folders we require userConfig)
-    let mergeFolderConfig userConfig folder =
+    let mergeFolderConfig userConfig (folder: Folder) =
         let merged = Config.mergeOpt (Folder.config folder) userConfig
         Folder.withConfig merged folder
 
@@ -467,13 +490,13 @@ module Workspace =
         let newFolder = mergeFolderConfig workspace.config newFolder
 
         let updatedFolders =
-            match newFolder with
+            match newFolder.data with
             | SingleFile _ -> Map.add (Folder.id newFolder) newFolder workspace.folders
             | MultiFile { root = root } ->
                 let newRoot = root.data
 
-                let isEnclosed _ existingFolder =
-                    match existingFolder with
+                let isEnclosed _ (existingFolder: Folder) =
+                    match existingFolder.data with
                     | MultiFile _ -> false
                     | SingleFile _ ->
                         let existingRoot = Abs (Folder.rootPath existingFolder).Path

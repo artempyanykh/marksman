@@ -71,9 +71,6 @@ type FakeDoc =
 type FakeFolder =
     class
         static member Mk(docs: seq<Doc>, ?config: Config.Config) : Folder =
-            let docsMap =
-                docs |> Seq.map (fun d -> Doc.pathFromRoot d, d) |> Map.ofSeq
-
             let folderId = UriWith.mkRoot dummyRootUri
-            Folder.multiFile "dummy" folderId docsMap config
+            Folder.multiFile "dummy" folderId docs config
     end

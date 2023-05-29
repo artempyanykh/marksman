@@ -100,78 +100,7 @@ type FileLink = { link: string; kind: FileLinkKind; dest: Doc }
 module FileLink =
     let dest { dest = dest } = dest
 
-    // TODO: this should be redone
-    let tryMatchDoc (folder: Folder) (name: InternName) (doc: Doc) : option<FileLink> =
-        let titleLink =
-            if (InternName.slug name) = (Doc.slug doc) then
-                Some { link = InternName.name name; kind = FileLinkKind.Title; dest = doc }
-            else
-                None
-
-        let linkRootPath = InternName.tryAsPath name
-
-        let fileStemLink, fileNameLink, filePathLink =
-            match linkRootPath with
-            | Some linkRootPath ->
-                let docFileStem =
-                    Path.GetFileNameWithoutExtension(Doc.pathFromRoot doc |> RelPath.toSystem)
-
-                let fileStemLink =
-                    let name = InternName.name name
-
-                    if name.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode() then
-                        Some { link = name; kind = FileLinkKind.FileStem; dest = doc }
-                    else
-                        None
-
-                let docFileName =
-                    Path.GetFileName(Doc.pathFromRoot doc |> RelPath.toSystem)
-
-                let fileNameLink =
-                    let name = InternName.name name
-
-                    if name.AbsPathUrlEncode() = docFileName.AbsPathUrlEncode() then
-                        Some { link = name; kind = FileLinkKind.FileName; dest = doc }
-                    else
-                        None
-
-                let filePathLink =
-                    try
-                        let name = InternName.name name
-                        let nameFileStem = Path.GetFileNameWithoutExtension(name)
-
-                        if
-                            nameFileStem.AbsPathUrlEncode() = docFileStem.AbsPathUrlEncode()
-                            && (linkRootPath |> InternPath.toRel |> RelPath.toSystem)
-                                .AbsPathUrlEncode()
-                                .IsSubStringOf(
-                                    (Doc.pathFromRoot doc |> RelPath.toSystem).AbsPathUrlEncode()
-                                )
-                        then
-                            Some { link = name; kind = FileLinkKind.FilePath; dest = doc }
-                        else
-                            None
-                    with :? ArgumentException ->
-                        None
-
-                fileStemLink, fileNameLink, filePathLink
-            | None -> None, None, None
-
-        let completionStyle = (Folder.configOrDefault folder).ComplWikiStyle()
-
-        let fileLink =
-            fileStemLink
-            |> Option.orElse fileNameLink
-            |> Option.orElse filePathLink
-
-        match titleLink, fileLink with
-        | Some _, None -> titleLink
-        | None, Some _ -> fileLink
-        | None, None -> None
-        | Some _, Some _ when completionStyle = Config.TitleSlug -> titleLink
-        | Some _, Some _ -> fileLink
-
-    let isFuzzyMatchDoc (folder: Folder) (name: InternName) (doc: Doc) : bool =
+    let isFuzzyMatchDoc (name: InternName) (doc: Doc) : bool =
         let byTitle = Slug.isSubString (InternName.slug name) (Doc.slug doc)
 
         let byPath () =
@@ -185,10 +114,56 @@ module FileLink =
         byTitle || byPath ()
 
     let filterMatchingDocs (folder: Folder) (name: InternName) : seq<FileLink> =
-        Folder.docs folder |> Seq.choose (tryMatchDoc folder name)
+        let completionStyle = (Folder.configOrDefault folder).ComplWikiStyle()
+
+        let byTitle: Map<Doc, FileLinkKind> =
+            Folder.filterDocsBySlug (InternName.name name |> Slug.ofString) folder
+            |> Seq.map (fun doc -> doc, FileLinkKind.Title)
+            |> Map.ofSeq
+
+        let byPath: Map<Doc, FileLinkKind> =
+            InternName.tryAsPath name
+            |> Option.map (fun path ->
+                let relPath = InternPath.toRel path
+
+                let docs = Folder.filterDocsByInternPath path folder
+
+                docs
+                |> Seq.map (fun doc ->
+                    let docPath = Doc.pathFromRoot doc
+
+                    let linkKind =
+                        if docPath = relPath then
+                            FileLinkKind.FilePath
+                        else if (RelPath.filenameStem docPath) = (RelPath.filenameStem relPath) then
+                            FileLinkKind.FileStem
+                        else
+                            FileLinkKind.FileName
+
+                    doc, linkKind))
+            |> Option.defaultValue []
+            |> Map.ofSeq
+
+        let main, aux =
+            if completionStyle = Config.TitleSlug then
+                byTitle, byPath
+            else
+                byPath, byTitle
+
+        let merged =
+            let aux = Map.keys main |> Seq.fold (flip Map.remove) aux
+            Map.fold (fun m k v -> Map.add k v m) aux main
+
+        let link = InternName.name name
+
+        seq {
+            for KeyValue (doc, linkKind) in merged do
+                yield { link = link; kind = linkKind; dest = doc }
+        }
+
 
     let filterFuzzyMatchingDocs (folder: Folder) (name: InternName) : seq<Doc> =
-        Folder.docs folder |> Seq.filter (isFuzzyMatchDoc folder name)
+        Folder.docs folder |> Seq.filter (isFuzzyMatchDoc name)
 
 type DocLink =
     | Explicit of FileLink

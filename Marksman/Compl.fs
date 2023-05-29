@@ -330,7 +330,7 @@ module CompletionHelpers =
             let name = docPath |> RelPath.filenameStem
             WPath(Approx(RelPath name))
         | FilePathStem ->
-            let name = docPath |> RelPath.filepathStem
+            let (PathStem name) = docPath |> RelPath.filepathStem
             WPath(ExactAbs(RootedRelPath.mk (Doc.rootPath doc) (Rel name)))
 
 module Completions =

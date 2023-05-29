@@ -107,6 +107,8 @@ and LocalPath =
         | Abs (AbsPath str)
         | Rel (RelPath str) -> str
 
+type PathStem<'T> = PathStem of 'T
+
 module AbsPath =
     let isRawWinAbsPath str = String.length str >= 2 && Char.IsLetter(str[0]) && str[1] = ':'
 
@@ -157,9 +159,11 @@ module RelPath =
 
     let filepathStem (RelPath p) =
         let ext = Path.GetExtension(p)
-        RelPath(p.TrimSuffix(ext))
+        PathStem(RelPath(p.TrimSuffix(ext)))
 
     let directory (RelPath p) = Path.GetDirectoryName(p) |> RelPath
+
+    let hasExtension (RelPath p) = Path.GetExtension(p).IsEmpty() |> not
 
 
 module LocalPath =

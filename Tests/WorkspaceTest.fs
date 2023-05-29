@@ -54,7 +54,7 @@ module WorkspaceTest =
         let ws = Workspace.ofFolders None [ f1; f2 ]
 
         let f0Path = dummyRootPath [ "a" ] |> mkFolderId
-        let f0 = Folder.multiFile "f0" f0Path Map.empty None
+        let f0 = Folder.multiFile "f0" f0Path Seq.empty None
 
         let updWs = Workspace.withFolder f0 ws
 
@@ -68,7 +68,7 @@ module WorkspaceTest =
         let fPath = dummyRootPath [ "a" ] |> mkFolderId
 
         // Multi-file
-        let f = (Folder.multiFile "f0" fPath Map.empty fConfig)
+        let f = (Folder.multiFile "f0" fPath Seq.empty fConfig)
         let ws = Workspace.ofFolders None [ f ]
         let f = (Workspace.folders ws) |> Seq.head
         let updatedConfig = Folder.config f
@@ -88,7 +88,7 @@ module WorkspaceTest =
         let fPath = dummyRootPath [ "a" ] |> mkFolderId
 
         // Multi-file
-        let f = (Folder.multiFile "f0" fPath Map.empty None)
+        let f = (Folder.multiFile "f0" fPath Seq.empty None)
         let ws = Workspace.ofFolders wsConfig [ f ]
         let f = (Workspace.folders ws) |> Seq.head
         let updatedConfig = Folder.config f
@@ -109,7 +109,7 @@ module WorkspaceTest =
 
         // Multi-file
         let ws = Workspace.ofFolders wsConfig []
-        let f = (Folder.multiFile "f0" fPath Map.empty None)
+        let f = (Folder.multiFile "f0" fPath Seq.empty None)
         let ws = Workspace.withFolder f ws
         let f = (Workspace.folders ws) |> Seq.head
         let updatedConfig = Folder.config f

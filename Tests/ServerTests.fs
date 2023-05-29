@@ -38,7 +38,7 @@ module ServerUtilTests =
             { ClientDescription.empty with opts = { preferredTextSyncKind = Some Incremental } }
 
         let folder =
-            Folder.multiFile "test" (dummyRootPath [ "test" ] |> mkFolderId) Map.empty None
+            Folder.multiFile "test" (dummyRootPath [ "test" ] |> mkFolderId) Seq.empty None
 
         let ws = Workspace.ofFolders None [ folder ]
         Assert.Equal(("clientOption", Incremental), ServerUtil.calcTextSync None ws clientDesc)
@@ -52,7 +52,7 @@ module ServerUtilTests =
             Folder.multiFile
                 "test"
                 (dummyRootPath [ "test" ] |> mkFolderId)
-                Map.empty
+                Seq.empty
                 (Some { Config.Empty with coreTextSync = Some Full })
 
         let ws = Workspace.ofFolders None [ folder ]

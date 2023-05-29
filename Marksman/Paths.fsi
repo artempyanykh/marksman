@@ -11,6 +11,8 @@ type LocalPath =
     | Abs of AbsPath
     | Rel of RelPath
 
+type PathStem<'T> = PathStem of 'T
+
 module AbsPath =
     val ofUri: DocumentUri -> AbsPath
     val ofSystem: string -> AbsPath
@@ -26,7 +28,8 @@ module RelPath =
     val toSystem: RelPath -> string
     val filename: RelPath -> string
     val filenameStem: RelPath -> string
-    val filepathStem: RelPath -> RelPath
+    val filepathStem: RelPath -> PathStem<RelPath>
+    val hasExtension: RelPath -> bool
 
 module LocalPath =
     val tryOfSystem: string -> Option<LocalPath>

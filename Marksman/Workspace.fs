@@ -20,6 +20,7 @@ open Marksman.Index
 open Microsoft.FSharp.Core
 
 
+[<CustomEquality; CustomComparison>]
 type Doc =
     { id: DocId
       version: option<int>
@@ -32,6 +33,22 @@ type Doc =
     member this.RelPath = this.id.data.path
 
     member this.Id = this.id
+
+    override this.Equals(obj) =
+        match obj with
+        | :? Doc as other -> this.id = other.id && this.version = other.version
+        | _ -> false
+
+    override this.GetHashCode() = HashCode.Combine(hash this.id, hash this.version)
+
+    interface IComparable with
+        member this.CompareTo(obj) =
+            match obj with
+            | :? Doc as other ->
+                match compare this.id other.id with
+                | 0 -> compare this.version other.version
+                | non0 -> non0
+            | _ -> failwith $"Comparison with non-Doc type: {obj}"
 
 module Doc =
     let logger = LogProvider.getLoggerByName "Doc"
@@ -133,7 +150,7 @@ module Doc =
 type MultiFile =
     { name: string
       root: FolderId
-      docs: Map<RelPath, Doc>
+      docs: Map<PathStem<RelPath>, Doc>
       config: option<Config> }
 
     member this.RootPath = this.root.data
@@ -145,14 +162,20 @@ type FolderData =
     | MultiFile of MultiFile
     | SingleFile of SingleFile
 
-type FolderLookup = { docsBySlug: Map<Slug, list<Doc>> }
+type FolderLookup =
+    { docsBySlug: Map<Slug, list<Doc>>
+      docsByPath: SuffixTree<string, Doc> }
 
 module FolderLookup =
     let mk (data: FolderData) =
         match data with
         | SingleFile data ->
             let bySlug = Map.ofList [ Doc.slug data.doc, [ data.doc ] ]
-            { docsBySlug = bySlug }
+
+            let byPath =
+                SuffixTree.ofSeq [ [ Doc.path data.doc |> AbsPath.filenameStem ], data.doc ]
+
+            { docsBySlug = bySlug; docsByPath = byPath }
         | MultiFile data ->
             let bySlug =
                 Map.toSeq data.docs
@@ -161,7 +184,13 @@ module FolderLookup =
                 |> Seq.map (fun (slug, docs) -> slug, List.ofSeq docs)
                 |> Map.ofSeq
 
-            { docsBySlug = bySlug }
+            let byPath =
+                Map.toSeq data.docs
+                |> Seq.map (fun (PathStem relPath, doc) ->
+                    LocalPath.components (Rel relPath) |> List.ofArray, doc)
+                |> SuffixTree.ofSeq
+
+            { docsBySlug = bySlug; docsByPath = byPath }
 
 type Folder = { data: FolderData; lookup: FolderLookup }
 
@@ -178,9 +207,14 @@ module Folder =
         let data = SingleFile { doc = doc; config = config }
         mk data
 
-    let multiFile name root docs config =
+    let multiFile name root (docs: seq<Doc>) config =
+        let byRelPathStem =
+            docs
+            |> Seq.map (fun doc -> Doc.pathFromRoot doc |> RelPath.filepathStem, doc)
+            |> Map.ofSeq
+
         let data =
-            MultiFile({ name = name; root = root; docs = docs; config = config })
+            MultiFile({ name = name; root = root; docs = byRelPathStem; config = config })
 
         mk data
 
@@ -220,17 +254,19 @@ module Folder =
         match folder.data with
         | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> Doc.path x = uri)
         | MultiFile { root = root; docs = docs } ->
-            let rooted = (RootedRelPath.mk root.data (Abs uri))
-            Map.tryFind rooted.path docs
+            let filepathStem =
+                (RootedRelPath.mk root.data (Abs uri)).path |> RelPath.filepathStem
+
+            Map.tryFind filepathStem docs
 
     let tryFindDocByRelPath (path: RelPath) folder : option<Doc> =
         match folder.data with
         | SingleFile { doc = doc } ->
             Some doc
             |> Option.filter (fun x ->
-                let sysPath = ((Doc.path x) |> AbsPath.toSystem)
-                sysPath.EndsWith(path |> RelPath.toSystem))
-        | MultiFile { docs = docs } -> Map.tryFind path docs
+                let sysPath = ((Doc.path x) |> AbsPath.filenameStem)
+                sysPath.EndsWith(path |> RelPath.filenameStem))
+        | MultiFile { docs = docs } -> Map.tryFind (path |> RelPath.filepathStem) docs
 
     let private readIgnoreFiles (root: LocalPath) : array<string> =
         let lines = ResizeArray()
@@ -361,10 +397,7 @@ module Folder =
                 (Option.defaultValue Config.Default folderConfig)
                     .CoreMarkdownFileExtensions()
 
-            let documents =
-                loadDocs configuredExts folderId
-                |> Seq.map (fun doc -> Doc.pathFromRoot doc, doc)
-                |> Map.ofSeq
+            let documents = loadDocs configuredExts folderId
 
 
             multiFile name folderId documents folderConfig |> Some
@@ -384,7 +417,9 @@ module Folder =
                     $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.RootPath}"
 
             let data =
-                MultiFile { folder with docs = Map.add newDoc.RelPath newDoc folder.docs }
+                MultiFile
+                    { folder with
+                        docs = Map.add (newDoc.RelPath |> RelPath.filepathStem) newDoc folder.docs }
 
             mk data
         | SingleFile ({ doc = existingDoc } as folder) ->
@@ -397,7 +432,9 @@ module Folder =
     let withoutDoc (docId: DocId) folder : option<Folder> =
         match folder.data with
         | MultiFile folder ->
-            MultiFile { folder with docs = Map.remove docId.data.path folder.docs }
+            MultiFile
+                { folder with
+                    docs = Map.remove (docId.data.path |> RelPath.filepathStem) folder.docs }
             |> mk
             |> Some
         | SingleFile { doc = doc } ->
@@ -428,10 +465,6 @@ module Folder =
         |> Option.defaultValue []
         |> Seq.ofList
 
-    let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
-        failwith "not implemented"
-
-    // TODO: rework
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()
 
@@ -445,6 +478,17 @@ module Folder =
         match folder.data with
         | SingleFile _ -> 1
         | MultiFile { docs = docs } -> docs.Values.Count
+
+    let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
+        match path with
+        | ExactAbs { path = path }
+        | ExactRel (_, { path = path }) ->
+            tryFindDocByRelPath path folder |> Option.toList |> Seq.ofList
+        | Approx relPath ->
+            let (PathStem pathStem) = RelPath.filepathStem relPath
+            let pathComps = Rel pathStem |> LocalPath.components |> List.ofArray
+
+            SuffixTree.filterMatchingValues pathComps folder.lookup.docsByPath
 
 type Workspace = { config: option<Config>; folders: Map<FolderId, Folder> }
 

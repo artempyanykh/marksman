@@ -14,6 +14,8 @@ open Marksman.Text
 type Doc =
     member Id: DocId
 
+    interface System.IComparable
+
 module Doc =
     val id: Doc -> DocId
     val uri: Doc -> DocumentUri
@@ -50,7 +52,7 @@ module Folder =
     val tryLoad: userConfig: option<Config> -> name: string -> FolderId -> option<Folder>
 
     val singleFile: doc: Doc -> config: option<Config> -> Folder
-    val multiFile: name: string -> FolderId -> docs: Map<RelPath, Doc> -> config: option<Config> -> Folder
+    val multiFile: name: string -> FolderId -> docs: seq<Doc> -> config: option<Config> -> Folder
     val isSingleFile: Folder -> bool
 
     val withDoc: Doc -> Folder -> Folder

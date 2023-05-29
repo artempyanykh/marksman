@@ -28,10 +28,8 @@ type ReferenceResolution() =
                 let contentLines = $"# Doc {i}" :: links
                 let content = String.concat "\n" contentLines
                 let text = Text.mkText content
-                let doc = Doc.mk docId None text
-                doc.Id.data.path, doc)
+                Doc.mk docId None text)
 
-        let docs = Map.ofArray docs
         Folder.multiFile "docs" folderId docs None
 
     [<Params(10, 50, 250)>]
@@ -79,15 +77,15 @@ let main _ =
 // BenchmarkDotNet=v0.13.5, OS=macOS Ventura 13.3.1 (22E261) [Darwin 22.4.0]
 // Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores
 // .NET SDK=7.0.302
-//   [Host]     : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD DEBUG
+//   [Host]     : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD DEBUG [AttachedDebugger]
 //   DefaultJob : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD
 //
 //
-// |       Method | FolderSize |             Mean |        Error |       StdDev |
-// |------------- |----------- |-----------------:|-------------:|-------------:|
-// |  gotoDefTime |         10 |         12.69 us |     0.021 us |     0.019 us |
-// | findRefsTime |         10 |      1,392.42 us |     2.681 us |     2.377 us |
-// |  gotoDefTime |         50 |         62.92 us |     0.078 us |     0.073 us |
-// | findRefsTime |         50 |    164,905.21 us |   229.081 us |   214.283 us |
-// |  gotoDefTime |        250 |        319.72 us |     0.575 us |     0.510 us |
-// | findRefsTime |        250 | 20,683,207.26 us | 6,810.020 us | 6,036.905 us |
+// |       Method | FolderSize |           Mean |       Error |      StdDev |
+// |------------- |----------- |---------------:|------------:|------------:|
+// |  gotoDefTime |         10 |       1.180 us |   0.0034 us |   0.0032 us |
+// | findRefsTime |         10 |     147.967 us |   0.7200 us |   0.6735 us |
+// |  gotoDefTime |         50 |       1.294 us |   0.0013 us |   0.0011 us |
+// | findRefsTime |         50 |   4,040.372 us |   4.7052 us |   4.4013 us |
+// |  gotoDefTime |        250 |       1.433 us |   0.0022 us |   0.0019 us |
+// | findRefsTime |        250 | 115,387.334 us | 118.0649 us | 104.6614 us |

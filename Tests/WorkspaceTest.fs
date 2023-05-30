@@ -20,6 +20,37 @@ module FolderTest =
 
         Assert.Equal((dummyRootPath [ "a" ] |> mkFolderId).data, Folder.rootPath f1)
 
+    [<Fact>]
+    let updateDoc () =
+        let d1 = FakeDoc.Mk(content = "# Title 1", path = "doc1.md")
+        let d2 = FakeDoc.Mk(content = "# Title 2", path = "doc2.md")
+        let f = FakeFolder.Mk([ d1; d2 ])
+
+        Assert.Equal(1, Folder.filterDocsBySlug (Slug.ofString "Title 1") f |> Seq.length)
+        Assert.Equal(0, Folder.filterDocsBySlug (Slug.ofString "Title 0") f |> Seq.length)
+
+        Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "doc1")) f |> Seq.length)
+        Assert.Equal(0, Folder.filterDocsByInternPath (Approx(RelPath "doc0")) f |> Seq.length)
+
+        // Updating a title of the doc; by slug lookup should reflect
+        let d1 = FakeDoc.Mk(content = "# Title 2", path = "doc1.md")
+        let f = Folder.withDoc d1 f
+
+        Assert.Equal(0, Folder.filterDocsBySlug (Slug.ofString "Title 1") f |> Seq.length)
+        Assert.Equal(2, Folder.filterDocsBySlug (Slug.ofString "Title 2") f |> Seq.length)
+
+        Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "doc1")) f |> Seq.length)
+        Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "doc2")) f |> Seq.length)
+
+        // Removing a doc; both by slug and by path should reflect
+        let f = Folder.withoutDoc d1.Id f |> Option.get
+
+        Assert.Equal(0, Folder.filterDocsBySlug (Slug.ofString "Title 1") f |> Seq.length)
+        Assert.Equal(1, Folder.filterDocsBySlug (Slug.ofString "Title 2") f |> Seq.length)
+
+        Assert.Equal(0, Folder.filterDocsByInternPath (Approx(RelPath "doc1")) f |> Seq.length)
+        Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "doc2")) f |> Seq.length)
+
 module DocTest =
     [<Fact>]
     let applyLspChange () =

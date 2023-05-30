@@ -211,7 +211,6 @@ module FolderLookup =
         { docsBySlug = bySlug; docsByPath = byPath }
 
     let withDoc (doc: Doc) (lookup: FolderLookup) =
-        let lookup = withoutDoc doc lookup
         let slug = Doc.slug doc
 
         let pathComps =
@@ -451,12 +450,17 @@ module Folder =
                 failwith
                     $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.RootPath}"
 
-            let data =
-                MultiFile
-                    { folder with
-                        docs = Map.add (newDoc.RelPath |> RelPath.filepathStem) newDoc folder.docs }
+            let docPathStem = newDoc.RelPath |> RelPath.filepathStem
+
+            let lookup =
+                match Map.tryFind docPathStem folder.docs with
+                | None -> lookup
+                | Some doc -> FolderLookup.withoutDoc doc lookup
 
             let lookup = FolderLookup.withDoc newDoc lookup
+
+            let data =
+                MultiFile { folder with docs = Map.add docPathStem newDoc folder.docs }
 
             { data = data; lookup = lookup }
         | SingleFile ({ doc = existingDoc } as folder) ->

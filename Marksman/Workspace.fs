@@ -163,14 +163,18 @@ type FolderData =
     | SingleFile of SingleFile
 
 type FolderLookup =
-    { docsBySlug: Map<Slug, list<Doc>>
+    { docsBySlug: Map<Slug, Set<Doc>>
       docsByPath: SuffixTree<string, Doc> }
 
 module FolderLookup =
-    let mk (data: FolderData) =
+    let private docPathComps relPathStem =
+        let (PathStem relPath) = relPathStem
+        LocalPath.components (Rel relPath) |> List.ofArray
+
+    let ofData (data: FolderData) =
         match data with
         | SingleFile data ->
-            let bySlug = Map.ofList [ Doc.slug data.doc, [ data.doc ] ]
+            let bySlug = Map.ofList [ Doc.slug data.doc, Set.ofList [ data.doc ] ]
 
             let byPath =
                 SuffixTree.ofSeq [ [ Doc.path data.doc |> AbsPath.filenameStem ], data.doc ]
@@ -181,16 +185,47 @@ module FolderLookup =
                 Map.toSeq data.docs
                 |> Seq.map snd
                 |> Seq.groupBy Doc.slug
-                |> Seq.map (fun (slug, docs) -> slug, List.ofSeq docs)
+                |> Seq.map (fun (slug, docs) -> slug, Set.ofSeq docs)
                 |> Map.ofSeq
 
             let byPath =
                 Map.toSeq data.docs
-                |> Seq.map (fun (PathStem relPath, doc) ->
-                    LocalPath.components (Rel relPath) |> List.ofArray, doc)
+                |> Seq.map (fun (relPath, doc) -> docPathComps relPath, doc)
                 |> SuffixTree.ofSeq
 
             { docsBySlug = bySlug; docsByPath = byPath }
+
+    let withoutDoc (doc: Doc) (lookup: FolderLookup) =
+        let slug = Doc.slug doc
+
+        let pathComps =
+            docPathComps (Doc.pathFromRoot doc |> RelPath.filepathStem)
+
+        let updateBySlug =
+            function
+            | None -> None
+            | Some docs -> Set.remove doc docs |> Some
+
+        let bySlug = Map.change slug updateBySlug lookup.docsBySlug
+        let byPath = SuffixTree.remove pathComps lookup.docsByPath
+        { docsBySlug = bySlug; docsByPath = byPath }
+
+    let withDoc (doc: Doc) (lookup: FolderLookup) =
+        let lookup = withoutDoc doc lookup
+        let slug = Doc.slug doc
+
+        let pathComps =
+            docPathComps (Doc.pathFromRoot doc |> RelPath.filepathStem)
+
+        let updateBySlug =
+            function
+            | None -> None
+            | Some docs -> Set.add doc docs |> Some
+
+        let bySlug = Map.change slug updateBySlug lookup.docsBySlug
+        let byPath = SuffixTree.add pathComps doc lookup.docsByPath
+        { docsBySlug = bySlug; docsByPath = byPath }
+
 
 type Folder = { data: FolderData; lookup: FolderLookup }
 
@@ -200,7 +235,7 @@ module Folder =
     let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
 
     let mk data =
-        let lookup = FolderLookup.mk data
+        let lookup = FolderLookup.ofData data
         { data = data; lookup = lookup }
 
     let singleFile doc config : Folder =
@@ -409,8 +444,8 @@ module Folder =
 
             None
 
-    let withDoc (newDoc: Doc) folder : Folder =
-        match folder.data with
+    let withDoc (newDoc: Doc) { data = data; lookup = lookup } : Folder =
+        match data with
         | MultiFile folder ->
             if newDoc.RootPath <> folder.RootPath then
                 failwith
@@ -421,7 +456,9 @@ module Folder =
                     { folder with
                         docs = Map.add (newDoc.RelPath |> RelPath.filepathStem) newDoc folder.docs }
 
-            mk data
+            let lookup = FolderLookup.withDoc newDoc lookup
+
+            { data = data; lookup = lookup }
         | SingleFile ({ doc = existingDoc } as folder) ->
             if newDoc.id <> existingDoc.id then
                 failwith
@@ -431,12 +468,17 @@ module Folder =
 
     let withoutDoc (docId: DocId) folder : option<Folder> =
         match folder.data with
-        | MultiFile folder ->
-            MultiFile
-                { folder with
-                    docs = Map.remove (docId.data.path |> RelPath.filepathStem) folder.docs }
-            |> mk
-            |> Some
+        | MultiFile mf ->
+            let docPathStem = docId.data.path |> RelPath.filepathStem
+
+            match Map.tryFind docPathStem mf.docs with
+            | None -> Some folder
+            | Some doc ->
+                let docs = Map.remove docPathStem mf.docs
+                let data = MultiFile { mf with docs = docs }
+
+                let lookup = FolderLookup.withoutDoc doc folder.lookup
+                Some { data = data; lookup = lookup }
         | SingleFile { doc = doc } ->
             if doc.id <> docId then
                 failwith
@@ -462,8 +504,8 @@ module Folder =
     let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
         folder.lookup.docsBySlug
         |> Map.tryFind slug
-        |> Option.defaultValue []
-        |> Seq.ofList
+        |> Option.defaultValue Set.empty
+        |> Set.toSeq
 
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()

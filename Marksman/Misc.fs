@@ -230,6 +230,12 @@ type SuffixTree<'K, 'V> when 'K: comparison =
 module SuffixTree =
     let empty = { nodes = Map.empty; value = None }
 
+    let hasChildren st = Map.isEmpty st.nodes |> not
+
+    let hasValue st = Option.isSome st.value
+
+    let hasData st = hasValue st || hasChildren st
+
     let add (key: list<'K>) (value: 'V) (st: SuffixTree<'K, 'V>) : SuffixTree<'K, 'V> =
         let rec go key st =
             match key with
@@ -240,6 +246,24 @@ module SuffixTree =
                 { nodes = Map.add keyHead tailTree st.nodes; value = st.value }
 
         go (List.rev key) st
+
+    let remove (key: list<'K>) (st: SuffixTree<'K, 'V>) : SuffixTree<'K, 'V> =
+        let rec go key st =
+            match key with
+            | [] -> if hasData st then Some { st with value = None } else None
+            | keyHd :: keyTl ->
+                let withUpdatedTail tlTree =
+                    match go keyTl tlTree with
+                    | Some tlTree -> Some { st with nodes = Map.add keyHd tlTree st.nodes }
+                    | None ->
+                        let st = { st with nodes = Map.remove keyHd st.nodes }
+                        if hasData st then Some st else None
+
+                Map.tryFind keyHd st.nodes
+                |> Option.map withUpdatedTail
+                |> Option.defaultValue (Some st)
+
+        go (List.rev key) st |> Option.defaultValue empty
 
     let ofSeq (sx: seq<list<'K> * 'V>) : SuffixTree<'K, 'V> =
         Seq.fold (fun st (key, value) -> add key value st) empty sx

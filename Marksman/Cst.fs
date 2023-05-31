@@ -32,7 +32,6 @@ module Node =
     let fmtOptUrl (node: option<UrlEncodedNode>) : string = fmtOption fmtUrl node
     let fmtOptWiki (node: option<WikiEncodedNode>) : string = fmtOption fmtWiki node
 
-[<RequireQualifiedAccess>]
 type WikiLink = { doc: option<WikiEncodedNode>; heading: option<WikiEncodedNode> }
 
 type WikiDest =
@@ -195,11 +194,7 @@ module MdLink =
 
         $"[{text}]({path}{anchor})"
 
-type MdLinkDef =
-    private
-        { label: TextNode
-          url: UrlEncodedNode
-          title: option<TextNode> }
+type MdLinkDef = { label: TextNode; url: UrlEncodedNode; title: option<TextNode> }
 
 module MdLinkDef =
     let mk label url title = { label = label; url = url; title = title }
@@ -375,6 +370,7 @@ module Cst =
 
         collect cst
 
+    // TODO: speed this up. We can do faster search since the elements are ordered by their position/scope
     let elementAtPos (pos: Position) (cst: Cst) : option<Element> =
         elementsAll cst
         |> Seq.tryFind (fun el -> (Element.range el).ContainsInclusive(pos))

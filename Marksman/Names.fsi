@@ -10,6 +10,7 @@ module UrlEncoded =
     val mkUnchecked: string -> UrlEncoded
     val encode: string -> UrlEncoded
     val decode: UrlEncoded -> string
+    val raw: UrlEncoded -> string
 
 type WikiEncoded = WikiEncoded of string
 

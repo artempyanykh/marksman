@@ -34,6 +34,7 @@
         <Compile Include="Config.fs"/>
         <Compile Include="Text.fs"/>
         <Compile Include="Cst.fs"/>
+        <Compile Include="Ast.fs"/>
         <Compile Include="Parser.fs"/>
         <Compile Include="Index.fs"/>
         <Compile Include="Workspace.fsi"/>

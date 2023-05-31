@@ -11,6 +11,7 @@ module UrlEncoded =
     let encode (str: string) = UrlEncoded(str.UrlEncode())
 
     let decode (UrlEncoded str) = str.UrlDecode()
+    let raw (UrlEncoded str) = str
 
 type WikiEncoded = WikiEncoded of string
 

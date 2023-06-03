@@ -46,8 +46,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 
 * VSCode via [Marksman VSCode][mn-vscode].
 * Neovim:
-    * via [mason.nvim][mason-nvim] (automatic server installation) (
-      Requires [mason-lspconfig.nvim][mason-nvim-lsp-config])
+    * via [mason.nvim][mason-nvim] (automatic server installation) (requires [mason-lspconfig.nvim][mason-nvim-lsp-config])
     * via [nvim-lspconfig][nvim-marksman],
     * via [CoC-marksman][coc-marksman].
 * Emacs:
@@ -73,181 +72,32 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
   your `PATH` manually.
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
   installation).
+* BBEdit [can be configured](https://github.com/artempyanykh/marksman/discussions/206#discussioncomment-5906423) to use Marksman as an LSP server for Markdown files.
 
 ## How to install
 
-### Option 1: via a package manager
+See the [installation instructions](/docs/install.md).
 
-#### Homebrew
+## Demos and tutorials
 
-Available for MacOS and Linux:
+* See [this page](/docs/demo.md) for a mix of Neovim, VSCode, and Emacs screen captures.
+* See [this post](https://medium.com/@chrisatmachine/lunarvim-improve-markdown-editing-with-marksman-739d06c73a26)
+  on how to use Marksman with [LunarVim](https://www.lunarvim.org).
+* Check out [this YouTube video](https://www.youtube.com/watch?v=8GQKOLh_V5E)
+  by Luke Pighetti on how to use Marksman with Helix.
 
-```bash
-brew install marksman
-```
-
-#### Nix
-
-`marksman` is available [via `nixpkgs`](https://search.nixos.org/packages?query=marksman) for Linux
-and MacOS.
-
-For example, on non-NixOS you can run the following to permanently install `marksman` into your local profile:
-```
-nix-env -iA nixpkgs.marksman
-```
-
-#### Snap
-
-Available for a number of Linux distros supporting Snap [via Snapcraft](https://snapcraft.io/marksman).
-
-To install the latest stable release:
-
-```
-sudo snap install marksman
-```
-
-To install the edge release (from main branch):
-```
-sudo snap install --edge marksman
-```
-
-### Option 2: use pre-built binary
-
-1. Go to [Releases](https://github.com/artempyanykh/marksman/releases) page: each release has pre-built binaries for
-   Linux, MacOS, and Windows. Download the binary for your OS.
-2. Rename the binary and make it executable:
-    * MacOS: `mv marksman-macos marksman && chmod +x marksman`
-    * Linux: `mv marksman-linux marksman && chmod +x marksman`
-    * Windows: rename `marksman-windows.exe` to `marksman.exe`.
-3. Place the binary somewhere in your `PATH`.
-    * XDG recommends using `$HOME/.local/bin/` (make sure this folder is in your `PATH`).
-
-**NOTE**: If you're on MacOS and are getting a popup about:
-
-> “marksman” can’t be opened because Apple cannot check it for malicious software...
-
-Then you can run the following command to bypass it and let Mac know that it's
-fine:
-
-```sh
-xattr -d com.apple.quarantine <path-to-marksman-bin>
-```
-
-### Option 3: build from source
-
-0. Install [Dotnet SDK](https://dotnet.microsoft.com/en-us/download) for your OS.
-1. Clone the repository: `git clone https://github.com/artempyanykh/marksman.git`
-2. Inside `marksman` folder run `make install`
-3. The binary will be installed under `$HOME/.local/bin` (make sure this folder is in your `PATH`).
-
-## Demo
-
-Below is a mix of VSCode, Neovim, and Emacs screenshots. Although, not all features demonstrated for each editor,
-generally most features should work equaly in all editors.
-
-- **Document symbols**:
-  ![Document Symbols](assets/readme/gifs/document-symbols.gif)
-- **Hover preview**:
-  ![Hover](assets/readme/gifs/hover.gif)
-- **Completion**:
-    * ![Completion Markdown](assets/readme/gifs/completion-markdown.gif)
-    * ![Completion Wiki](assets/readme/gifs/completion-wiki.gif)
-- **Find references**:
-  ![Find references](assets/readme/gifs/find-references.gif)
-- **Project-wide diagnostics**:
-  ![Diagnostics](assets/readme/gifs/diagnostics.gif)
-- **Rename refactor for headings and reference links**:
-  ![Rename Refactor](assets/readme/gifs/rename.gif)
+![Completion Markdown](/assets/readme/gifs/completion-markdown.gif)
 
 ## Features
 
-✅ - done; 🗓 - planned.
+See [the Features page](/docs/features.md) to learn more about language features, configurations, and single- and multi-file modes.
 
-- ✅ Document symbols from headings.
-- ✅ Workspace symbols from headings.
-    * Query matching is subsequence-based, that is `lsp` will match both `LSP` and `Low Seismic Profile`.
-- ✅ Completion for links (inline, reference, wiki).
-- ✅ Hover prevew for links.
-- ✅ "Go to definition" for links.
-- ✅ "Find references" for headings and links.
-- ✅ Diagnostics for wiki-links.
-- ✅ Support multi-folder workspaces.
-- ✅ Custom parser for more fine-grained note structure.
-- 🗓 Code Lens with "# references" on headings.
-- ✅ Rename refactor.
-- 🗓 Add support for images (diagnostics, completion, goto).
-- 🗓 Add "check" command for standalone workspace checking.
-- 🗓 Add "build" command that rewrites all cross-references into proper
-  relative markdown links for further embedding into a static site generator
-  such as Jekyll or Hakyll.
-- 🗓 Support for Jupyter notebooks.
+## FAQ
 
-### Configuration
-
-See [Configuration](docs/configuration.md) docs for more details.
-
-### Wiki links
-
-Alongside regular markdown links, Marksman also supports wiki-style links, e.g. ``[[some-doc]]``
-or ``[[#some-heading]]``. This is particularly convenient when working with a Zettelkasten-like repository of markdown
-notes, as it streamlines linking and cross-linking of notes. This is what tool like [Obsidian][obsidian]
-and [Emanote][emanote] use.
-
-By default Marksman uses a document **title's slug** when referencing a document, however there is an configuration
-setting to use a **file name** or a file path instead. This functionality is currently **experimental** and may change
-in future depending on user's feedback. See [Configuration](docs/configuration.md) for more details.
-
-### Code actions
-
-Code actions usually can be enabled/disabled via a configuration option. See
-[configuration](#configuration) for more details.
-
-#### Table of Contents
-
-Marksman has a code action to create and update a table of contents of a document.
-
-![Table of Contents](assets/readme/gifs/toc.gif)
-
-### Ignore files
-
-Marksman by default reads ignore globs from `.gitignore`, `.hgignore`, and
-`.ignore` and doesn't scan directories matching any of the glob patterns.
-Marksman will search for and read ignore files in all sub-folders of the
-workspace. similarly to what Git does.
-
-### Workspace folders, project roots, and single-file mode
-
-The LSP specification is designed to work with projects rather than individual
-files[^single-file-mode]. Marksman has a custom **single-file mode** that
-provides a *subset* of language features for markdown files open outside of any
-project. This works well for small one-off edits or when opening random
-markdown files. However, when you have several interconnected documents do
-consider setting up a project folder for them for an improved experience.
-
-How a folder (aka project, aka root) is found varies between editors, but
-usually it's either
-
-1. a root of a VCS repository (applicable to all languages),
-2. a folder with `.marksman.toml` marker file (specific to Marksman
-   integrations).
-
-When Marksman doesn't provide cross-file language assist for your files and you
-don't understand why, you can either:
-
-1. check your project into version control, or
-2. create a `.marksman.toml` at the root folder of your project, or
-3. refer to your editor/LSP client documentation regarding how a project root
-   is defined.
-
-## Where's `zeta-note` and where's Rust?
-
-After much deliberation, I've decided that it'd be _cheaper_ for me to write a new from-scratch implementation of the
-language server **in F#** and add new features to it, than it is to add new features to the Rust version.
-
-The original Rust implementation is archived [in a separate repo][original-zn]. Further development will happen in this
-repository in F#.
-
-
+* Cross-file references and completions don't work.
+    + Either create an empty `.marksman.toml` in the root folder of your project or initialize a repository (e.g. `git init`). See [this page](/docs/features.md#workspace-folders-project-roots-and-single-file-mode) to learn more about single- and mult-file modes.
+* I'm getting "marksman can’t be opened because Apple cannot check it for malicious software" on MacOS.
+    + Run the following command to bypass it and let Mac know that it's fine: `xattr -d com.apple.quarantine <path-to-marksman-bin>`.
 
 [^roam-research]: You may have heard about [Roam Research][roam]. That is a commercial implementation of the
 Zettelkasten method and another point of reference for what Marksman is about. However, unlike a proprietary Roam
@@ -294,7 +144,3 @@ LSP but it's not a part of the spec at least until and including v3.17.
 [eglot-marksman-pr]: https://github.com/joaotavora/eglot/pull/1013
 
 [sublime-marksman]: https://github.com/bitsper2nd/LSP-marksman
-
-[obsidian]: https://obsidian.md
-
-[emanote]: https://emanote.srid.ca

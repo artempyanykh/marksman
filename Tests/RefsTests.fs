@@ -429,3 +429,105 @@ module LinkKindRefsTests =
             (fun x -> x.ToString())
             refs
             [ "(file1.md, (6,0)-(6,9))"; "(file2.md, (2,0)-(2,15))" ]
+
+module EncodingTests =
+    let doc1 =
+        FakeDoc.Mk(
+            content =
+                """# Doc 1
+
+## Heading 1
+
+## Heading 2
+
+[[#Heading 1]]
+[[#Heading%201]]
+[[Doc 2]]
+[[Doc%202]]
+[[Doc 2#Heading %231]]
+[](Doc%202)
+[](Doc%202#heading-1)
+""",
+            path = "doc1.md"
+        )
+
+    let doc2 =
+        FakeDoc.Mk(
+            content =
+                """# Doc 2
+
+## Heading #1
+""",
+            path = "doc2.md"
+        )
+
+    let folder =
+        FakeFolder.Mk(
+            [ doc1; doc2 ],
+            { Config.Config.Default with complWikiStyle = Some Config.FilePathStem }
+        )
+
+    let exts = (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+
+    let simplifyDest (dest: Dest) : string =
+        match dest with
+        | Dest.Doc fileLink -> fileLink.dest |> Doc.name
+        | Dest.Heading (docLink, node) ->
+            let doc = DocLink.doc docLink |> Doc.name
+            let head = node.text
+            $"{doc} / {head}"
+        | Dest.LinkDef (doc, node) ->
+            let defName = MdLinkDef.label node.data
+            $"{Doc.name doc} / {defName}"
+
+    let requireUrefAtPos doc line col =
+        requireElementAtPos doc line col
+        |> (Uref.ofElement exts doc.Id)
+        |> Option.defaultWith (fun () -> failwith "Could not parse as URef")
+
+    let resolveUref uref doc folder =
+        Dest.tryResolveUref uref doc folder
+        |> Seq.map simplifyDest
+        |> Array.ofSeq
+
+    [<Fact>]
+    let headingNotEncoding () =
+        let uref = requireUrefAtPos doc1 6 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 1 / ## Heading 1" ]
+
+    [<Fact>]
+    let headingUrlEncoded () =
+        let uref = requireUrefAtPos doc1 7 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 1 / ## Heading 1" ]
+
+    [<Fact>]
+    let docNotEncoded () =
+        let uref = requireUrefAtPos doc1 8 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2" ]
+
+    [<Fact>]
+    let docUrlEncoded () =
+        let uref = requireUrefAtPos doc1 9 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2" ]
+
+    [<Fact>]
+    let docHeadingMixedEncoding () =
+        let uref = requireUrefAtPos doc1 10 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / ## Heading #1" ]
+
+    [<Fact>]
+    let inlineDocUrlEncoding () =
+        let uref = requireUrefAtPos doc1 11 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2" ]
+
+    [<Fact>]
+    let inlineDocHeadingMixedEncoding () =
+        let uref = requireUrefAtPos doc1 12 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / ## Heading #1" ]

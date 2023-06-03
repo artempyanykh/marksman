@@ -9,12 +9,14 @@ type UrlEncoded = UrlEncoded of string
 module UrlEncoded =
     val mkUnchecked: string -> UrlEncoded
     val encode: string -> UrlEncoded
+    val decode: UrlEncoded -> string
 
 type WikiEncoded = WikiEncoded of string
 
 module WikiEncoded =
     val mkUnchecked: string -> WikiEncoded
     val encode: string -> WikiEncoded
+    val decode: WikiEncoded -> string
     val raw: WikiEncoded -> string
 
 type FolderId = UriWith<RootPath>

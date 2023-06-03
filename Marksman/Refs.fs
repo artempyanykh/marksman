@@ -18,18 +18,17 @@ open Marksman.Workspace
 type InternNameNode = Node<InternName>
 
 module InternNameNode =
-    let mk name range : InternNameNode = { text = InternName.name name; range = range; data = name }
+    let ofWikiUnchecked (src: DocId) (node: WikiEncodedNode) =
+        let name = InternName.mkUnchecked src (WikiEncoded.decode node.data)
+        { text = node.text; range = node.range; data = name }
 
-    let ofTextUnchecked src { text = text; range = range } : InternNameNode =
-        mk (InternName.mkUnchecked src text) range
-
-    let ofTextChecked
+    let ofUrlChecked
         (configuredExts: array<string>)
         (src: DocId)
-        { text = text; range = range }
+        ({ text = text; range = range; data = data }: UrlEncodedNode)
         : option<InternNameNode> =
-        InternName.mkChecked configuredExts src text
-        |> Option.map (fun sym -> mk sym range)
+        InternName.mkChecked configuredExts src (UrlEncoded.decode data)
+        |> Option.map (fun name -> { text = text; range = range; data = name })
 
 /// Unresolved reference.
 [<RequireQualifiedAccess>]
@@ -42,10 +41,10 @@ and HeadingNode =
     | Wiki of WikiEncodedNode
     | Url of UrlEncodedNode
 
-    member this.Text =
+    member this.DecodedText =
         match this with
-        | Wiki n -> n.text
-        | Url n -> n.text
+        | Wiki n -> n.text.UrlDecode()
+        | Url n -> n.text.UrlDecode()
 
 module Uref =
     let ofElement (configuredExts: array<string>) (srcId: DocId) (el: Element) : option<Uref> =
@@ -53,9 +52,9 @@ module Uref =
         | WL wl ->
             match wl.data.doc, wl.data.heading with
             | Some doc, Some heading ->
-                Uref.Heading(Some(InternNameNode.ofTextUnchecked srcId doc), Wiki heading)
+                Uref.Heading(Some(InternNameNode.ofWikiUnchecked srcId doc), Wiki heading)
                 |> Some
-            | Some doc, None -> Uref.Doc(InternNameNode.ofTextUnchecked srcId doc) |> Some
+            | Some doc, None -> Uref.Doc(InternNameNode.ofWikiUnchecked srcId doc) |> Some
             | None, Some heading -> Uref.Heading(None, Wiki heading) |> Some
             | None, None -> None
         | ML ml ->
@@ -65,10 +64,10 @@ module Uref =
 
                 match docUrl.url, docUrl.anchor with
                 | Some url, Some anchor ->
-                    InternNameNode.ofTextChecked configuredExts srcId url
+                    InternNameNode.ofUrlChecked configuredExts srcId url
                     |> Option.map (fun sym -> Uref.Heading(Some(sym), Url anchor))
                 | Some url, None ->
-                    InternNameNode.ofTextChecked configuredExts srcId url
+                    InternNameNode.ofUrlChecked configuredExts srcId url
                     |> Option.map Uref.Doc
                 | None, Some anchor -> Uref.Heading(None, Url anchor) |> Some
                 | None, None -> None
@@ -255,7 +254,7 @@ module Dest =
                         doc
                         |> DocLink.doc
                         |> Doc.index
-                        |> Index.filterHeadingBySlug (Slug.ofString heading.Text)
+                        |> Index.filterHeadingBySlug (Slug.ofString heading.DecodedText)
 
                     for h in headings do
                         yield Dest.Heading(doc, h)

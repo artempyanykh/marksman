@@ -109,15 +109,16 @@ let refToHuman (ref: Dest) : string =
         $"heading {Heading.name heading} in the document {Doc.name (DocLink.doc docLink)}"
     | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
 
-let docRefToHuman (name: InternName) : string = $"document '{name.name}'"
+let docRefToHuman (name: string) : string = $"document '{name}'"
 
 let urefToHuman (uref: Uref) : string =
     match uref with
-    | Uref.Doc { data = name } -> docRefToHuman name
+    | Uref.Doc { text = rawDocName } -> docRefToHuman rawDocName
     | Uref.Heading (docLink, heading) ->
         match docLink with
-        | None -> $"heading '{heading.Text}'"
-        | Some { data = name } -> $"heading '{heading.Text}' in {docRefToHuman name}"
+        | None -> $"heading '{heading.DecodedText}'"
+        | Some { data = docName } ->
+            $"heading '{heading.DecodedText}' in {docRefToHuman docName.name}"
     | Uref.LinkDef ld -> $"link definition with the label '{Node.text ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =

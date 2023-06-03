@@ -17,6 +17,7 @@ type WikiEncoded = WikiEncoded of string
 module WikiEncoded =
     let mkUnchecked = WikiEncoded
     let encode (str: string) = WikiEncoded(str.EncodeForWiki())
+    let decode (WikiEncoded str) = str.UrlDecode()
     let raw (WikiEncoded raw) = raw
 
 type FolderId = UriWith<RootPath>

@@ -28,7 +28,7 @@ module Index =
         let tags = ResizeArray()
         let mutable yaml = None
 
-        for el in Cst.elementsAll cst do
+        for el in Cst.elements cst do
             match el with
             | H hn ->
                 let slug = Heading.slug hn.data

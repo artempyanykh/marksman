@@ -20,7 +20,7 @@ let checkSnapshot (document: array<Element>) =
 
 let checkInlineSnapshot = checkInlineSnapshot Element.fmt
 
-let scrapeString content = parseText (Text.mkText content)
+let scrapeString content = parseText (Text.mkText content) |> Cst.elements
 
 [<StoreSnapshotsPerClass>]
 module HeadingTests =

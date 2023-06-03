@@ -1,6 +1,7 @@
 module Marksman.Parser
 
 open System
+open System.Collections.Generic
 open Ionide.LanguageServerProtocol.Types
 open Markdig.Syntax
 
@@ -246,10 +247,7 @@ module Markdown =
                     Node.mk
                         fullText
                         range
-                        { level = level
-                          title = Node.mkText title titleRange
-                          scope = range
-                          children = [||] }
+                        { level = level; title = Node.mkText title titleRange; scope = range }
 
                 elements.Add(H heading)
             | :? WikiLinkInline as link ->
@@ -385,85 +383,8 @@ module Markdown =
 
         elements.ToArray()
 
-let rec private reconstructHierarchy (text: Text) (flat: seq<Element>) : seq<Element> =
-    seq {
-        let mutable headStack: list<Node<Heading>> = []
-        let mutable accChildren: list<Element> = []
-
-        let mutable accStandalone: list<Element> = []
-
-        let rec unwindHeadStack (newHead: Node<Heading>) : unit =
-            match headStack with
-            | [] ->
-                accStandalone <- List.concat [ accChildren; accStandalone ]
-
-                accChildren <- []
-                headStack <- [ newHead ]
-            | curHead :: rest ->
-                // #
-                // ##
-                //  e1, e2
-                // ###       |
-                //  e3, e4   |
-                // ##        |
-                //  e5
-                let curHeadChildren =
-                    Array.concat [ curHead.data.children; Array.ofList accChildren ]
-
-                let curHead =
-                    { curHead with data = { curHead.data with children = curHeadChildren } }
-
-                accChildren <- []
-
-                // Unwind further until we find a parent heading or none at all
-                if curHead.data.level >= newHead.data.level then
-                    let newScope =
-                        { Start = curHead.data.scope.Start; End = newHead.data.scope.Start }
-
-                    let curHead =
-                        { curHead with data = { curHead.data with scope = newScope } }
-
-                    accChildren <- [ H curHead ]
-                    headStack <- rest
-                    unwindHeadStack newHead
-                else // cur.level < new.level; should stack the child
-                    headStack <- newHead :: curHead :: rest
-
-        for el in flat do
-            match el with
-            | YML _
-            | T _
-            | WL _
-            | ML _
-            | MLD _ ->
-                match headStack with
-                | _ :: _ -> accChildren <- el :: accChildren
-                | [] -> yield el
-            | H newHead -> unwindHeadStack newHead
-
-        let guardHead =
-            { level = -1
-              title = Node.mkText "" (text.EndRange())
-              scope = text.EndRange()
-              children = [||] }
-            |> Node.mk "" (text.EndRange())
-
-        unwindHeadStack guardHead
-
-        for child in accChildren do
-            yield child
-
-        for child in accStandalone do
-            yield child
-    }
-
 let rec private sortElements (text: Text) (elements: array<Element>) : unit =
-    for el in elements do
-        match el with
-        | H h -> sortElements text h.data.children
-        | _ -> ()
-
-    let elementStart el =
+    let elemOffsets el =
         let range = (Element.range el)
 
         let start = text.lineMap.FindOffset(range.Start)
@@ -472,17 +393,84 @@ let rec private sortElements (text: Text) (elements: array<Element>) : unit =
 
         (start, end_)
 
-    Array.sortInPlaceBy elementStart elements
+    Array.sortInPlaceBy elemOffsets elements
+
+let private buildCst (text: Text) (inputElements: Element[]) : Cst =
+    let nestedDeeperThan (_, baseHeader) (_, otherHeader) =
+        otherHeader.data.level >= baseHeader.data.level
+
+    let scopeMap = Dictionary()
+    let childMap = Dictionary()
+    let outputElements = ResizeArray()
+
+    let processEl headStack (idx: int, el: Element) =
+        outputElements.Add(el)
+
+        let parentStack, newHeadStack =
+            match el with
+            | H curHead ->
+                // Close headings nested deeper than curHead
+                headStack
+                |> List.takeWhile (nestedDeeperThan (idx, curHead))
+                |> List.iter (fun (idx, _) -> scopeMap.Add(idx, curHead.data.scope.Start))
+
+                let parentStack =
+                    headStack |> List.skipWhile (nestedDeeperThan (idx, curHead))
+
+                parentStack, (idx, curHead) :: parentStack
+            | _ -> headStack, headStack
+
+        match parentStack with
+        | [] -> ()
+        | (parentIdx, _) :: _ ->
+            let children =
+                if childMap.ContainsKey(parentIdx) then
+                    childMap.GetValueOrDefault(parentIdx)
+                else
+                    let children = ResizeArray()
+                    childMap.Add(parentIdx, children)
+                    children
+
+            children.Add(idx)
+
+        newHeadStack
+
+    // Add unclosed headings to the scope map with 'text end' scope
+    Array.indexed inputElements
+    |> Array.fold processEl []
+    |> List.iter (fun (idx, _) -> scopeMap.Add(idx, text.EndRange().Start))
+    // Update header scopes
+    for KeyValue (headerIdx, scopeEnd) in scopeMap do
+        match outputElements[headerIdx] with
+        | H header ->
+            let newScope = { Start = header.data.scope.Start; End = scopeEnd }
+
+            outputElements[headerIdx] <-
+                H { header with data = { header.data with scope = newScope } }
+        | other -> failwith $"Unexpected non-heading element at idx {headerIdx}: {other}"
+
+    let childMap =
+        seq {
+            for KeyValue (parentId, childIds) in childMap do
+                let children =
+                    childIds.ToArray() |> Array.map (fun i -> outputElements[i])
+
+                sortElements text children
+                let parent = outputElements[parentId]
+                parent, children
+        }
+        |> Map.ofSeq
+
+
+    let elements = outputElements.ToArray()
+    sortElements text elements
+
+    { elements = elements; childMap = childMap }
+
 
 let rec parseText (text: Text) : Cst =
     if String.IsNullOrEmpty text.content then
-        [||]
+        { elements = [||]; childMap = Map.empty }
     else
         let flatElements = Markdown.scrapeText text
-
-        let hierarchicalElements = reconstructHierarchy text flatElements
-
-        let elements = Array.ofSeq hierarchicalElements
-
-        sortElements text elements
-        elements
+        buildCst text flatElements

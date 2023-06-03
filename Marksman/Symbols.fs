@@ -3,7 +3,6 @@ module Marksman.Symbols
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
-open Marksman.Paths
 open Marksman.Names
 open Marksman.Cst
 open Marksman.Workspace
@@ -51,7 +50,7 @@ let rec tagToDocumentSymbol (t: Node<Tag>) : DocumentSymbol =
       SelectionRange = range
       Children = None }
 
-let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
+let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : DocumentSymbol =
     let name = Heading.name h.data
     let kind = SymbolKind.String
     let range = h.data.scope
@@ -59,12 +58,12 @@ let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSym
 
     let toDocumentSymbol (e: Element) : option<DocumentSymbol> =
         match e with
-        | H h -> Some(headingToDocumentSymbol isEmacs h)
+        | H h -> Some(headingToDocumentSymbol isEmacs cst h)
         | T t -> Some(tagToDocumentSymbol t)
         | _ -> None
 
     let children =
-        h.data.children
+        Cst.children cst (H h)
         |> Array.map toDocumentSymbol
         |> Array.collect Option.toArray
 
@@ -99,11 +98,11 @@ let docSymbols
     (doc: Doc)
     : U2<array<SymbolInformation>, array<DocumentSymbol>> =
     if hierarchy then
-        let topLevelHeadings =
-            Doc.cst doc |> Seq.collect (Element.asHeading >> Option.toList)
+        let cst = Doc.cst doc
+        let topLevelHeadings = Cst.topLevelHeadings cst
 
         topLevelHeadings
-        |> Seq.map (headingToDocumentSymbol isEmacs)
+        |> Seq.map (headingToDocumentSymbol isEmacs cst)
         |> Array.ofSeq
         |> Second
     else

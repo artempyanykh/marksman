@@ -126,7 +126,6 @@ module Ast =
                                   id = Cst.Heading.slug cHead }
 
                         yield el, aHead
-                        yield! go cHead.children
                     | Cst.WL { data = cWiki } ->
                         let aWiki =
                             Element.WL
@@ -163,7 +162,7 @@ module Ast =
         let concrete = ResizeArray<Cst.Element>()
         let c2n = Dictionary<Cst.Element, int>()
         // Accumulate AST elements and mapping
-        for cel, ael in go cst do
+        for cel, ael in go cst.elements do
             let n = abs.Count
             abs.Add(ael)
             a2n.Add(ael, n)

@@ -54,9 +54,7 @@ let testAstLookup () =
         [ csub1 ]
         [ "H2: range=(4,0)-(4,8); scope=(4,0)-(8,0)"
           "  text=`## Sub 1`"
-          "  title=`Sub 1` @ (4,3)-(4,8)"
-          "  ML: [inline-link](url \"title\") @ (6,8)-(6,34)"
-          "    IL: label=inline-link @ (6,9)-(6,20); url=url @ (6,22)-(6,25); title=title @ (6,26)-(6,33)" ]
+          "  title=`Sub 1` @ (4,3)-(4,8)" ]
 
     let shouldBeSub1 = Ast.tryFindMatchingAbstract csub1 ast1 |> Option.get
     Assert.Equal(sub1, shouldBeSub1)

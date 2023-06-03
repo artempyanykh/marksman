@@ -232,11 +232,7 @@ type Element =
     | T of Node<Tag>
     | YML of TextNode
 
-and Heading =
-    { level: int
-      title: TextNode
-      scope: Range
-      children: array<Element> }
+and Heading = { level: int; title: TextNode; scope: Range }
 
 let rec private fmtElement =
     function
@@ -256,9 +252,7 @@ and private fmtHeading node =
 
     let l3 = $"  title=`{inner.title.text}` @ {inner.title.range}"
 
-    let rest = Array.map (indentFmt fmtElement) inner.children
-
-    String.Join(Environment.NewLine, Array.concat [ [| l1; l2; l3 |]; rest ])
+    String.Join(Environment.NewLine, [| l1; l2; l3 |])
 
 and private fmtWikiLink node =
     let first = $"WL: {node.text}; {node.range}"
@@ -350,27 +344,32 @@ module Element =
         asHeading el |>> Node.data |>> Heading.isTitle
         |> Option.defaultValue false
 
-type Cst = array<Element>
+type Cst = { elements: Element[]; childMap: Map<Element, Element[]> }
 
 module Cst =
-    let elementsAll (cst: Cst) : seq<Element> =
-        let rec collect els =
-            seq {
-                for el in els do
-                    yield el
+    let elements (cst: Cst) : Element[] = cst.elements
 
-                    match el with
-                    | H h -> yield! collect h.data.children
-                    | YML _
-                    | T _
-                    | WL _
-                    | ML _
-                    | MLD _ -> ()
-            }
+    let children cst el = Map.tryFind el cst.childMap |> Option.defaultValue [||]
 
-        collect cst
+    let topLevelHeadings cst =
+        // Collect headings which are not nested under any other headings
+        // E.g.
+        // ## L2
+        // # L1
+        // ## L3
+        // Top level: L2, L1
+        let go (revHeads, level) =
+            function
+            | H heading ->
+                if heading.data.level <= level then
+                    heading :: revHeads, heading.data.level
+                else
+                    revHeads, level
+            | _ -> revHeads, level
+
+        let revTopLevel, _ = Array.fold go ([], 999) cst.elements
+        List.rev revTopLevel
 
     // TODO: speed this up. We can do faster search since the elements are ordered by their position/scope
     let elementAtPos (pos: Position) (cst: Cst) : option<Element> =
-        elementsAll cst
-        |> Seq.tryFind (fun el -> (Element.range el).ContainsInclusive(pos))
+        Array.tryFind (fun el -> (Element.range el).ContainsInclusive(pos)) cst.elements

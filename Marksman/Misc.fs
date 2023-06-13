@@ -244,6 +244,9 @@ module LinkLabel =
 
 type IndexMap<'E> when 'E: comparison = { elements: 'E[]; revMap: Map<'E, int> }
 
+module IndexMap =
+    let empty () = { elements = [||]; revMap = Map.empty }
+
 type SuffixTree<'K, 'V> when 'K: comparison =
     { nodes: Map<'K, SuffixTree<'K, 'V>>; value: option<'V> }
 

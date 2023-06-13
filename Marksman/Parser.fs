@@ -465,12 +465,16 @@ let private buildCst (text: Text) (inputElements: Element[]) : Cst =
     let elements = outputElements.ToArray()
     sortElements text elements
 
-    { elements = elements; childMap = childMap }
+    let revMap =
+        elements |> Seq.ofArray |> Seq.mapi (fun id el -> el, id) |> Map.ofSeq
+
+    { elementMap = { elements = elements; revMap = revMap }
+      childMap = childMap }
 
 
 let rec parseText (text: Text) : Cst =
     if String.IsNullOrEmpty text.content then
-        { elements = [||]; childMap = Map.empty }
+        { elementMap = IndexMap.empty (); childMap = Map.empty }
     else
         let flatElements = Markdown.scrapeText text
         buildCst text flatElements

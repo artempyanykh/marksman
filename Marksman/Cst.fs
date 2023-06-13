@@ -344,14 +344,14 @@ module Element =
         asHeading el |>> Node.data |>> Heading.isTitle
         |> Option.defaultValue false
 
-type Cst = { elements: Element[]; childMap: Map<Element, Element[]> }
+type Cst = { elementMap: IndexMap<Element>; childMap: Map<Element, Element[]> }
 
 module Cst =
-    let elements (cst: Cst) : Element[] = cst.elements
+    let elements (cst: Cst) : Element[] = cst.elementMap.elements
 
     let children cst el = Map.tryFind el cst.childMap |> Option.defaultValue [||]
 
-    let topLevelHeadings cst =
+    let topLevelHeadings (cst: Cst) =
         // Collect headings which are not nested under any other headings
         // E.g.
         // ## L2
@@ -367,9 +367,9 @@ module Cst =
                     revHeads, level
             | _ -> revHeads, level
 
-        let revTopLevel, _ = Array.fold go ([], 999) cst.elements
+        let revTopLevel, _ = Array.fold go ([], 999) (elements cst)
         List.rev revTopLevel
 
     // TODO: speed this up. We can do faster search since the elements are ordered by their position/scope
     let elementAtPos (pos: Position) (cst: Cst) : option<Element> =
-        Array.tryFind (fun el -> (Element.range el).ContainsInclusive(pos)) cst.elements
+        Array.tryFind (fun el -> (Element.range el).ContainsInclusive(pos)) (elements cst)

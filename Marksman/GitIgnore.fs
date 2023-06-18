@@ -3,10 +3,13 @@ module Marksman.GitIgnore
 open System
 open System.IO
 open GlobExpressions
+open Ionide.LanguageServerProtocol.Logging
 
 type GlobPattern =
     | Include of Glob
     | Exclude of Glob
+
+let private logger = LogProvider.getLoggerByName "GitIgnore"
 
 let patternToGlob (pat: string) : array<Glob> =
     if String.IsNullOrWhiteSpace(pat) then
@@ -18,10 +21,17 @@ let patternToGlob (pat: string) : array<Glob> =
         let pat = if pat.StartsWith("/") then pat.Substring(1) else pat
         let pat = if isAbsolute then pat else "**/" + pat
 
-        if isDir then
-            [| Glob(pat + "**"); Glob(pat.Substring(0, pat.Length - 1)) |]
-        else
-            [| Glob(pat) |]
+        let opts = GlobOptions.Compiled
+
+        try
+            if isDir then
+                [| Glob(pat + "**", opts)
+                   Glob(pat.Substring(0, pat.Length - 1), opts) |]
+            else
+                [| Glob(pat, opts) |]
+        with :? GlobPatternException ->
+            logger.warn (Log.setMessage "Unsupported glob pattern" >> Log.addContext "pat" pat)
+            [||]
 
 let mkGlobPattern (pat: string) : array<GlobPattern> =
     if pat.StartsWith("#") then
@@ -50,6 +60,7 @@ module GlobMatcher =
             match g with
             | Include glob -> if glob.IsMatch(relPath) then Some false else None
             | Exclude glob -> if glob.IsMatch(relPath) then Some true else None
+
 
         match matcher.patterns |> Seq.map checkGlob |> Seq.tryFind Option.isSome with
         | None -> false

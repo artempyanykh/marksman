@@ -122,3 +122,15 @@ let relGlob_Win_3 () =
 
         let notIgnored = "C:\\notes\\a\\real.md"
         GlobMatcher.ignores glob notIgnored |> Assert.False
+
+[<Fact>]
+let issue_218 () =
+    if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
+        let root = "/Users/john/notes"
+        let glob = GlobMatcher.mk root [| "*.foo[o,p]" |]
+        // FN because the pattern is not supported
+        GlobMatcher.ignores glob "zip.foop" |> Assert.False
+        // FN because the pattern is not supported
+        GlobMatcher.ignores glob "zap.fooo" |> Assert.False
+        // TN
+        GlobMatcher.ignores glob "zap.foos" |> Assert.False

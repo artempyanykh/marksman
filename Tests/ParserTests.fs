@@ -109,7 +109,7 @@ module WikiLinkTests =
         checkSnapshot document
 
     [<Fact>]
-    let parser_wiki_empty_heading () =
+    let parse_wiki_empty_heading () =
         //          0123456
         let text = "[[T#]]"
         let doc = scrapeString text
@@ -138,6 +138,41 @@ module WikiLinkTests =
     let parse_wiki_escaped_hash_and_heading_with_hash () =
         //          0123456789012345
         let text = "[[F\##Section #3]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+
+    [<Fact>]
+    let parse_wiki_with_title () =
+        //          0123456789012345
+        let text = "[[T#head|title]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+
+    [<Fact>]
+    let parse_wiki_empty_title () =
+        //          0123456789012345
+        let text = "[[T#head|]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+
+    [<Fact>]
+    let parse_wiki_no_doc_and_title () =
+        //          0123456789012345
+        let text = "[[#head|title]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+
+    [<Fact>]
+    let parse_wiki_no_doc_and_no_title () =
+        //          0123456789012345
+        let text = "[[|]]"
+        let doc = scrapeString text
+        checkSnapshot doc
+
+    [<Fact>]
+    let parse_wiki_all_empty () =
+        //          0123456789012345
+        let text = "[[]]"
         let doc = scrapeString text
         checkSnapshot doc
 

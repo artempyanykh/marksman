@@ -81,10 +81,10 @@ module Markdown =
             let mutable slice = slice_ // this copy is necessary because byrefs cannot be captured
 
             // helper functions for finite state machine
-            let withEnd offset (span: option<SourceSpan>) =
+            let updateSpanEnd offset (span: option<SourceSpan>) =
                 span |> Option.map (fun s -> SourceSpan(s.Start, offset - 1))
 
-            let notEscaped () = slice.PeekCharExtra(-1) <> '\\'
+            let isNotEscaped () = slice.PeekCharExtra(-1) <> '\\'
             let advance () = (slice.NextChar(), processor.GetSourcePosition(slice.Start))
 
             // state transition functions
@@ -99,8 +99,8 @@ module Markdown =
                     titleSpan <- SourceSpan(offset, -1) |> Some
 
                 match c with
-                | ']' when notEscaped () ->
-                    titleSpan <- withEnd offset titleSpan
+                | ']' when isNotEscaped () ->
+                    titleSpan <- updateSpanEnd offset titleSpan
                     parseEnd ()
                 | c when c.IsNewLineOrLineFeed() || c.IsZero() -> false
                 | _ -> parseTitle ()
@@ -112,11 +112,11 @@ module Markdown =
                     headingSpan <- SourceSpan(offset, -1) |> Some
 
                 match c with
-                | '|' when notEscaped () ->
-                    headingSpan <- withEnd offset headingSpan
+                | '|' when isNotEscaped () ->
+                    headingSpan <- updateSpanEnd offset headingSpan
                     parseTitle ()
-                | ']' when notEscaped () ->
-                    headingSpan <- withEnd offset headingSpan
+                | ']' when isNotEscaped () ->
+                    headingSpan <- updateSpanEnd offset headingSpan
                     parseEnd ()
                 | c when c.IsNewLineOrLineFeed() || c.IsZero() -> false
                 | _ -> parseHeading ()
@@ -128,14 +128,14 @@ module Markdown =
                 let c, offset = advance ()
 
                 match c with
-                | '#' when notEscaped () ->
-                    docSpan <- withEnd offset docSpan
+                | '#' when isNotEscaped () ->
+                    docSpan <- updateSpanEnd offset docSpan
                     parseHeading ()
-                | '|' when notEscaped () ->
-                    docSpan <- withEnd offset docSpan
+                | '|' when isNotEscaped () ->
+                    docSpan <- updateSpanEnd offset docSpan
                     parseTitle ()
-                | ']' when notEscaped () ->
-                    docSpan <- withEnd offset docSpan
+                | ']' when isNotEscaped () ->
+                    docSpan <- updateSpanEnd offset docSpan
                     parseEnd ()
                 | c when c.IsNewLineOrLineFeed() || c.IsZero() -> false
                 | _ -> parseDoc offset
@@ -157,17 +157,17 @@ module Markdown =
             // do the parsing (run the finite state machine)
             let start = slice.Start
             let offsetStart = processor.GetSourcePosition(start)
-            let isALink = parse ()
+            let hasParsedLink = parse ()
             slice_ <- slice // update output parameter to modified slice state
 
-            if isALink then
+            if hasParsedLink then
                 let offsetEnd = processor.GetSourcePosition(slice.Start)
                 let text = slice.Text.Substring(start, offsetEnd - offsetStart + 1)
-                let sliceOffset = offsetStart - start
 
                 let contentAndSpan (span: SourceSpan) =
-                    let content =
-                        slice.Text.Substring(span.Start - sliceOffset, span.End - span.Start + 1)
+                    let contentSliceStart = start + (span.Start - offsetStart)
+                    let contentSliceLen = span.End - span.Start + 1
+                    let content = slice.Text.Substring(contentSliceStart, contentSliceLen)
 
                     (content, span)
 
@@ -182,7 +182,7 @@ module Markdown =
                 link.Span <- SourceSpan(offsetStart, offsetEnd)
                 processor.Inline <- link
 
-            isALink
+            hasParsedLink
 
     let markdigPipeline =
         let pipelineBuilder =

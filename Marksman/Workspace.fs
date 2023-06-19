@@ -324,6 +324,10 @@ module Folder =
 
             Map.tryFind canonPath docs
 
+    let findDocById (id: DocId) folder : Doc =
+        tryFindDocByRelPath (id.data.path) folder
+        |> Option.defaultWith (fun () -> failwith $"Expected doc could not be found: {id.uri}")
+
     let private readIgnoreFiles (root: LocalPath) : array<string> =
         let lines = ResizeArray()
 

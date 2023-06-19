@@ -62,6 +62,7 @@ module Folder =
     val tryFindDocByPath: AbsPath -> Folder -> option<Doc>
     val tryFindDocByRelPath: RelPath -> Folder -> option<Doc>
     val tryFindDocByUrl: string -> Folder -> option<Doc>
+    val findDocById: DocId -> Folder -> Doc
     val filterDocsBySlug: Slug -> Folder -> seq<Doc>
     val filterDocsByInternPath: InternPath -> Folder -> seq<Doc>
 

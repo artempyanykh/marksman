@@ -19,8 +19,9 @@ module Markdown =
     type WikiLinkInline
         (
             text: string,
-            doc: Option<string * SourceSpan>,
-            heading: option<string * SourceSpan>
+            doc: option<string * SourceSpan>,
+            heading: option<string * SourceSpan>,
+            title: option<string * SourceSpan>
         ) =
         inherit LeafInline()
         member val Text = text
@@ -30,6 +31,9 @@ module Markdown =
 
         member val Heading = Option.map fst heading
         member val HeadingSpan = Option.map snd heading
+
+        member val Title = Option.map fst title
+        member val TitleSpan = Option.map snd title
 
     type TagInline(text: string) =
         inherit LeafInline()
@@ -63,105 +67,122 @@ module Markdown =
             else
                 false
 
-
+    /// <summary>Match links of the form `[[doc#heading|title]]`, where at least one of `doc` and `#heading` must be present (`|title` may be omitted).</summary>
     type WikiLinkParser() as this =
         inherit InlineParser()
 
         do this.OpeningCharacters <- [| '[' |]
 
-        override this.Match(processor, slice) =
-            let nextChar = slice.PeekCharExtra(1)
+        override this.Match(processor, slice_) =
+            let mutable docSpan: option<SourceSpan> = None
+            let mutable headingSpan: option<SourceSpan> = None
+            let mutable titleSpan: option<SourceSpan> = None
 
-            let isRef = nextChar = '['
+            let mutable slice = slice_ // this copy is necessary because byrefs cannot be captured
 
-            if isRef then
-                let start = slice.Start
-                let offsetStart = processor.GetSourcePosition(start)
-                let offsetInnerStart = offsetStart + 2
+            // helper functions for finite state machine
+            let updateSpanEnd offset (span: option<SourceSpan>) =
+                span |> Option.map (fun s -> SourceSpan(s.Start, offset - 1))
 
-                let mutable offsetHashDelim: option<int> = None
-                let mutable found = false
-                let mutable current = slice.NextChar()
+            let isNotEscaped () = slice.PeekCharExtra(-1) <> '\\'
+            let advance () = (slice.NextChar(), processor.GetSourcePosition(slice.Start))
 
-                let shouldStop (c: char) = c.IsNewLineOrLineFeed() || c.IsZero() || found
+            // state transition functions
+            let parseEnd () =
+                let c, _ = advance ()
+                c = ']'
 
-                while not (shouldStop current) do
-                    if
-                        current = '#'
-                        && slice.PeekCharExtra(-1) <> '\\'
-                        && offsetHashDelim.IsNone
-                    then
-                        offsetHashDelim <- Some(processor.GetSourcePosition(slice.Start))
+            let rec parseTitle () =
+                let c, offset = advance ()
 
-                    if current = ']' then
-                        let prev = slice.PeekCharExtra(-1)
+                if titleSpan.IsNone then
+                    titleSpan <- SourceSpan(offset, -1) |> Some
 
-                        if prev = ']' then found <- true else current <- slice.NextChar()
-                    else
-                        current <- slice.NextChar()
+                match c with
+                | ']' when isNotEscaped () ->
+                    titleSpan <- updateSpanEnd offset titleSpan
+                    parseEnd ()
+                | c when c.IsNewLineOrLineFeed() || c.IsZero() -> false
+                | _ -> parseTitle ()
 
-                if found then
-                    let end_ = slice.Start
-                    let offsetEnd = offsetStart + (end_ - start)
-                    let offsetInnerEnd = offsetEnd - 2
+            let rec parseHeading () =
+                let c, offset = advance ()
 
-                    let text = slice.Text.Substring(start, end_ - start + 1)
+                if headingSpan.IsNone then
+                    headingSpan <- SourceSpan(offset, -1) |> Some
 
-                    let doc, heading =
-                        match offsetHashDelim with
-                        | Some offsetHashDelim ->
-                            let offsetDocStart = offsetInnerStart
-                            let offsetDocEnd = offsetHashDelim - 1
-                            let offsetHeadingStart = offsetHashDelim + 1
-                            let offsetHeadingEnd = offsetInnerEnd
+                match c with
+                | '|' when isNotEscaped () ->
+                    headingSpan <- updateSpanEnd offset headingSpan
+                    parseTitle ()
+                | ']' when isNotEscaped () ->
+                    headingSpan <- updateSpanEnd offset headingSpan
+                    parseEnd ()
+                | c when c.IsNewLineOrLineFeed() || c.IsZero() -> false
+                | _ -> parseHeading ()
 
-                            let docText =
-                                if offsetDocEnd >= offsetDocStart then
-                                    slice.Text.Substring(
-                                        start + 2,
-                                        offsetDocEnd - offsetDocStart + 1
-                                    )
-                                else
-                                    String.Empty
+            let rec parseDoc offset =
+                if docSpan.IsNone then
+                    docSpan <- SourceSpan(offset, -1) |> Some
 
-                            let headingText =
-                                if offsetHeadingEnd >= offsetHeadingStart then
-                                    slice.Text.Substring(
-                                        start + 2 + (offsetDocEnd - offsetDocStart + 1) + 1,
-                                        offsetHeadingEnd - offsetHeadingStart + 1
-                                    )
-                                else
-                                    String.Empty
+                let c, offset = advance ()
 
-                            let doc =
-                                if String.IsNullOrEmpty docText then
-                                    None
-                                else
-                                    (docText, SourceSpan(offsetDocStart, offsetDocEnd)) |> Some
+                match c with
+                | '#' when isNotEscaped () ->
+                    docSpan <- updateSpanEnd offset docSpan
+                    parseHeading ()
+                | '|' when isNotEscaped () ->
+                    docSpan <- updateSpanEnd offset docSpan
+                    parseTitle ()
+                | ']' when isNotEscaped () ->
+                    docSpan <- updateSpanEnd offset docSpan
+                    parseEnd ()
+                | c when c.IsNewLineOrLineFeed() || c.IsZero() -> false
+                | _ -> parseDoc offset
 
-                            let heading =
-                                (headingText, SourceSpan(offsetHeadingStart, offsetHeadingEnd))
-                                |> Some
+            let parse () =
+                let c, _ = advance ()
 
-                            doc, heading
+                if c <> '[' then
+                    false
+                else
+                    let c, offset = advance ()
 
-                        | None ->
-                            let offsetDocStart = offsetStart + 2
-                            let offsetDocEnd = offsetEnd - 2
+                    match c with
+                    | '#' -> parseHeading ()
+                    | '|' -> parseTitle ()
+                    | ']' -> parseEnd ()
+                    | _ -> parseDoc offset
 
-                            let docText =
-                                slice.Text.Substring(start + 2, offsetDocEnd - offsetDocStart + 1)
+            // do the parsing (run the finite state machine)
+            let start = slice.Start
+            let offsetStart = processor.GetSourcePosition(start)
+            let hasParsedLink = parse ()
+            slice_ <- slice // update output parameter to modified slice state
 
-                            Some(docText, SourceSpan(offsetDocStart, offsetDocEnd)), None
+            if hasParsedLink then
+                let offsetEnd = processor.GetSourcePosition(slice.Start)
+                let text = slice.Text.Substring(start, offsetEnd - offsetStart + 1)
 
+                let contentAndSpan (span: SourceSpan) =
+                    let contentSliceStart = start + (span.Start - offsetStart)
+                    let contentSliceLen = span.End - span.Start + 1
+                    let content = slice.Text.Substring(contentSliceStart, contentSliceLen)
 
-                    let link = WikiLinkInline(text, doc, heading)
-                    link.Span <- SourceSpan(offsetStart, offsetEnd)
-                    processor.Inline <- link
+                    (content, span)
 
-                found
-            else
-                false
+                let link =
+                    WikiLinkInline(
+                        text,
+                        Option.map contentAndSpan docSpan,
+                        Option.map contentAndSpan headingSpan,
+                        Option.map contentAndSpan titleSpan
+                    )
+
+                link.Span <- SourceSpan(offsetStart, offsetEnd)
+                processor.Inline <- link
+
+            hasParsedLink
 
     let markdigPipeline =
         let pipelineBuilder =

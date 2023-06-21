@@ -48,12 +48,7 @@ module Src =
             | Some name -> filterDocsByName folder name
             | None -> [||]
 
-    let private tryFindDestInDoc
-        (folder: Folder)
-        (srcDoc: DocId)
-        (src: Src)
-        (destDoc: DocId)
-        : seq<Dest> =
+    let private tryFindDestInDoc (folder: Folder) (src: Src) (destDoc: DocId) : seq<Dest> =
         let destDoc = Folder.findDocById destDoc folder
         let destIndex = Doc.index destDoc
 
@@ -78,9 +73,7 @@ module Src =
 
         seq {
             for destDoc in destDocs do
-                yield!
-                    tryFindDestInDoc folder srcDoc src destDoc
-                    |> Seq.map (fun x -> destDoc, x)
+                yield! tryFindDestInDoc folder src destDoc |> Seq.map (fun x -> destDoc, x)
         }
         |> Array.ofSeq
 
@@ -95,21 +88,113 @@ module CGraph =
           pointedBy = Map.empty
           unresolved = Map.empty }
 
-    let hasSrc docId src graph =
+    let private hasSrc docId src graph =
         Map.tryFind docId graph.pointsTo
         |> Option.map (Map.tryFind src)
         |> Option.isSome
 
-    let hasDest docId dest graph =
+    let private hasDest docId dest graph =
         Map.tryFind docId graph.pointedBy
         |> Option.map (Map.tryFind dest)
         |> Option.isSome
 
-    let addSrc (folder: Folder) (docId: DocId) (src: Src) (graph: CGraph) : CGraph =
-        if hasSrc docId src graph then graph else failwith ""
+    let private addUnresolved docId src graph =
+        let insertFn setOpt = Option.defaultValue Set.empty setOpt |> Set.add src |> Some
+        let unresolved = Map.change docId insertFn graph.unresolved
+        { graph with unresolved = unresolved }
 
-    let addDest (folder: Folder) (docId: DocId) (dest: Dest) (graph: CGraph) : CGraph =
-        if hasDest docId dest graph then graph else failwith ""
+
+    let private addEdges (srcDoc: DocId, src: Src) (destDoc: DocId, dest: Dest) (graph: CGraph) =
+        let addForwardEdge srcToDestOpt =
+            let srcToDest = Option.defaultValue Map.empty srcToDestOpt
+
+            let srcToDest =
+                srcToDest
+                |> Map.change src (fun destSetOpt ->
+                    Option.defaultValue Set.empty destSetOpt
+                    |> Set.add (destDoc, dest)
+                    |> Some)
+
+            Some srcToDest
+
+        let pointsTo = graph.pointsTo |> Map.change srcDoc addForwardEdge
+
+        let addBackwardEdge destToSrcOpt =
+            let destToSrc = Option.defaultValue Map.empty destToSrcOpt
+
+            let destToSrc =
+                destToSrc
+                |> Map.change dest (fun srcSetOpt ->
+                    Option.defaultValue Set.empty srcSetOpt
+                    |> Set.add (srcDoc, src)
+                    |> Some)
+
+            Some destToSrc
+
+        let pointedBy = graph.pointedBy |> Map.change destDoc addBackwardEdge
+
+        { graph with pointsTo = pointsTo; pointedBy = pointedBy }
+
+    let private addSrcSkipUnresolved
+        (folder: Folder)
+        (srcDoc: DocId)
+        (src: Src)
+        (graph: CGraph)
+        : bool * CGraph =
+        if hasSrc srcDoc src graph then
+            false, graph
+        else
+            let destinations = Src.tryFindDest folder srcDoc src
+
+            if Array.isEmpty destinations then
+                false, addUnresolved srcDoc src graph
+            else
+                let shouldResolve =
+                    Array.exists (fun (doc, dest) -> hasDest doc dest graph |> not) destinations
+
+                let connectSrc graph (destDoc, destInDoc) =
+                    addEdges (srcDoc, src) (destDoc, destInDoc) graph
+
+                let graph = Array.fold connectSrc graph destinations
+
+                shouldResolve, graph
+
+    let private addDestSkipUnresolved (docId: DocId) (dest: Dest) (graph: CGraph) : bool * CGraph =
+        if hasDest docId dest graph then
+            false, graph
+        else
+            let addDestFn mapOpt =
+                Option.defaultValue Map.empty mapOpt |> Map.add dest Set.empty |> Some
+
+            let newPointedBy = Map.change docId addDestFn graph.pointedBy
+            true, { graph with pointedBy = newPointedBy }
+
+    let private resolveUnresolved folder graph =
+        // Now that we have a new dest, let's try to resolve previously unresolved links
+        let unresolved = graph.unresolved
+        let graph = { graph with unresolved = Map.empty }
+
+        let resolveFn graph srcDoc srcSet =
+            let resolveFn' graph src = addSrcSkipUnresolved folder srcDoc src graph |> snd
+            Set.fold resolveFn' graph srcSet
+
+        Map.fold resolveFn graph unresolved
+
+    let private addDest (folder: Folder) (docId: DocId) (dest: Dest) (graph: CGraph) : CGraph =
+        let shouldResolve, graph = addDestSkipUnresolved docId dest graph
+
+        let graph =
+            if shouldResolve then resolveUnresolved folder graph else graph
+
+        graph
+
+    let private addSrc (folder: Folder) (srcDoc: DocId) (src: Src) (graph: CGraph) : CGraph =
+        let shouldResolve, graph = addSrcSkipUnresolved folder srcDoc src graph
+
+        let graph =
+            if shouldResolve then resolveUnresolved folder graph else graph
+
+        graph
 
     let addDoc (folder: Folder) (docId: DocId) (graph: CGraph) : CGraph =
         addDest folder docId Dest.Doc graph
@@ -122,3 +207,7 @@ module CGraph =
         | Element.ML mdLink -> addSrc folder docId (Src.ML mdLink) graph
         | Element.MR mdRef -> addSrc folder docId (Src.MR mdRef) graph
         | Element.T _ -> graph
+
+    let removeDoc (docId: DocId) (graph: CGraph) : CGraph = failwith "todo"
+
+    let removeElement (docId: DocId) (el: Element) (graph: CGraph) : CGraph = failwith "todo"

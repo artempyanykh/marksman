@@ -1,3 +1,6 @@
+# Allow packagers to override PREFIX with their distribution standard
+PREFIX?=${HOME}/.local
+
 # Do magic to turn make arguments into command line arguments for executable invocation
 ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 $(eval $(ARGS):;@:)
@@ -134,9 +137,12 @@ install: publish
 	cmd /C scripts\install.bat
 else
 install: publish
-	mkdir -p $${HOME}/.local/bin
-	rm -f $${HOME}/.local/bin/marksman
-	cp Marksman/bin/Release/net7.0/$(RID)/publish/marksman $${HOME}/.local/bin
+	mkdir -p $(PREFIX)/bin
+	install -Dm755 Marksman/bin/Release/net7.0/$(RID)/publish/marksman $(PREFIX)/bin
 endif
+
+.PHONY: uninstall
+uninstall:
+	rm -rf $(PREFIX)/bin/marksman
 
 .DEFAULT_GOAL := build

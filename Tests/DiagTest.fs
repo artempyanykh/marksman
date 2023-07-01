@@ -17,7 +17,7 @@ let diagToHuman (diag: seq<DocId * list<Entry>>) : list<string * string> =
     seq {
         for id, entries in diag do
             for e in entries do
-                yield id.data.path |> RelPath.toSystem, entryToHuman e
+                yield id.data |> RootedRelPath.relPathForced |> RelPath.toSystem, entryToHuman e
     }
     |> List.ofSeq
 

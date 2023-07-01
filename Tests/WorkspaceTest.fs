@@ -74,7 +74,39 @@ module DocTest =
         let doc = FakeDoc.Mk(path = "blah#blah.md", contentLines = [||])
         Assert.Equal("blah#blah.md", Doc.pathFromRoot doc |> RelPath.toSystem)
 
+    [<Fact>]
+    let fromLsp_singleFile () =
+        let par =
+            { Uri = "file:///a/b/doc.md"
+              LanguageId = "md"
+              Version = 1
+              Text = "text" }
+
+        let singletonRoot = UriWith.mkRoot par.Uri
+        let doc = Doc.fromLsp singletonRoot par
+        Assert.Equal("file:///a/b/doc.md", (Doc.uri doc).ToString())
+        Assert.Equal("AbsPath \"/a/b/doc.md\"", (Doc.path doc).ToString())
+
 module WorkspaceTest =
+    [<Fact>]
+    let folderFind_singleFile () =
+        let f1 =
+            let d = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a")
+            Folder.singleFile d None
+
+        let f2 =
+            let d = FakeDoc.Mk(content = "", path = "a/b/d2.md", root = "a")
+            Folder.singleFile d None
+
+        let ws = Workspace.ofFolders None [ f1; f2 ]
+
+        Assert.Equal(
+            Some f1,
+            Workspace.tryFindFolderEnclosing (AbsPath.ofUri "file:///a/b/d1.md") ws
+        )
+
+        Assert.Equal(None, Workspace.tryFindFolderEnclosing (AbsPath.ofUri "file:///a/d1.md") ws)
+
     [<Fact>]
     let folderAdded_evictSingleFile () =
         let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a/b")

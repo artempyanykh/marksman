@@ -65,7 +65,10 @@ module RootPath =
     val filename: RootPath -> string
     val filenameStem: RootPath -> string
 
-type RootedRelPath = { root: RootPath; path: RelPath }
+type RootedRelPath =
+    private
+        { root: RootPath
+          path: option<RelPath> }
 
 module RootedRelPath =
     val mk: RootPath -> LocalPath -> RootedRelPath
@@ -75,7 +78,15 @@ module RootedRelPath =
     val combine: RootedRelPath -> LocalPath -> option<RootedRelPath>
     val filename: RootedRelPath -> string
     val filenameStem: RootedRelPath -> string
-    val directory: RootedRelPath -> RootedRelPath
+    val directory: RootedRelPath -> option<RootedRelPath>
+
+    val rootPath: RootedRelPath -> RootPath
+    /// This method will give slightly misleading results for
+    /// rooted paths where the root and the path are the same
+    /// (e.g. a document inside a single-file folder), but
+    /// it's the least evil compared to propagating an optional
+    /// rel path to all use-sites.
+    val relPathForced: RootedRelPath -> RelPath
 
 type UriWith<'T> = { uri: DocumentUri; data: 'T }
 

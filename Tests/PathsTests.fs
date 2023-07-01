@@ -85,3 +85,18 @@ module PathUriTests =
         let uri = "file:///E%3A/notes"
         let puri = UriWith.mkAbs (systemPathToUriString path)
         Assert.Equal(uri, puri.uri)
+
+    [<Fact>]
+    let testRootedRel_SameRootRel () =
+        let uri = "file:///a/b/doc.md"
+        let root = UriWith.mkRoot uri
+        let id = UriWith.mkRooted root (LocalPath.ofUri uri)
+        Assert.Equal("file:///a/b/doc.md", id.uri.ToString())
+
+        Assert.Equal(
+            """
+{ root = RootPath (AbsPath "/a/b/doc.md")
+  path = None }"""
+                .Trim(),
+            id.data.ToString()
+        )

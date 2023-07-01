@@ -28,9 +28,9 @@ type Doc =
       cst: Cst
       index: Index }
 
-    member this.RootPath = this.id.data.root
+    member this.RootPath = RootedRelPath.rootPath this.id.data
 
-    member this.RelPath = this.id.data.path
+    member this.RelPath = RootedRelPath.relPathForced this.id.data
 
     member this.Id = this.id
 
@@ -118,10 +118,10 @@ module Doc =
 
     let uri (doc: Doc) : DocumentUri = doc.id.uri
 
-    let rootPath (doc: Doc) : RootPath = doc.id.data.root
+    let rootPath (doc: Doc) : RootPath = RootedRelPath.rootPath doc.id.data
     let path (doc: Doc) : AbsPath = RootedRelPath.toAbs doc.id.data
 
-    let pathFromRoot (doc: Doc) = doc.id.data.path
+    let pathFromRoot (doc: Doc) = RootedRelPath.relPathForced doc.id.data
 
     let title (doc: Doc) : option<Node<Heading>> = Index.title doc.index
 
@@ -289,7 +289,9 @@ module Folder =
         | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> Doc.path x = uri)
         | MultiFile { root = root; docs = docs } ->
             let filepathStem =
-                (RootedRelPath.mk root.data (Abs uri)).path |> RelPath.filepathStem
+                RootedRelPath.mk root.data (Abs uri)
+                |> RootedRelPath.relPathForced
+                |> RelPath.filepathStem
 
             Map.tryFind filepathStem docs
 
@@ -473,7 +475,8 @@ module Folder =
     let withoutDoc (docId: DocId) folder : option<Folder> =
         match folder.data with
         | MultiFile mf ->
-            let docPathStem = docId.data.path |> RelPath.filepathStem
+            let docPathStem =
+                docId.data |> RootedRelPath.relPathForced |> RelPath.filepathStem
 
             match Map.tryFind docPathStem mf.docs with
             | None -> Some folder
@@ -527,9 +530,11 @@ module Folder =
 
     let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
         match path with
-        | ExactAbs { path = path }
-        | ExactRel (_, { path = path }) ->
-            tryFindDocByRelPath path folder |> Option.toList |> Seq.ofList
+        | ExactAbs rooted
+        | ExactRel (_, rooted) ->
+            tryFindDocByRelPath (RootedRelPath.relPathForced rooted) folder
+            |> Option.toList
+            |> Seq.ofList
         | Approx relPath ->
             let (PathStem pathStem) = RelPath.filepathStem relPath
             let pathComps = Rel pathStem |> LocalPath.components |> List.ofArray

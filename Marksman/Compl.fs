@@ -1,7 +1,6 @@
 ﻿module Marksman.Compl
 
 open System
-open System.IO
 open FSharpPlus.GenericBuilders
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
@@ -321,27 +320,30 @@ module Prompt =
             | PE (PartialElement.TagOpening _) -> Some(Tag String.Empty)
 
 module CompletionHelpers =
-    let wikiTargetLink (style: ComplWikiStyle) (doc: Doc) : WikiDest =
+    let wikiTargetLink (config: Config) (doc: Doc) : WikiDest =
         let docPath = Doc.pathFromRoot doc
 
-        match style with
+        match config.ComplWikiStyle() with
         | TitleSlug -> Slug.str (Doc.name doc) |> WTitle
         | FileStem ->
             let name = docPath |> RelPath.filenameStem
             WPath(Approx(RelPath name))
         | FilePathStem ->
-            let (PathStem name) = docPath |> RelPath.filepathStem
-            WPath(ExactAbs(RootedRelPath.mk (Doc.rootPath doc) (Rel name)))
+            let relPath =
+                CanonDocPath.mk (config.CoreMarkdownFileExtensions()) docPath
+                |> CanonDocPath.toRel
+
+            WPath(ExactAbs(RootedRelPath.mk (Doc.rootPath doc) (Rel relPath)))
 
 module Completions =
     let wikiDoc
-        (style: ComplWikiStyle)
+        (config: Config)
         (pos: Position)
         (compl: Completable)
         (doc: Doc)
         : option<CompletionItem> =
         let targetName = (Doc.name doc)
-        let targetLink = CompletionHelpers.wikiTargetLink style doc
+        let targetLink = CompletionHelpers.wikiTargetLink config doc
 
         match compl with
         | E (WL { data = { doc = input; heading = heading }; range = range })
@@ -412,7 +414,7 @@ module Completions =
         | _ -> None
 
     let wikiHeadingInOtherDoc
-        (style: ComplWikiStyle)
+        (config: Config)
         (_pos: Position)
         (compl: Completable)
         (doc: Doc, heading: string)
@@ -423,7 +425,7 @@ module Completions =
         | E (WL { data = { doc = Some destPart; heading = Some headingPart }
                   range = range })
         | PE (PartialElement.WikiLink (Some destPart, Some headingPart, range)) ->
-            let targetLink = CompletionHelpers.wikiTargetLink style doc
+            let targetLink = CompletionHelpers.wikiTargetLink config doc
 
             let newText =
                 WikiLink.render
@@ -739,8 +741,7 @@ let findCandidatesForCompl
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
 
-        cand
-        |> Array.choose (Completions.wikiDoc (config.ComplWikiStyle()) pos compl)
+        cand |> Array.choose (Completions.wikiDoc config pos compl)
     | Some (WikiHeadingInSrcDoc input) ->
         let cand = Candidates.findHeadingCandidates folder srcDoc None input
 
@@ -754,7 +755,7 @@ let findCandidatesForCompl
             Candidates.findHeadingCandidates folder srcDoc destPart headingPart
 
         cand
-        |> Array.choose (Completions.wikiHeadingInOtherDoc (config.ComplWikiStyle()) pos compl)
+        |> Array.choose (Completions.wikiHeadingInOtherDoc config pos compl)
     | Some (Reference input) ->
         let cand = Candidates.findLinkDefCandidates folder srcDoc input
         cand |> Array.choose (Completions.reference pos compl)

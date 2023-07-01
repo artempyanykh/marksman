@@ -59,6 +59,10 @@ let uriToSystemPath (uri: DocumentUri) : string =
 
     localPath
 
+let pathComponents (path: string) =
+    let components = path.Split([| '\\'; '/' |])
+    Array.filter (String.IsNullOrEmpty >> not) components
+
 type Platform =
     | Unix
     | Win
@@ -107,14 +111,10 @@ and LocalPath =
         | Abs (AbsPath str)
         | Rel (RelPath str) -> str
 
-type PathStem<'T> = PathStem of 'T
-
 module AbsPath =
     let isRawWinAbsPath str = String.length str >= 2 && Char.IsLetter(str[0]) && str[1] = ':'
 
     let isRawUnixAbsPath str = String.length str > 0 && str[0] = '/'
-
-    let isRawAbsPath str = isRawUnixAbsPath str || isRawWinAbsPath str
 
     let isRootComponent str =
         str = "/"
@@ -157,10 +157,6 @@ module RelPath =
     let filename (RelPath p) = Path.GetFileName(p)
     let filenameStem (RelPath p) = Path.GetFileNameWithoutExtension(p)
 
-    let filepathStem (RelPath p) =
-        let ext = Path.GetExtension(p)
-        PathStem(RelPath(p.TrimSuffix(ext)))
-
     let directory (RelPath p) = Path.GetDirectoryName(p) |> RelPath
 
     let hasExtension (RelPath p) = Path.GetExtension(p).IsEmpty() |> not
@@ -196,10 +192,7 @@ module LocalPath =
         | Abs _ -> false
         | Rel _ -> true
 
-    let components path =
-        let raw = toSystem path
-        let components = raw.Split([| '\\'; '/' |])
-        Array.filter (String.IsNullOrEmpty >> not) components
+    let components path = toSystem path |> pathComponents
 
     let hasDotComponents path = components path |> Array.exists (fun x -> x = "." || x = "..")
 
@@ -269,7 +262,7 @@ module LocalPath =
     let combine p1 p2 =
         match p1, p2 with
         | _, Abs _ -> p2
-        | _, Rel relPath ->
+        | _, Rel _ ->
             let sys1 = toSystem p1
             let sys2 = toSystem p2
             let sysComb = Path.Combine(sys1, sys2)
@@ -373,3 +366,14 @@ module UriWith =
     let rootedRelToAbs uri =
         let localPath = RootedRelPath.toAbs uri.data
         { uri = uri.uri; data = localPath }
+
+/// Canonical document path is a path relative to the document's folder with
+/// any known markdown extensions removed from the file name
+type CanonDocPath = private CanonDocPath of string
+
+module CanonDocPath =
+    let mk mdExts (RelPath relPath) = CanonDocPath(chopMarkdownExt mdExts relPath)
+
+    let components (CanonDocPath canonPath) = pathComponents canonPath |> List.ofArray
+
+    let toRel (CanonDocPath canonPath) = RelPath canonPath

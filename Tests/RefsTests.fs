@@ -447,6 +447,8 @@ module EncodingTests =
 [[Doc 2#Heading %231]]
 [](Doc%202)
 [](Doc%202#heading-1)
+[[doc.3.with.dots.md]]
+[[doc.3.with.dots]]
 """,
             path = "doc1.md"
         )
@@ -461,9 +463,12 @@ module EncodingTests =
             path = "doc2.md"
         )
 
+    let doc3 =
+        FakeDoc.Mk(content = """# Doc 3""", path = "doc.3.with.dots.md")
+
     let folder =
         FakeFolder.Mk(
-            [ doc1; doc2 ],
+            [ doc1; doc2; doc3 ],
             { Config.Config.Default with complWikiStyle = Some Config.FilePathStem }
         )
 
@@ -531,3 +536,13 @@ module EncodingTests =
         let uref = requireUrefAtPos doc1 12 5
         let refs = resolveUref uref doc1 folder
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / ## Heading #1" ]
+
+    [<Fact>]
+    let docFileNameWithDots () =
+        let uref = requireUrefAtPos doc1 13 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 3" ]
+
+        let uref = requireUrefAtPos doc1 14 5
+        let refs = resolveUref uref doc1 folder
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 3" ]

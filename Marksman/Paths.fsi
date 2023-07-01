@@ -11,8 +11,6 @@ type LocalPath =
     | Abs of AbsPath
     | Rel of RelPath
 
-type PathStem<'T> = PathStem of 'T
-
 module AbsPath =
     val ofUri: DocumentUri -> AbsPath
     val ofSystem: string -> AbsPath
@@ -28,7 +26,6 @@ module RelPath =
     val toSystem: RelPath -> string
     val filename: RelPath -> string
     val filenameStem: RelPath -> string
-    val filepathStem: RelPath -> PathStem<RelPath>
     val hasExtension: RelPath -> bool
 
 module LocalPath =
@@ -95,3 +92,10 @@ module UriWith =
     val mkRoot: DocumentUri -> UriWith<RootPath>
     val mkRooted: UriWith<RootPath> -> LocalPath -> UriWith<RootedRelPath>
     val rootedRelToAbs: UriWith<RootedRelPath> -> UriWith<AbsPath>
+
+type CanonDocPath = private CanonDocPath of string
+
+module CanonDocPath =
+    val mk: mdExts: seq<string> -> RelPath -> CanonDocPath
+    val components: CanonDocPath -> list<string>
+    val toRel: CanonDocPath -> RelPath

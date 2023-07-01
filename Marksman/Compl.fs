@@ -644,24 +644,20 @@ module Completions =
                     TextEdit = Some { Range = range; NewText = label } }
 
 module Candidates =
-    let findDocCandidates
-        (folder: Folder)
-        (srcDoc: Doc)
-        (destPart: option<InternName>)
-        : array<Doc> =
+    let findDocCandidates (folder: Folder) (srcDoc: Doc) (destPart: option<InternName>) : seq<Doc> =
         let candidates =
             match destPart with
             | None -> Folder.docs folder
             | Some name -> FileLink.filterFuzzyMatchingDocs folder name
 
-        candidates |> Seq.filter (fun d -> d <> srcDoc) |> Array.ofSeq
+        candidates |> Seq.filter (fun d -> d <> srcDoc)
 
     let findHeadingCandidates
         (folder: Folder)
         (srcDoc: Doc)
         (destPart: option<InternName>)
         (headingPart: string)
-        : array<Doc * string> =
+        : seq<Doc * string> =
         let targetDocs =
             destPart
             |> Option.map (FileLink.filterFuzzyMatchingDocs folder)
@@ -690,16 +686,15 @@ module Candidates =
             let docWithHeadings = headings |> Seq.map (fun h -> d, h)
             docWithHeadings
 
-        targetDocs |> Seq.collect prepareForDoc |> Array.ofSeq
+        targetDocs |> Seq.collect prepareForDoc
 
-    let findLinkDefCandidates (_folder: Folder) (srcDoc: Doc) (input: string) : array<MdLinkDef> =
+    let findLinkDefCandidates (_folder: Folder) (srcDoc: Doc) (input: string) : seq<MdLinkDef> =
         Index.filterLinkDefs
             (LinkLabel.isSubSequenceOf (LinkLabel.ofString input))
             (Doc.index srcDoc)
         |> Seq.map Node.data
-        |> Array.ofSeq
 
-    let findTagCandidates (folder: Folder) (_srcDoc: Doc) (input: string) : array<string * int> =
+    let findTagCandidates (folder: Folder) (_srcDoc: Doc) (input: string) : seq<string * int> =
         let matchingTags =
             seq {
                 for doc in Folder.docs folder do
@@ -714,7 +709,7 @@ module Candidates =
             }
             |> Seq.countBy id
 
-        matchingTags |> Array.ofSeq
+        matchingTags
 
 let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
     let link () = Doc.index doc |> Index.linkAtPos pos |> Option.map E
@@ -747,7 +742,7 @@ let findCandidatesForCompl
     (srcDoc: Doc)
     (pos: Position)
     (compl: Completable)
-    : array<CompletionItem> =
+    : seq<CompletionItem> =
     let config = Folder.configOrDefault folder
 
     match Prompt.ofCompletable pos compl with
@@ -756,13 +751,13 @@ let findCandidatesForCompl
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
 
-        cand |> Array.choose (Completions.wikiDoc config pos compl)
+        cand |> Seq.choose (Completions.wikiDoc config pos compl)
     | Some (WikiHeadingInSrcDoc input) ->
         let cand = Candidates.findHeadingCandidates folder srcDoc None input
 
         cand
-        |> Array.map snd
-        |> Array.choose (Completions.wikiHeadingInSrcDoc (config.ComplWikiStyle()) pos compl)
+        |> Seq.map snd
+        |> Seq.choose (Completions.wikiHeadingInSrcDoc (config.ComplWikiStyle()) pos compl)
     | Some (WikiHeadingInOtherDoc (destPart, headingPart)) ->
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) destPart)
 
@@ -770,10 +765,10 @@ let findCandidatesForCompl
             Candidates.findHeadingCandidates folder srcDoc destPart headingPart
 
         cand
-        |> Array.choose (Completions.wikiHeadingInOtherDoc config pos compl)
+        |> Seq.choose (Completions.wikiHeadingInOtherDoc config pos compl)
     | Some (Reference input) ->
         let cand = Candidates.findLinkDefCandidates folder srcDoc input
-        cand |> Array.choose (Completions.reference pos compl)
+        cand |> Seq.choose (Completions.reference pos compl)
     | Some (InlineDoc input) ->
         let cand =
             match
@@ -783,28 +778,28 @@ let findCandidatesForCompl
             | None -> [||]
             | Some destPart -> Candidates.findDocCandidates folder srcDoc (Some destPart)
 
-        cand |> Array.choose (Completions.inlineDoc pos compl)
+        cand |> Seq.choose (Completions.inlineDoc pos compl)
     | Some (InlineAnchorInSrcDoc input) ->
         let cand = Candidates.findHeadingCandidates folder srcDoc None input
 
         cand
-        |> Array.map snd
-        |> Array.choose (Completions.inlineAnchorInSrcDoc pos compl)
+        |> Seq.map snd
+        |> Seq.choose (Completions.inlineAnchorInSrcDoc pos compl)
     | Some (InlineAnchorInOtherDoc (pathPart, anchorPart)) ->
         let cand =
             match
                 InternName.mkChecked (config.CoreMarkdownFileExtensions()) (Doc.id srcDoc) pathPart
             with
-            | None -> [||]
+            | None -> Seq.empty
             | Some destPart ->
                 Candidates.findHeadingCandidates folder srcDoc (Some destPart) anchorPart
 
-        cand |> Array.choose (Completions.inlineAnchorInOtherDoc pos compl)
+        cand |> Seq.choose (Completions.inlineAnchorInOtherDoc pos compl)
     | Some (Tag input) ->
         let cand = Candidates.findTagCandidates folder srcDoc input
-        cand |> Array.choose (Completions.tag pos compl input)
+        cand |> Seq.choose (Completions.tag pos compl input)
 
-let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) : array<CompletionItem> =
+let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) : seq<CompletionItem> =
     match findCompletableAtPos doc pos with
     | None ->
         logger.trace (Log.setMessage "No completion point found")

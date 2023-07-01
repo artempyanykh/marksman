@@ -11,6 +11,7 @@ open Marksman.Misc
 
 let tryParsePartialElement text line col = PartialElement.inText text (Position.Mk(line, col))
 let parsePartialElement text line col = tryParsePartialElement text line col |> Option.get
+let findCandidatesInDoc folder doc pos = findCandidatesInDoc folder doc pos |> Array.ofSeq
 
 [<StoreSnapshotsPerClass>]
 module PartialElementWiki =

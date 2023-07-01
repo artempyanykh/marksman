@@ -102,10 +102,17 @@ module WorkspaceTest =
 
         Assert.Equal(
             Some f1,
-            Workspace.tryFindFolderEnclosing (AbsPath.ofUri "file:///a/b/d1.md") ws
+            Workspace.tryFindFolderEnclosing
+                (AbsPath.ofUri (dummyRootPath [ "a"; "b"; "d1.md" ] |> pathToUri))
+                ws
         )
 
-        Assert.Equal(None, Workspace.tryFindFolderEnclosing (AbsPath.ofUri "file:///a/d1.md") ws)
+        Assert.Equal(
+            None,
+            Workspace.tryFindFolderEnclosing
+                (AbsPath.ofUri (dummyRootPath [ "a"; "d1.md" ] |> pathToUri))
+                ws
+        )
 
     [<Fact>]
     let folderAdded_evictSingleFile () =

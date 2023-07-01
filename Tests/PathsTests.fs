@@ -2,6 +2,7 @@ module Marksman.PathsTests
 
 open Xunit
 
+open Marksman.Misc
 open Marksman.Paths
 
 module LocalPathTests =
@@ -93,10 +94,7 @@ module PathUriTests =
         let id = UriWith.mkRooted root (LocalPath.ofUri uri)
         Assert.Equal("file:///a/b/doc.md", id.uri.ToString())
 
-        Assert.Equal(
-            """
-{ root = RootPath (AbsPath "/a/b/doc.md")
-  path = None }"""
-                .Trim(),
-            id.data.ToString()
-        )
+        Helpers.checkInlineSnapshot
+            (fun x -> x.ToString())
+            (id.data.ToString().Lines())
+            [ "{ root = RootPath (AbsPath \"/a/b/doc.md\")"; "  path = None }" ]

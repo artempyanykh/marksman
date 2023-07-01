@@ -47,7 +47,5 @@ module StateTests =
         let ws = Workspace.ofFolders None [ f1; f2 ]
         let state = State.mk ClientDescription.empty ws
 
-        Assert.Equal(
-            Some(f1, d1),
-            State.tryFindFolderAndDoc (UriWith.mkAbs "file:///a/b/d1.md") state
-        )
+        let d1Uri = dummyRootPath [ "a"; "b"; "d1.md" ] |> pathToUri
+        Assert.Equal(Some(f1, d1), State.tryFindFolderAndDoc (UriWith.mkAbs d1Uri) state)

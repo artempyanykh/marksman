@@ -202,6 +202,11 @@ module PartialElementInline =
         checkSnapshot [ parsePartialElement text 0 4 ]
 
     [<Fact>]
+    let bracketsWithSpacedTextAndOpenParen () =
+        let text = Text.mkText "[a b](c"
+        checkSnapshot [ parsePartialElement text 0 7 ]
+
+    [<Fact>]
     let anchor1 () =
         let text = Text.mkText "](t# other"
 

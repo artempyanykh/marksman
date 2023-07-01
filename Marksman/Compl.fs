@@ -58,11 +58,10 @@ module PartialElement =
                 | _ when Line.endsAt pos line -> Line.endCursor line
                 | _ -> None
 
-            let findOpenOrWs =
-                Cursor.tryFindCharMatching Cursor.backward (fun c ->
-                    Char.IsWhiteSpace(c) || c = '[' || c = '(')
+            let findOpen =
+                Cursor.tryFindCharMatching Cursor.backward (fun c -> c = '[' || c = '(')
 
-            let! precedingPunct = findOpenOrWs startCursor
+            let! precedingPunct = findOpen startCursor
             let lineRange = Line.range line
 
             match Cursor.backwardChar precedingPunct, Cursor.char precedingPunct with
@@ -75,7 +74,7 @@ module PartialElement =
 
                 // No need to try to match ]] because then it would be a proper Element, not
                 // just a partial one
-                let inputEnd = Cursor.forward precedingPunct >>= findEnd
+                let inputEnd = Cursor.forward startCursor >>= findEnd
 
                 let elementEnd =
                     match inputEnd with
@@ -119,7 +118,7 @@ module PartialElement =
                     Cursor.tryFindCharMatching Cursor.forward (fun c ->
                         Char.IsWhiteSpace(c) || c = ']')
 
-                let inputEnd = inputStart >>= findEnd
+                let inputEnd = Cursor.forward startCursor >>= findEnd
 
                 let elementEnd =
                     match inputEnd with
@@ -147,9 +146,25 @@ module PartialElement =
 
                 PartialElement.ReferenceLink(inputNode, elementRange)
             | _, '(' -> // "inline link"
-                let findStart =
+                let findStartOrWs =
                     Cursor.tryFindCharMatching Cursor.backward (fun c ->
                         Char.IsWhiteSpace(c) || c = '[' || c = ']' || c = '(' || c = ')')
+
+                let findStart =
+                    Cursor.tryFindCharMatching Cursor.backward (fun c ->
+                        c = '[' || c = ']' || c = '(' || c = ')')
+
+                // Inline link can't have whitespace in the URL part. Short-circuit to exit
+                let doubleCheckStart =
+                    findStartOrWs startCursor
+                    |> Option.defaultWith (fun () ->
+                        failwith "Expected to find a cursor, found none")
+
+                let! _ =
+                    if Cursor.isBeforeOrAt doubleCheckStart precedingPunct then
+                        Some()
+                    else
+                        None
 
                 let precedingClosingBracket =
                     Cursor.backward precedingPunct
@@ -182,7 +197,7 @@ module PartialElement =
                         Char.IsWhiteSpace(c) || c = '[' || c = ']' || c = '(' || c = ')')
 
                 let labelStart = Cursor.forward precedingPunct
-                let labelEnd = labelStart >>= findEnd
+                let labelEnd = Cursor.forward startCursor >>= findEnd
 
                 let labelRangeStart =
                     labelStart |>> Cursor.pos |> Option.defaultValue lineRange.End

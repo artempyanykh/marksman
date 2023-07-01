@@ -202,9 +202,13 @@ let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text:
     Array.fold applyChangeOne text changeEvents
 
 type Span =
-    { text: Text
-      start: int
-      end_: int }
+    {
+        text: Text
+        /// Inclusive
+        start: int
+        /// Exclusive
+        end_: int
+    }
 
     override this.ToString() =
         let substr =
@@ -229,6 +233,8 @@ module Cursor =
     let char c = c.span.text.content[c.pos]
 
     let pos c = c.span.text.lineMap.FindPosition(c.pos)
+
+    let isBeforeOrAt before after = before.pos <= after.pos
 
     let forward c : option<Cursor> =
         if c.pos < c.span.end_ - 1 then

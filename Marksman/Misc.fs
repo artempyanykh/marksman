@@ -20,38 +20,6 @@ let mkWatchGlob (configuredExts: seq<string>) : string =
 
 let isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
 
-let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
-    let isEmacsBackup =
-        try
-            (Path.GetFileName path).StartsWith(".#")
-        with :? ArgumentException ->
-            false
-
-    if isEmacsBackup then
-        false
-    else
-        // GetExtension returns extension with a '.'. In config we don't have '.'s.
-        let ext = (Path.GetExtension path)
-
-        match ext with
-        | null -> false
-        | ext ->
-            let ext = ext.TrimStart('.').ToLowerInvariant()
-            Seq.contains ext configuredExts
-
-let isPotentiallyMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
-    let ext = Path.GetExtension path
-
-    match ext with
-    | null
-    | "" -> true
-    | _ -> isMarkdownFile configuredExts path
-
-let fmtOption fmt value =
-    match value with
-    | Some value -> $"{fmt value}"
-    | None -> "∅"
-
 type String with
 
     member this.Lines() : array<string> = this.Split(lineEndings, StringSplitOptions.None)
@@ -158,6 +126,45 @@ type String with
 
     member this.TrimBoth(prefix: string, suffix: string) : string =
         this.TrimPrefix(prefix).TrimSuffix(suffix)
+
+
+let isEmacsBackup (path: string) =
+    try
+        (Path.GetFileName path).StartsWith(".#")
+    with :? ArgumentException ->
+        false
+
+let isMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
+    if isEmacsBackup path then
+        false
+    else
+        // GetExtension returns extension with a '.'. In config we don't have '.'s.
+        let ext = (Path.GetExtension path)
+
+        match ext with
+        | null -> false
+        | ext ->
+            let ext = ext.TrimStart('.').ToLowerInvariant()
+            Seq.contains ext configuredExts
+
+let chopMarkdownExt (configuredExts: seq<string>) (path: string) : string =
+    if isMarkdownFile configuredExts path then
+        path.TrimSuffix(Path.GetExtension path)
+    else
+        path
+
+let isPotentiallyMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
+    let ext = Path.GetExtension path
+
+    match ext with
+    | null
+    | "" -> true
+    | _ -> isMarkdownFile configuredExts path
+
+let fmtOption fmt value =
+    match value with
+    | Some value -> $"{fmt value}"
+    | None -> "∅"
 
 type Slug = Slug of string
 

@@ -16,6 +16,7 @@ open Marksman.Paths
 open Marksman.Names
 open Marksman.Cst
 open Marksman.Index
+open Marksman.SuffixTree
 
 open Microsoft.FSharp.Core
 
@@ -164,7 +165,7 @@ type FolderData =
 
 type FolderLookup =
     { docsBySlug: Map<Slug, Set<Doc>>
-      docsByPath: SuffixTree<string, Doc> }
+      docsByPath: SuffixTree<PathStem<RelPath>, Doc> }
 
 module FolderLookup =
     let private docPathComps relPathStem =
@@ -176,8 +177,8 @@ module FolderLookup =
         | SingleFile data ->
             let bySlug = Map.ofList [ Doc.slug data.doc, Set.ofList [ data.doc ] ]
 
-            let byPath =
-                SuffixTree.ofSeq [ [ Doc.path data.doc |> AbsPath.filenameStem ], data.doc ]
+            let path = Doc.pathFromRoot data.doc |> RelPath.filepathStem
+            let byPath = SuffixTree.ofSeq docPathComps [ path, data.doc ]
 
             { docsBySlug = bySlug; docsByPath = byPath }
         | MultiFile data ->
@@ -188,18 +189,14 @@ module FolderLookup =
                 |> Seq.map (fun (slug, docs) -> slug, Set.ofSeq docs)
                 |> Map.ofSeq
 
-            let byPath =
-                Map.toSeq data.docs
-                |> Seq.map (fun (relPath, doc) -> docPathComps relPath, doc)
-                |> SuffixTree.ofSeq
+            let byPath = Map.toSeq data.docs |> SuffixTree.ofSeq docPathComps
 
             { docsBySlug = bySlug; docsByPath = byPath }
 
     let withoutDoc (doc: Doc) (lookup: FolderLookup) =
         let slug = Doc.slug doc
 
-        let pathComps =
-            docPathComps (Doc.pathFromRoot doc |> RelPath.filepathStem)
+        let docPath = Doc.pathFromRoot doc |> RelPath.filepathStem
 
         let updateBySlug =
             function
@@ -207,14 +204,13 @@ module FolderLookup =
             | Some docs -> Set.remove doc docs |> Some
 
         let bySlug = Map.change slug updateBySlug lookup.docsBySlug
-        let byPath = SuffixTree.remove pathComps lookup.docsByPath
+        let byPath = SuffixTree.remove docPath lookup.docsByPath
         { docsBySlug = bySlug; docsByPath = byPath }
 
     let withDoc (doc: Doc) (lookup: FolderLookup) =
         let slug = Doc.slug doc
 
-        let pathComps =
-            docPathComps (Doc.pathFromRoot doc |> RelPath.filepathStem)
+        let docPath = Doc.pathFromRoot doc |> RelPath.filepathStem
 
         let updateBySlug =
             function
@@ -222,7 +218,7 @@ module FolderLookup =
             | Some docs -> Set.add doc docs |> Some
 
         let bySlug = Map.change slug updateBySlug lookup.docsBySlug
-        let byPath = SuffixTree.add pathComps doc lookup.docsByPath
+        let byPath = SuffixTree.add docPath doc lookup.docsByPath
         { docsBySlug = bySlug; docsByPath = byPath }
 
 
@@ -536,10 +532,10 @@ module Folder =
             |> Option.toList
             |> Seq.ofList
         | Approx relPath ->
-            let (PathStem pathStem) = RelPath.filepathStem relPath
-            let pathComps = Rel pathStem |> LocalPath.components |> List.ofArray
+            // TODO: fix to work with paths that contain '.'s
+            let docPath = RelPath.filepathStem relPath
 
-            SuffixTree.filterMatchingValues pathComps folder.lookup.docsByPath
+            SuffixTree.filterMatchingValues docPath folder.lookup.docsByPath
 
 type Workspace = { config: option<Config>; folders: Map<FolderId, Folder> }
 

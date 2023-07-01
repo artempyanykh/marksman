@@ -9,6 +9,7 @@
 
     <ItemGroup>
         <Compile Include="Helpers.fs" />
+        <Compile Include="SuffixTreeTests.fs" />
         <Compile Include="ParserTests.fs" />
         <Compile Include="TextTests.fs" />
         <Compile Include="MiscTests.fs" />

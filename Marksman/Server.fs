@@ -786,9 +786,17 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder, doc = State.tryFindFolderAndDoc docUri state
 
-                    match Compl.findCandidatesInDoc folder doc pos with
+                    let maxCompletions = 50
+
+                    match
+                        Compl.findCandidatesInDoc folder doc pos
+                        |> Seq.truncate maxCompletions
+                        |> Array.ofSeq
+                    with
                     | [||] -> return! None
-                    | candidates -> { IsIncomplete = true; Items = candidates }
+                    | candidates ->
+                        let isIncomplete = Array.length candidates >= maxCompletions
+                        { IsIncomplete = isIncomplete; Items = candidates }
                 }
 
             LspResult.success candidates

@@ -4,6 +4,7 @@ open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Cst
 open Marksman.Misc
+open Marksman.Names
 open Marksman.Refs
 open Marksman.Workspace
 
@@ -72,7 +73,7 @@ let renameMarkdownLabelsInDoc newLabel (doc: Doc, els) =
 
 let renameHeadingLink
     (heading: Heading)
-    (newSlug: Slug)
+    (newTitle: WikiEncoded)
     (el: Element, elDest: array<Dest>)
     : option<TextEdit> =
     let doesDestMatchHeading dest =
@@ -94,7 +95,7 @@ let renameHeadingLink
             let toEdit = if Heading.isTitle heading then wl.doc else wl.heading
 
             toEdit
-            |> Option.map (fun node -> { Range = node.range; NewText = Slug.toString newSlug })
+            |> Option.map (fun node -> { Range = node.range; NewText = WikiEncoded.raw newTitle })
         | ML { data = MdLink.IL (_, url, _) } ->
             let docUrl = url |> Option.map Url.ofUrlNode
 
@@ -105,13 +106,13 @@ let renameHeadingLink
                     None
 
             toEdit
-            |> Option.map (fun node -> { Range = node.range; NewText = Slug.toString newSlug })
+            |> Option.map (fun node -> { Range = node.range; NewText = WikiEncoded.raw newTitle })
         | _ -> None
     else
         None
 
 let renameHeadingLinksInDoc heading newTitle (doc: Doc, elsWithDest: seq<Element * array<Dest>>) =
-    let newSlug = Slug.ofString newTitle
+    let newSlug = WikiEncoded.encode newTitle
 
     let edits =
         Seq.collect (renameHeadingLink heading newSlug >> Option.toArray) elsWithDest

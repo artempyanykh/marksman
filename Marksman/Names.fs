@@ -37,8 +37,8 @@ type InternPath =
 module InternPath =
     let toRel =
         function
-        | ExactAbs { path = path }
-        | ExactRel (_, { path = path }) -> path
+        | ExactAbs rooted
+        | ExactRel (_, rooted) -> RootedRelPath.relPathForced rooted
         | Approx path -> path
 
 module InternName =
@@ -67,7 +67,7 @@ module InternName =
                     UrlEncoded.mkUnchecked (name.TrimStart('/')) |> UrlEncoded.decode
                 )
 
-            let rootPath = src.data.root
+            let rootPath = RootedRelPath.rootPath src.data
             let namePath = RootedRelPath.mk rootPath relPath
             Some(ExactAbs namePath)
         else
@@ -76,7 +76,8 @@ module InternName =
                     LocalPath.ofSystem (UrlEncoded.mkUnchecked name |> UrlEncoded.decode)
 
                 if LocalPath.hasDotComponents rawNamePath then
-                    RootedRelPath.combine (RootedRelPath.directory src.data) rawNamePath
+                    RootedRelPath.directory src.data
+                    |> Option.bind (fun dir -> RootedRelPath.combine dir rawNamePath)
                     |> Option.map (fun x -> ExactRel(src, x))
                 else
                     match rawNamePath with

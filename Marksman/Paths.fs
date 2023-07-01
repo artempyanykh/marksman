@@ -296,6 +296,7 @@ type RootPath =
 module RootPath =
     let ofPath path = RootPath path
     let toLocal (RootPath p) = Abs p
+    let toAbs (RootPath p) = p
     let toSystem (RootPath p) = AbsPath.toSystem p
     let toUri (RootPath p) = AbsPath.toUri p
     let resolve (RootPath p) = AbsPath.resolve p
@@ -313,28 +314,39 @@ module RootPath =
     let filename (RootPath p) = AbsPath.filename p
     let filenameStem (RootPath p) = AbsPath.filenameStem p
 
-type RootedRelPath = { root: RootPath; path: RelPath }
+type RootedRelPath = { root: RootPath; path: option<RelPath> }
 
 module RootedRelPath =
     let mk root path =
         match path with
-        | Rel path -> { root = root; path = path }
+        | Rel path -> { root = root; path = Some path }
         | Abs path ->
             let (AbsPath sysRoot) = RootPath.resolve root
             let (AbsPath sysOther) = AbsPath.resolve path
-            let relPath = Path.GetRelativePath(sysRoot, sysOther)
-            { root = root; path = RelPath relPath }
 
-    let toAbs path = RootPath.append path.root path.path
+            if sysRoot = sysOther then
+                { root = root; path = None }
+            else
+                let relPath = Path.GetRelativePath(sysRoot, sysOther)
+                { root = root; path = Some(RelPath relPath) }
+
+    let toAbs rooted =
+        match rooted.path with
+        | None -> RootPath.toAbs rooted.root
+        | Some path -> RootPath.append rooted.root path
+
     let toLocal path = Abs(toAbs path)
     let toSystem path = toAbs path |> AbsPath.toSystem
     let toUri path = LocalPath.toUri (toLocal path)
-    let filename path = RelPath.filename path.path
-    let filenameStem path = RelPath.filenameStem path.path
+    let filename path = Path.GetFileName(toSystem path)
+    let filenameStem path = Path.GetFileNameWithoutExtension(toSystem path)
 
-    let directory path =
-        let dir = path.path |> RelPath.directory
-        { root = path.root; path = dir }
+    let directory rooted =
+        let mkDir relPath =
+            let dir = relPath |> RelPath.directory
+            { root = rooted.root; path = Some dir }
+
+        rooted.path |> Option.map mkDir
 
     let combine (root: RootedRelPath) (path: LocalPath) : option<RootedRelPath> =
         match LocalPath.combine (toLocal root) path with
@@ -344,6 +356,9 @@ module RootedRelPath =
                 mk root.root (Abs out) |> Some
             else
                 None
+
+    let rootPath { root = root } = root
+    let relPathForced { path = path } = path |> Option.defaultValue (RelPath ".")
 
 type UriWith<'T> = { uri: DocumentUri; data: 'T }
 

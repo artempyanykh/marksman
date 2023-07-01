@@ -663,6 +663,12 @@ type MarksmanServer(client: MarksmanClient) =
                     if isMarkdownFile configuredExts (AbsPath.toSystem path.data) then
                         let singletonRoot = UriWith.mkRoot par.TextDocument.Uri
 
+                        logger.trace (
+                            Log.setMessage "Opening document in single-file mode"
+                            >> Log.addContext "uri" par.TextDocument.Uri
+                            >> Log.addContext "root" singletonRoot
+                        )
+
                         let doc = Doc.fromLsp singletonRoot par.TextDocument
                         let userConfig = (State.workspace state) |> Workspace.userConfig
                         let newFolder = Folder.singleFile doc userConfig

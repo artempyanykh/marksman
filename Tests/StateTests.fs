@@ -1,4 +1,4 @@
-module Marsman.ServerTests
+module Marksman.StateTests
 
 open Newtonsoft.Json.Linq
 open Xunit

@@ -19,6 +19,7 @@ module WikiEncoded =
     let encode (str: string) = WikiEncoded(str.EncodeForWiki())
     let decode (WikiEncoded str) = str.UrlDecode()
     let raw (WikiEncoded raw) = raw
+    let encodeAsString (str: string) : string = encode str |> raw
 
 type FolderId = UriWith<RootPath>
 

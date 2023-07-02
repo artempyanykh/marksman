@@ -73,7 +73,7 @@ let renameMarkdownLabelsInDoc newLabel (doc: Doc, els) =
 
 let renameHeadingLink
     (heading: Heading)
-    (newTitle: WikiEncoded)
+    (newTitle: string)
     (el: Element, elDest: array<Dest>)
     : option<TextEdit> =
     let doesDestMatchHeading dest =
@@ -95,7 +95,8 @@ let renameHeadingLink
             let toEdit = if Heading.isTitle heading then wl.doc else wl.heading
 
             toEdit
-            |> Option.map (fun node -> { Range = node.range; NewText = WikiEncoded.raw newTitle })
+            |> Option.map (fun node ->
+                { Range = node.range; NewText = WikiEncoded.encodeAsString newTitle })
         | ML { data = MdLink.IL (_, url, _) } ->
             let docUrl = url |> Option.map Url.ofUrlNode
 
@@ -106,16 +107,18 @@ let renameHeadingLink
                     None
 
             toEdit
-            |> Option.map (fun node -> { Range = node.range; NewText = WikiEncoded.raw newTitle })
+            |> Option.map (fun node -> { Range = node.range; NewText = Slug.str newTitle })
         | _ -> None
     else
         None
 
-let renameHeadingLinksInDoc heading newTitle (doc: Doc, elsWithDest: seq<Element * array<Dest>>) =
-    let newSlug = WikiEncoded.encode newTitle
-
+let renameHeadingLinksInDoc
+    heading
+    (newTitle: string)
+    (doc: Doc, elsWithDest: seq<Element * array<Dest>>)
+    =
     let edits =
-        Seq.collect (renameHeadingLink heading newSlug >> Option.toArray) elsWithDest
+        Seq.collect (renameHeadingLink heading newTitle >> Option.toArray) elsWithDest
         |> Array.ofSeq
 
     let lspDoc = { Uri = Doc.uri doc; Version = Doc.version doc }

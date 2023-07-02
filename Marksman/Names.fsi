@@ -18,6 +18,7 @@ module WikiEncoded =
     val encode: string -> WikiEncoded
     val decode: WikiEncoded -> string
     val raw: WikiEncoded -> string
+    val encodeAsString: string -> string
 
 type FolderId = UriWith<RootPath>
 

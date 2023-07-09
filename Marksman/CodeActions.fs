@@ -1,11 +1,16 @@
 module Marksman.CodeActions
 
+open FSharpPlus
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
 open Marksman.Toc
 open Marksman.Workspace
 open Marksman.Misc
+open Marksman.Refs
+open Marksman.Index
+open Marksman.Names
+open Marksman.Paths
 
 open type System.Environment
 
@@ -19,6 +24,14 @@ let documentEdit range text documentUri : WorkspaceEdit =
     let workspaceChanges = Map.ofList [ documentUri, [| textEdit |] ]
 
     { Changes = Some workspaceChanges; DocumentChanges = None }
+
+type CreateFileAction = { name: string; newFileUri: DocumentUri }
+
+let createFile newFileUri : WorkspaceEdit =
+    let documentChanges =
+        [| DocumentChange.CreateFile { Kind = "create"; Uri = newFileUri } |]
+
+    { Changes = None; DocumentChanges = Some documentChanges }
 
 let tableOfContentsInner (doc: Doc) : DocumentAction option =
     match TableOfContents.mk (Doc.index doc) with
@@ -99,3 +112,39 @@ let tableOfContents
     (doc: Doc)
     : DocumentAction option =
     tableOfContentsInner doc
+
+let createNonexistentLink
+    (range: Range)
+    (_context: CodeActionContext)
+    (doc: Doc)
+    (folder: Folder)
+    : CreateFileAction option =
+        let configuredExts = (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+        let pos = range.Start // XXX: Should this just use the Start??
+        monad' {
+            let! atPos = Doc.index doc |> Index.linkAtPos pos
+            let! uref = Uref.ofElement configuredExts (Doc.id doc) atPos
+            let refs = Dest.tryResolveUref uref doc folder
+
+            // Early return if the file exists
+            do! guard (Seq.isEmpty refs)
+
+            let! name =
+                match uref with
+                | Uref.Doc name -> Some name.data
+                | Uref.Heading (Some name, _) -> Some name.data
+                | _ -> None
+            let! internPath = InternName.tryAsPath name
+            let relPath =
+                InternPath.toRel internPath
+                |> RelPath.toSystem
+                |> ensureMarkdownExt configuredExts
+                |> RelPath
+            let rootPath = Folder.rootPath folder
+            let path = RootPath.append rootPath relPath
+            let filename = AbsPath.filename path
+            let uri = AbsPath.toUri path
+
+            // create the file
+            { name = $"Create `{filename}`"; newFileUri = uri }
+        }

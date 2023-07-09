@@ -7,7 +7,11 @@ markdown.file_extensions = ["md", "markdown"]
 text_sync = "full"
 
 [code_action]
-toc.enable = true # Enable/disable "Table of Contents" code action
+# Enable/disable "Table of Contents" code action
+toc.enable = true
+
+# Enable/disable "Create nonexistent linked file" code action
+create_nonexistent_link.enable = true
 
 [completion]
 # The style of wiki links completion.

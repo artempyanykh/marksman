@@ -48,10 +48,14 @@ let mkWorkspaceEdit
     for docEdit in docEdits do
         docEdit.Edits |> Array.sortInPlaceWith (fun x y -> -(compare x y))
 
+    let docChanges =
+      docEdits
+      |> Array.map (DocumentChange.TextDocumentEdit)
+
     if supportsDocumentEdit then
-        { Changes = None; DocumentChanges = Some docEdits }
+        { Changes = None; DocumentChanges = Some docChanges }
     else
-        { Changes = Some(WorkspaceEdit.DocumentChangesToChanges docEdits)
+        { Changes = Some(WorkspaceEdit.DocumentChangesToChanges docChanges)
           DocumentChanges = None }
 
 let renameMarkdownLabel (newLabel: string) (element: Element) : option<TextEdit> =

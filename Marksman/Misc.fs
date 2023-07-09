@@ -153,6 +153,13 @@ let chopMarkdownExt (configuredExts: seq<string>) (path: string) : string =
     else
         path
 
+let ensureMarkdownExt (configuredExts: seq<string>) (path: string) : string =
+    if isMarkdownFile configuredExts path then
+        path
+    else
+        let ext = Seq.head configuredExts
+        $"{path}.{ext}"
+
 let isPotentiallyMarkdownFile (configuredExts: seq<string>) (path: string) : bool =
     let ext = Path.GetExtension path
 

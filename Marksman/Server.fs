@@ -949,8 +949,21 @@ type MarksmanServer(client: MarksmanClient) =
                     else
                         [||]
 
+                let createLinkAction =
+                    if config.CaCreateNonexistentLinkEnable() then
+                        CodeActions.createNonexistentLink opts.Range opts.Context doc folder
+                        |> Option.toArray
+                        |> Array.map (fun ca ->
+                            let wsEdit = CodeActions.createFile ca.newFileUri
+                            codeAction ca.name wsEdit)
+                    else
+                        [||]
+
                 let codeActions: TextDocumentCodeActionResult =
-                    tocAction |> Array.map U2.Second
+                    seq { tocAction
+                          createLinkAction }
+                    |> Array.concat
+                    |> Array.map U2.Second
 
                 Mutation.output (LspResult.success (Some codeActions))
 

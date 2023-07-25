@@ -9,9 +9,14 @@ let editRanges =
     function
     | Refactor.Edit wsEdit ->
         match wsEdit.DocumentChanges with
-        | Some docEdits ->
-            docEdits
-            |> Array.map (fun docEdit ->
+        | Some docChanges ->
+            docChanges
+            |> Array.map (fun docChange ->
+                let docEdit =
+                    match docChange with
+                    | TextDocumentEdit docEdit -> docEdit
+                    | _ -> failwith $"Refactoring should always produce TextDocumentEdits"
+
                 let doc = Path.GetFileName(docEdit.TextDocument.Uri)
                 let ranges = docEdit.Edits |> Array.map (fun x -> x.Range)
                 doc, ranges)

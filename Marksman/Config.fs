@@ -124,18 +124,21 @@ module TextSync =
 /// without lenses manageable.
 type Config =
     { caTocEnable: option<bool>
+      caCreateMissingFileEnable: option<bool>
       coreMarkdownFileExtensions: option<array<string>>
       coreTextSync: option<TextSync>
       complWikiStyle: option<ComplWikiStyle> }
 
     static member Default =
         { caTocEnable = Some true
+          caCreateMissingFileEnable = Some true
           coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
           coreTextSync = Some Full
           complWikiStyle = Some TitleSlug }
 
     static member Empty =
         { caTocEnable = None
+          caCreateMissingFileEnable = None
           coreMarkdownFileExtensions = None
           coreTextSync = None
           complWikiStyle = None }
@@ -143,6 +146,11 @@ type Config =
     member this.CaTocEnable() =
         this.caTocEnable
         |> Option.orElse Config.Default.caTocEnable
+        |> Option.get
+
+    member this.CaCreateMissingFileEnable() =
+        this.caCreateMissingFileEnable
+        |> Option.orElse Config.Default.caCreateMissingFileEnable
         |> Option.get
 
     member this.CoreMarkdownFileExtensions() =
@@ -164,6 +172,9 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
 
+        let! caCreateMissingFileEnable =
+            getFromTableOpt<bool> table [] [ "code_action"; "create_missing_file"; "enable" ]
+
         let! coreMarkdownFileExtensions =
             getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "file_extensions" ]
 
@@ -176,6 +187,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
             complWikiStyle |> Option.bind ComplWikiStyle.ofStringOpt
 
         { caTocEnable = caTocEnable
+          caCreateMissingFileEnable = caCreateMissingFileEnable
           coreMarkdownFileExtensions = coreMarkdownFileExtensions
           coreTextSync = coreTextSync
           complWikiStyle = complWikiStyle }
@@ -186,6 +198,9 @@ module Config =
 
     let merge hi low =
         { caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
+          caCreateMissingFileEnable =
+            hi.caCreateMissingFileEnable
+            |> Option.orElse low.caCreateMissingFileEnable
           coreMarkdownFileExtensions =
             hi.coreMarkdownFileExtensions
             |> Option.orElse low.coreMarkdownFileExtensions

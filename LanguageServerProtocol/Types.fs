@@ -275,6 +275,11 @@ type DocumentChange =
   | RenameFile of RenameFile
   | DeleteFile of DeleteFile
 
+module DocumentChange =
+    let createFile uri = DocumentChange.CreateFile {Kind = "create"; Uri = uri}
+    let renameFile oldUri newUri = DocumentChange.RenameFile {Kind = "rename"; oldUri = oldUri; newUri = newUri}
+    let deleteFile uri = DocumentChange.DeleteFile {Kind = "delete"; Uri = uri}
+
 type TraceSetting =
   | Off = 0
   | Messages = 1

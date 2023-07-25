@@ -28,8 +28,7 @@ let documentEdit range text documentUri : WorkspaceEdit =
 type CreateFileAction = { name: string; newFileUri: DocumentUri }
 
 let createFile newFileUri : WorkspaceEdit =
-    let documentChanges =
-        [| DocumentChange.CreateFile { Kind = "create"; Uri = newFileUri } |]
+    let documentChanges = [| DocumentChange.createFile newFileUri |]
 
     { Changes = None; DocumentChanges = Some documentChanges }
 
@@ -113,38 +112,43 @@ let tableOfContents
     : DocumentAction option =
     tableOfContentsInner doc
 
-let createNonexistentLink
+let createMissingFile
     (range: Range)
     (_context: CodeActionContext)
     (doc: Doc)
     (folder: Folder)
     : CreateFileAction option =
-        let configuredExts = (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
-        let pos = range.Start // XXX: Should this just use the Start??
-        monad' {
-            let! atPos = Doc.index doc |> Index.linkAtPos pos
-            let! uref = Uref.ofElement configuredExts (Doc.id doc) atPos
-            let refs = Dest.tryResolveUref uref doc folder
+    let configuredExts =
+        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
-            // Early return if the file exists
-            do! guard (Seq.isEmpty refs)
+    let pos = range.Start
 
-            let! name =
-                match uref with
-                | Uref.Doc name -> Some name.data
-                | Uref.Heading (Some name, _) -> Some name.data
-                | _ -> None
-            let! internPath = InternName.tryAsPath name
-            let relPath =
-                InternPath.toRel internPath
-                |> RelPath.toSystem
-                |> ensureMarkdownExt configuredExts
-                |> RelPath
-            let rootPath = Folder.rootPath folder
-            let path = RootPath.append rootPath relPath
-            let filename = AbsPath.filename path
-            let uri = AbsPath.toUri path
+    monad' {
+        let! atPos = Doc.index doc |> Index.linkAtPos pos
+        let! uref = Uref.ofElement configuredExts (Doc.id doc) atPos
+        let refs = Dest.tryResolveUref uref doc folder
 
-            // create the file
-            { name = $"Create `{filename}`"; newFileUri = uri }
-        }
+        // Early return if the file exists
+        do! guard (Seq.isEmpty refs)
+
+        let! name =
+            match uref with
+            | Uref.Doc name -> Some name.data
+            | Uref.Heading (Some name, _) -> Some name.data
+            | _ -> None
+
+        let! internPath = InternName.tryAsPath name
+
+        let relPath =
+            InternPath.toRel internPath
+            |> RelPath.toSystem
+            |> ensureMarkdownExt configuredExts
+            |> RelPath
+
+        let path = RootPath.append (Folder.rootPath folder) relPath
+        let filename = AbsPath.filename path
+        let uri = AbsPath.toUri path
+
+        // create the file
+        { name = $"Create `{filename}`"; newFileUri = uri }
+    }

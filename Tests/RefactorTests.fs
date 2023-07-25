@@ -16,6 +16,7 @@ let editRanges =
                     match docChange with
                     | TextDocumentEdit docEdit -> docEdit
                     | _ -> failwith $"Refactoring should always produce TextDocumentEdits"
+
                 let doc = Path.GetFileName(docEdit.TextDocument.Uri)
                 let ranges = docEdit.Edits |> Array.map (fun x -> x.Range)
                 doc, ranges)

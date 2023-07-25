@@ -922,9 +922,9 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let docPath = opts.TextDocument.Uri |> UriWith.mkAbs
 
-            let codeAction title edit =
+            let codeAction title kind edit =
                 { Title = title
-                  Kind = Some CodeActionKind.Source
+                  Kind = kind
                   Diagnostics = None
                   Command = None
                   Data = None
@@ -945,24 +945,25 @@ type MarksmanServer(client: MarksmanClient) =
                             let wsEdit =
                                 (CodeActions.documentEdit ca.edit ca.newText opts.TextDocument.Uri)
 
-                            codeAction ca.name wsEdit)
+                            let caKind = Some CodeActionKind.Source
+
+                            codeAction ca.name caKind wsEdit)
                     else
                         [||]
 
-                let createLinkAction =
-                    if config.CaCreateNonexistentLinkEnable() then
-                        CodeActions.createNonexistentLink opts.Range opts.Context doc folder
+                let createMissingFileAction =
+                    if config.CaCreateMissingFileEnable() then
+                        CodeActions.createMissingFile opts.Range opts.Context doc folder
                         |> Option.toArray
                         |> Array.map (fun ca ->
                             let wsEdit = CodeActions.createFile ca.newFileUri
-                            codeAction ca.name wsEdit)
+                            let caKind = Some CodeActionKind.QuickFix
+                            codeAction ca.name caKind wsEdit)
                     else
                         [||]
 
                 let codeActions: TextDocumentCodeActionResult =
-                    seq { tocAction
-                          createLinkAction }
-                    |> Array.concat
+                    Array.concat [| tocAction; createMissingFileAction |]
                     |> Array.map U2.Second
 
                 Mutation.output (LspResult.success (Some codeActions))

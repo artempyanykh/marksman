@@ -49,6 +49,27 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
     * via [mason.nvim][mason-nvim] (automatic server installation) (requires [mason-lspconfig.nvim][mason-nvim-lsp-config])
     * via [nvim-lspconfig][nvim-marksman],
     * via [CoC-marksman][coc-marksman].
+* Vim:
+    * via [ale](ale) - will support Marksman out-of-the-box once [PR](https://github.com/dense-analysis/ale/pull/4565) is merged; in the meantime...
+
+      Example config (add the following to your `~/.vim/after/ftplugin/markdown.vim`):
+
+      ```viml
+      if exists('g:loaded_ale')
+        call ale#linter#Define('markdown', { 'name': 'marksman', 'lsp': 'stdio', 'executable': 'marksman', 'command': '%e server', 'initialization_options': {} })
+      end
+      ```
+
+    * via [lsp](lsp)
+
+      Example config (add the following to your `~/.vim/after/ftplugin/markdown.vim`):
+
+      ```viml
+      if exists('g:loaded_lsp')
+        call LspAddServer([#{ name: 'marksman', filetype: ['markdown'], path: '/path/to/marksman', args: ['server'], syncInit: v:true }])
+      end
+      ```
+
 * Emacs:
     * via [LSP Mode](https://emacs-lsp.github.io/lsp-mode/page/lsp-marksman/) (automatic server installation).
 
@@ -65,7 +86,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
       `init.el`
 
       ```lisp
-      (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))      
+      (add-to-list 'eglot-server-programs '(markdown-mode . ("marksman")))
       (add-hook 'markdown-mode-hook #'eglot-ensure)
       ```
 * [Helix](https://helix-editor.com/) supports Marksman out of the box. However, you need add `marksman` binary to
@@ -144,3 +165,5 @@ LSP but it's not a part of the spec at least until and including v3.17.
 [eglot-marksman-pr]: https://github.com/joaotavora/eglot/pull/1013
 
 [sublime-marksman]: https://github.com/bitsper2nd/LSP-marksman
+
+[ale]: https://github.com/dense-analysis/ale

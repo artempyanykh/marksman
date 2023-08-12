@@ -52,15 +52,14 @@
         <Compile Include="Program.fs"/>
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.5"/>
-        <PackageReference Include="FSharp.SystemCommandLine" Version="0.13.0-beta4"/>
-        <PackageReference Include="FSharpPlus" Version="1.2.4"/>
-        <PackageReference Include="Glob" Version="1.1.9"/>
-        <PackageReference Include="Markdig" Version="0.30.2"/>
+        <PackageReference Include="FSharp.SystemCommandLine" />
+        <PackageReference Include="FSharpPlus" />
+        <PackageReference Include="Glob" />
+        <PackageReference Include="Markdig" />
         <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->
-        <PackageReference Include="Serilog" Version="2.11.0"/>
-        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
-        <PackageReference Include="Tomlyn" Version="0.16.0"/>
+        <PackageReference Include="Serilog" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Tomlyn" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj"/>

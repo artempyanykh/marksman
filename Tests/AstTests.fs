@@ -37,7 +37,7 @@ let testAstShape () =
           "[collapsedRef][]"
           "[[wiki-link]]"
           "## Sub 1 {sub-1}"
-          "[inline-link](url title)"
+          "[inline-link](url)"
           "## Sub 2 {sub-2}"
           "#tag"
           "[collapsedRef]: DefURL" ]

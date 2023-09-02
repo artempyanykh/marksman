@@ -2,8 +2,9 @@ module Marksman.Diag
 
 open Ionide.LanguageServerProtocol.Types
 
-open Marksman.Workspace
 open Marksman.Names
+open Marksman.Doc
+open Marksman.Workspace
 
 module Lsp = Ionide.LanguageServerProtocol.Types
 

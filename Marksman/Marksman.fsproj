@@ -25,6 +25,8 @@
     </Target>
     <ItemGroup>
         <Compile Include="SuffixTree.fs"/>
+        <Compile Include="MMap.fs"/>
+        <Compile Include="Graph.fs"/>
         <Compile Include="Misc.fs"/>
         <Compile Include="Paths.fsi"/>
         <Compile Include="Paths.fs"/>
@@ -37,6 +39,8 @@
         <Compile Include="Ast.fs"/>
         <Compile Include="Parser.fs"/>
         <Compile Include="Index.fs"/>
+        <Compile Include="Doc.fsi"/>
+        <Compile Include="Doc.fs"/>
         <Compile Include="Workspace.fsi"/>
         <Compile Include="Workspace.fs"/>
         <Compile Include="Semato.fs"/>

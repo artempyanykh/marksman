@@ -4,6 +4,7 @@ open System.Runtime.InteropServices
 open Snapper
 open Marksman.Misc
 open Marksman.Paths
+open Marksman.Doc
 open Marksman.Workspace
 open Marksman.CodeActions
 

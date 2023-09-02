@@ -1,16 +1,17 @@
 ﻿module Marksman.State
 
-open Ionide.LanguageServerProtocol.Logging
-open Ionide.LanguageServerProtocol.Types
-
 open FSharpPlus.GenericBuilders
 
-open Marksman.Diag
-open Marksman.Workspace
+open Ionide.LanguageServerProtocol.Logging
+open Ionide.LanguageServerProtocol.Types
+open Newtonsoft.Json.Linq
+
 open Marksman.Paths
 open Marksman.Names
 open Marksman.Config
-open Newtonsoft.Json.Linq
+open Marksman.Doc
+open Marksman.Workspace
+open Marksman.Diag
 
 type InitOptions = { preferredTextSyncKind: Option<TextSync> }
 

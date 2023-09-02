@@ -367,8 +367,6 @@ module UriWith =
         let localPath = RootedRelPath.toAbs uri.data
         { uri = uri.uri; data = localPath }
 
-/// Canonical document path is a path relative to the document's folder with
-/// any known markdown extensions removed from the file name
 type CanonDocPath = private CanonDocPath of string
 
 module CanonDocPath =

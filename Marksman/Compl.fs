@@ -5,14 +5,15 @@ open FSharpPlus.GenericBuilders
 open Ionide.LanguageServerProtocol.Logging
 open Ionide.LanguageServerProtocol.Types
 
-open Marksman.Config
-open Marksman.Cst
-open Marksman.Index
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
 open Marksman.Refs
 open Marksman.Text
+open Marksman.Cst
+open Marksman.Doc
+open Marksman.Index
+open Marksman.Config
 open Marksman.Workspace
 
 let private logger = LogProvider.getLoggerByName "Compl"

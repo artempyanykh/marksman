@@ -7,7 +7,7 @@ open Marksman.Cst
 open Marksman.Index
 open Marksman.Misc
 open Marksman.Text
-open Marksman.Workspace
+open Marksman.Doc
 
 [<Literal>]
 let StartMarker = """<!--toc:start-->"""

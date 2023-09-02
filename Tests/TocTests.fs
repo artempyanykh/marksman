@@ -1,10 +1,10 @@
 module Marksman.TocTests
 
-open Marksman.Workspace
 open Xunit
 
 open Marksman.Helpers
 open Marksman.Toc
+open Marksman.Doc
 
 open type System.Environment
 

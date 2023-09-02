@@ -18,6 +18,7 @@ open Marksman.Index
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Paths
+open Marksman.Doc
 open Marksman.Refs
 open Marksman.State
 open Marksman.Workspace

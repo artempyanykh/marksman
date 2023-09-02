@@ -7,10 +7,11 @@ open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 open Marksman.Paths
-open Marksman.Workspace
+open Marksman.Cst
+open Marksman.Doc
 open Marksman.Index
 open Marksman.Refs
-open Marksman.Cst
+open Marksman.Workspace
 
 type ReferenceResolution() =
     let mkFolder size : Folder =

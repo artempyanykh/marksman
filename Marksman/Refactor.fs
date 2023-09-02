@@ -2,9 +2,10 @@ module Marksman.Refactor
 
 open Ionide.LanguageServerProtocol.Types
 
-open Marksman.Cst
 open Marksman.Misc
+open Marksman.Cst
 open Marksman.Names
+open Marksman.Doc
 open Marksman.Refs
 open Marksman.Workspace
 

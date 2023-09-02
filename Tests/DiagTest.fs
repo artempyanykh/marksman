@@ -7,6 +7,7 @@ open Marksman.Helpers
 open Marksman.Index
 open Marksman.Names
 open Marksman.Paths
+open Marksman.Doc
 open Marksman.Workspace
 
 let entryToHuman (entry: Entry) =

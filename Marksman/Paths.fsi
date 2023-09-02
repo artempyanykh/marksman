@@ -93,6 +93,8 @@ module UriWith =
     val mkRooted: UriWith<RootPath> -> LocalPath -> UriWith<RootedRelPath>
     val rootedRelToAbs: UriWith<RootedRelPath> -> UriWith<AbsPath>
 
+/// Canonical document path is a path relative to the document's folder with
+/// any known markdown extensions removed from the file name
 type CanonDocPath = private CanonDocPath of string
 
 module CanonDocPath =

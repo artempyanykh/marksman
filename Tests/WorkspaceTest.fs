@@ -7,6 +7,7 @@ open Xunit
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Paths
+open Marksman.Doc
 open Marksman.Workspace
 open Marksman.Config
 

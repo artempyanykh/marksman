@@ -3,9 +3,8 @@ module Marksman.SematoTests
 open Xunit
 
 open Marksman.Helpers
-open Marksman.Paths
 open Marksman.Semato
-open Marksman.Workspace
+open Marksman.Doc
 
 let folderPath = (dummyRootPath [ "folder" ]) |> mkFolderId
 

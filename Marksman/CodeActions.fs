@@ -1,18 +1,19 @@
 module Marksman.CodeActions
 
+open type System.Environment
+
 open FSharpPlus
 open Ionide.LanguageServerProtocol.Types
 open Ionide.LanguageServerProtocol.Logging
 
-open Marksman.Toc
-open Marksman.Workspace
 open Marksman.Misc
-open Marksman.Refs
-open Marksman.Index
-open Marksman.Names
 open Marksman.Paths
-
-open type System.Environment
+open Marksman.Names
+open Marksman.Doc
+open Marksman.Index
+open Marksman.Workspace
+open Marksman.Refs
+open Marksman.Toc
 
 let private logger = LogProvider.getLoggerByName "CodeActions"
 

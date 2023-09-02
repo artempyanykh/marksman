@@ -1,8 +1,5 @@
 ﻿module Marksman.Refs
 
-open System
-open System.IO
-
 open FSharpPlus.Data
 open FSharpPlus.Operators
 open FSharpPlus.GenericBuilders
@@ -13,6 +10,7 @@ open Marksman.Index
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
+open Marksman.Doc
 open Marksman.Workspace
 
 type InternNameNode = Node<InternName>

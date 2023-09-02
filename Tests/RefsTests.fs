@@ -10,6 +10,7 @@ open Marksman.Misc
 open Marksman.Names
 open Marksman.Paths
 open Marksman.Refs
+open Marksman.Doc
 open Marksman.Workspace
 
 module InternNameTests =

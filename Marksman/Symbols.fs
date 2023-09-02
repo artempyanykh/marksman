@@ -5,8 +5,9 @@ open Ionide.LanguageServerProtocol.Types
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Cst
-open Marksman.Workspace
+open Marksman.Doc
 open Marksman.Index
+open Marksman.Workspace
 
 let headingToSymbolName (h: Node<Heading>) : string = $"H{h.data.level}: {Heading.name h.data}"
 

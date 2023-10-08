@@ -11,7 +11,7 @@ open Marksman.Cst
 open Marksman.Doc
 open Marksman.Index
 open Marksman.Refs
-open Marksman.Workspace
+open Marksman.Folder
 
 type ReferenceResolution() =
     let mkFolder size : Folder =

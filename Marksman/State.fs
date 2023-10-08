@@ -10,6 +10,7 @@ open Marksman.Paths
 open Marksman.Names
 open Marksman.Config
 open Marksman.Doc
+open Marksman.Folder
 open Marksman.Workspace
 open Marksman.Diag
 

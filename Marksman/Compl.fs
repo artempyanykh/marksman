@@ -14,7 +14,7 @@ open Marksman.Cst
 open Marksman.Doc
 open Marksman.Index
 open Marksman.Config
-open Marksman.Workspace
+open Marksman.Folder
 
 let private logger = LogProvider.getLoggerByName "Compl"
 

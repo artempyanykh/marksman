@@ -20,8 +20,9 @@ open Marksman.Names
 open Marksman.Paths
 open Marksman.Doc
 open Marksman.Refs
-open Marksman.State
+open Marksman.Folder
 open Marksman.Workspace
+open Marksman.State
 
 module ServerUtil =
     let logger = LogProvider.getLoggerByName "ServerUtil"

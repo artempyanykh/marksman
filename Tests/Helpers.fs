@@ -5,7 +5,7 @@ open Snapper
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Doc
-open Marksman.Workspace
+open Marksman.Folder
 open Marksman.CodeActions
 
 let pathToUri (path: string) = $"file://{path}"

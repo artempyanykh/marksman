@@ -11,7 +11,7 @@ open Marksman.Paths
 open Marksman.Names
 open Marksman.Doc
 open Marksman.Index
-open Marksman.Workspace
+open Marksman.Folder
 open Marksman.Refs
 open Marksman.Toc
 

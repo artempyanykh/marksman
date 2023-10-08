@@ -5,6 +5,7 @@ open Xunit
 
 open Marksman
 open Marksman.Paths
+open Marksman.Folder
 open Marksman.Workspace
 open Marksman.State
 

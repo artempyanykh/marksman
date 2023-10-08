@@ -4,6 +4,7 @@ open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Names
 open Marksman.Doc
+open Marksman.Folder
 open Marksman.Workspace
 
 module Lsp = Ionide.LanguageServerProtocol.Types

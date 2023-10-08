@@ -11,7 +11,7 @@ open Marksman.Names
 open Marksman.Paths
 open Marksman.Refs
 open Marksman.Doc
-open Marksman.Workspace
+open Marksman.Folder
 
 module InternNameTests =
     let internAsPath docId name =

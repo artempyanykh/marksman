@@ -6,7 +6,7 @@ open Marksman.Misc
 open Marksman.Ast
 open Marksman.Names
 open Marksman.Doc
-open Marksman.Workspace
+open Marksman.Folder
 open Marksman.Index
 
 let private filterDocsByName (folder: Folder) (name: InternName) : DocId[] =

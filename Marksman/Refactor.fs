@@ -7,7 +7,7 @@ open Marksman.Cst
 open Marksman.Names
 open Marksman.Doc
 open Marksman.Refs
-open Marksman.Workspace
+open Marksman.Folder
 
 type RenameResult =
     | Edit of WorkspaceEdit

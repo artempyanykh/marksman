@@ -8,7 +8,7 @@ open Marksman.Index
 open Marksman.Names
 open Marksman.Paths
 open Marksman.Doc
-open Marksman.Workspace
+open Marksman.Folder
 
 let entryToHuman (entry: Entry) =
     let lsp = diagToLsp entry

@@ -11,7 +11,7 @@ open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
 open Marksman.Doc
-open Marksman.Workspace
+open Marksman.Folder
 
 type InternNameNode = Node<InternName>
 

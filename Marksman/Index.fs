@@ -86,6 +86,10 @@ module Index =
 
     let tags index = index.tags
 
+    let filterTagsByName name index =
+        index.tags
+        |> Array.filter (fun { data = tag } -> tag.name.text = name)
+
     let tryFindLinkDef (label: LinkLabel) index =
         index.linkDefs
         |> Array.tryFind (fun { data = ld } -> (MdLinkDef.normalizedLabel ld) = label)

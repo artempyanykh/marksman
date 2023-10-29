@@ -220,7 +220,9 @@ module BasicRefsTests =
                    "Entry 1" // 11
                    "" // 12
                    "## Dup" // 13
-                   "Entry 2" |] // 14
+                   "Entry 2"  // 14
+                   "" // 15
+                   "#tag1 #tag2" |] // 16
         )
 
     let doc2 =
@@ -246,10 +248,38 @@ module BasicRefsTests =
                    "" // 16
                    "[d2-link-1]: some-url" // 17
                    "" // 18
-                   "[^fn1]: This is footnote" |] // 19
+                   "[^fn1]: This is footnote" // 19
+                   "" //20
+                   "#tag1" |] //21
         )
 
     let folder = FakeFolder.Mk [ doc1; doc2 ]
+
+    [<Fact>]
+    let refToTag_atTag () =
+        let def =
+            Cst.elementAtPos (Position.Mk(21, 1)) (Doc.cst doc2)
+            |> Option.defaultWith (fun _ -> failwith "No def")
+
+        let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc1.md, (16,0)-(16,5))" ]
+
+    [<Fact>]
+    let refToTag_atTag_withDecl () =
+        let def =
+            Cst.elementAtPos (Position.Mk(21, 1)) (Doc.cst doc2)
+            |> Option.defaultWith (fun _ -> failwith "No def")
+
+        let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
+
+        checkInlineSnapshot
+            (fun x -> x.ToString())
+            refs
+            [ "(doc2.md, (21,0)-(21,5))"; "(doc1.md, (16,0)-(16,5))" ]
 
     [<Fact>]
     let refToLinkDef_atDef () =
@@ -484,6 +514,9 @@ module EncodingTests =
         | Dest.LinkDef (doc, node) ->
             let defName = MdLinkDef.label node.data
             $"{Doc.name doc} / {defName}"
+        | Dest.Tag (doc, node) ->
+            let tag = node.text
+            $"{Doc.name doc} / {tag}"
 
     let requireUrefAtPos doc line col =
         requireElementAtPos doc line col

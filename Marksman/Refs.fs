@@ -182,6 +182,7 @@ type Dest =
     | Doc of FileLink
     | Heading of DocLink * Node<Heading>
     | LinkDef of Doc * Node<MdLinkDef>
+    | Tag of Doc * Node<Tag>
 
 module Dest =
     let doc: Dest -> Doc =
@@ -189,6 +190,7 @@ module Dest =
         | Dest.Doc { dest = doc }
         | Dest.LinkDef (doc, _) -> doc
         | Dest.Heading (docLink, _) -> DocLink.doc docLink
+        | Dest.Tag (doc, _) -> doc
 
     let element: Dest -> Element option =
         function
@@ -196,6 +198,7 @@ module Dest =
         | Dest.Doc _ -> None
         | Dest.Heading (_, h) -> Some(H h)
         | Dest.LinkDef (_, ld) -> Some(MLD ld)
+        | Dest.Tag (_, t) -> Some(T t)
 
     let range: Dest -> Range =
         function
@@ -205,12 +208,14 @@ module Dest =
             |> Option.defaultWith (Doc.text doc).FullRange
         | Dest.Heading (_, heading) -> heading.range
         | Dest.LinkDef (_, linkDef) -> linkDef.range
+        | Dest.Tag (_, tag) -> tag.range
 
     let scope: Dest -> Range =
         function
         | Dest.Doc { dest = doc } -> (Doc.text doc).FullRange()
         | Dest.Heading (_, heading) -> heading.data.scope
         | Dest.LinkDef (_, linkDef) -> linkDef.range
+        | Dest.Tag (_, tag) -> tag.range
 
     let uri (ref: Dest) : DocumentUri = doc ref |> Doc.uri
 
@@ -305,6 +310,7 @@ module Dest =
             | H h when Heading.isTitle h.data ->
                 [| Dest.Doc { link = h.text; kind = FileLinkKind.Title; dest = srcDoc } |]
             | H h -> [| Dest.Heading(Implicit srcDoc, h) |]
+            | T t -> [| Dest.Tag(srcDoc, t) |]
             | link when Element.isLink link ->
                 let linkToDecl = resolveLinks folder srcDoc
                 Map.tryFind link linkToDecl |> Option.defaultValue [||]
@@ -316,17 +322,28 @@ module Dest =
                 | Dest.LinkDef _ -> [ srcDoc ]
                 | Dest.Heading _
                 | Dest.Doc _ -> Folder.docs folder |> List.ofSeq
+                | Dest.Tag _ -> Folder.docs folder |> List.ofSeq
 
             let referencingEls =
                 seq {
                     for targetDoc in targetDocs do
-                        let targetDocRefs = resolveLinks folder targetDoc
+                        match declToFind with
+                        | Dest.Tag(_, tag) ->
+                            let targets =
+                                Doc.index targetDoc
+                                |> Index.filterTagsByName tag.data.name.text
+                                |> Seq.filter (fun t -> T t <> el)
+                                |> Seq.map (fun t -> targetDoc, T t, [| Dest.Tag(targetDoc, t) |])
 
-                        let backRefs =
-                            findReferencingElements targetDocRefs declToFind
-                            |> Seq.map (fun (el, dest) -> targetDoc, el, dest)
+                            yield! targets
+                        | _ ->
+                            let targetDocRefs = resolveLinks folder targetDoc
 
-                        yield! backRefs
+                            let backRefs =
+                                findReferencingElements targetDocRefs declToFind
+                                |> Seq.map (fun (el, dest) -> targetDoc, el, dest)
+
+                            yield! backRefs
                 }
 
             let declEl =

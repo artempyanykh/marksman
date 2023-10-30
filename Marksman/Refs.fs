@@ -328,7 +328,7 @@ module Dest =
                 seq {
                     for targetDoc in targetDocs do
                         match declToFind with
-                        | Dest.Tag(_, tag) ->
+                        | Dest.Tag (_, tag) ->
                             let targets =
                                 Doc.index targetDoc
                                 |> Index.filterTagsByName tag.data.name.text

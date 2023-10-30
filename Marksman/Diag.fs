@@ -108,8 +108,7 @@ let refToHuman (ref: Dest) : string =
     | Dest.Heading (docLink, { data = heading }) ->
         $"heading {Heading.name heading} in the document {Doc.name (DocLink.doc docLink)}"
     | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
-    | Dest.Tag (doc, { data = tag }) ->
-        $"tag {tag.name} in the document {Doc.name doc}"
+    | Dest.Tag (doc, { data = tag }) -> $"tag {tag.name} in the document {Doc.name doc}"
 
 let docRefToHuman (name: string) : string = $"document '{name}'"
 

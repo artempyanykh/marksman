@@ -220,7 +220,7 @@ module BasicRefsTests =
                    "Entry 1" // 11
                    "" // 12
                    "## Dup" // 13
-                   "Entry 2"  // 14
+                   "Entry 2" // 14
                    "" // 15
                    "#tag1 #tag2" |] // 16
         )
@@ -263,10 +263,7 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc1.md, (16,0)-(16,5))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "(doc1.md, (16,0)-(16,5))" ]
 
     [<Fact>]
     let refToTag_atTag_withDecl () =

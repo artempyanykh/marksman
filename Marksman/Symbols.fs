@@ -39,16 +39,34 @@ let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
 
     sym
 
+let rec tagToDocumentSymbol (t: Node<Tag>) : DocumentSymbol =
+    let name = t.data.name.text
+    let kind = SymbolKind.String
+    let range = t.range
+
+    { Name = name
+      Detail = None
+      Kind = kind
+      Range = range
+      SelectionRange = range
+      Children = None }
+
 let rec headingToDocumentSymbol (isEmacs: bool) (h: Node<Heading>) : DocumentSymbol =
     let name = Heading.name h.data
     let kind = SymbolKind.String
     let range = h.data.scope
     let selectionRange = h.range
 
+    let toDocumentSymbol (e: Element) : option<DocumentSymbol> =
+        match e with
+        | H h -> Some(headingToDocumentSymbol isEmacs h)
+        | T t -> Some(tagToDocumentSymbol t)
+        | _ -> None
+
     let children =
         h.data.children
-        |> Element.pickHeadings
-        |> Array.map (headingToDocumentSymbol isEmacs)
+        |> Array.map toDocumentSymbol
+        |> Array.collect Option.toArray
 
     let children =
         if Array.isEmpty children then
@@ -89,12 +107,17 @@ let docSymbols
         |> Array.ofSeq
         |> Second
     else
-        let allHeadings = Doc.index >> Index.headings <| doc
+        let allHeadings =
+            Doc.index >> Index.headings <| doc
+            |> Seq.map (headingToSymbolInfo (Doc.id doc))
+            |> Array.ofSeq
 
-        allHeadings
-        |> Seq.map (headingToSymbolInfo (Doc.id doc))
-        |> Array.ofSeq
-        |> First
+        let allTags =
+            Doc.index >> Index.tags <| doc
+            |> Seq.map (tagToSymbolInfo (Doc.id doc))
+            |> Array.ofSeq
+
+        Array.append allHeadings allTags |> First
 
 let workspaceSymbols (query: string) (ws: Workspace) : array<SymbolInformation> =
     seq {

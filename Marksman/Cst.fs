@@ -333,9 +333,6 @@ module Element =
         | MLD def -> Some def
         | _ -> None
 
-    let pickHeadings (elements: array<Element>) : array<Node<Heading>> =
-        elements |> Array.map asHeading |> Array.collect Option.toArray
-
     let isDecl =
         function
         | WL _

@@ -9,11 +9,26 @@ open Marksman.Cst
 open Marksman.Workspace
 open Marksman.Index
 
-let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
-    let name = Heading.name h.data
-    let name = $"H{h.data.level}: {name}"
-    let kind = SymbolKind.String
+let headingToSymbolName (h: Node<Heading>) : string = $"H{h.data.level}: {Heading.name h.data}"
 
+let tagToSymbolName (t: Node<Tag>) : string = $"Tag: {t.data.name.text}"
+
+let tagToSymbolInfo (docUri: DocId) (t: Node<Tag>) : SymbolInformation =
+    let name = tagToSymbolName t
+    let kind = SymbolKind.String
+    let location = { Uri = docUri.uri; Range = t.range }
+
+    let sym =
+        { Name = name
+          Kind = kind
+          Location = location
+          ContainerName = None }
+
+    sym
+
+let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
+    let name = headingToSymbolName h
+    let kind = SymbolKind.String
     let location = { Uri = docUri.uri; Range = h.range }
 
     let sym =
@@ -85,15 +100,18 @@ let workspaceSymbols (query: string) (ws: Workspace) : array<SymbolInformation> 
     seq {
         for folder in Workspace.folders ws do
             for doc in Folder.docs folder do
-                let headings = Doc.index doc |> Index.headings
+                let matchingHeadingSymbols =
+                    Doc.index doc
+                    |> Index.headings
+                    |> Seq.filter (headingToSymbolName >> query.IsSubSequenceOf)
+                    |> Seq.map (headingToSymbolInfo (Doc.id doc))
 
-                let matchingHeadings =
-                    headings
-                    |> Seq.filter (fun { data = h } -> query.IsSubSequenceOf(Heading.name h))
+                let matchingTagSymbols =
+                    Doc.index doc
+                    |> Index.tags
+                    |> Seq.filter (tagToSymbolName >> query.IsSubSequenceOf)
+                    |> Seq.map (tagToSymbolInfo (Doc.id doc))
 
-                let matchingSymbols =
-                    matchingHeadings |> Seq.map (headingToSymbolInfo (Doc.id doc))
-
-                yield! matchingSymbols
+                yield! Seq.append matchingHeadingSymbols matchingTagSymbols
     }
     |> Array.ofSeq

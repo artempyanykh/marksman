@@ -639,8 +639,6 @@ module Completions =
             Some
                 { CompletionItem.Create(label) with
                     Detail = Some detail
-                    // Use input as filter text to avoid any extra filtering on the editor's side
-                    FilterText = Some input
                     TextEdit = Some { Range = range; NewText = label } }
 
 module Candidates =

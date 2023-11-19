@@ -1,16 +1,17 @@
 module Marksman.AstTests
 
+open Marksman.Parser
 open Xunit
 open Snapper
 
 open Marksman.Ast
 
-let parseString content = Parser.parseText (Text.mkText content)
+let parseString content = Structure.ofText (Text.mkText content)
 
 let checkInlineSnapshot =
     Helpers.checkInlineSnapshot (fun (el: Element) -> el.CompactFormat())
 
-let cst1 =
+let struct1 =
     parseString
         """
 # Doc 1
@@ -27,12 +28,12 @@ This is a #tag
 [collapsedRef]: DefURL
 """
 
-let ast1 = Ast.ofCst cst1
+let ast1 = struct1.ast
 
 [<Fact>]
 let testAstShape () =
     checkInlineSnapshot
-        (Ast.elements ast1)
+        ast1.elements
         [ "# Doc 1 {doc-1}"
           "[collapsedRef][]"
           "[[wiki-link]]"
@@ -44,20 +45,20 @@ let testAstShape () =
 
 [<Fact>]
 let testAstLookup () =
-    let sub1 = (Ast.elements ast1)[3]
+    let sub1 = ast1.elements[3]
     sub1.CompactFormat().ShouldMatchInlineSnapshot("## Sub 1 {sub-1}")
 
-    let csub1 = (Ast.tryFindMatchingConcrete sub1 ast1) |> Option.get
+    let csub1 = (Structure.findMatchingConcrete sub1 struct1) |> List.ofArray
 
     Helpers.checkInlineSnapshot
         Cst.Element.fmt
-        [ csub1 ]
+        csub1
         [ "H2: range=(4,0)-(4,8); scope=(4,0)-(8,0)"
           "  text=`## Sub 1`"
           "  title=`Sub 1` @ (4,3)-(4,8)" ]
 
-    let shouldBeSub1 = Ast.tryFindMatchingAbstract csub1 ast1 |> Option.get
+    let shouldBeSub1 = Structure.findMatchingAbstract csub1[0] struct1
     Assert.Equal(sub1, shouldBeSub1)
 
     let madeUpAbstract = Element.MR(Collapsed "WAT")
-    Assert.True(Ast.tryFindMatchingConcrete madeUpAbstract ast1 |> Option.isNone)
+    Assert.Empty(Structure.tryFindMatchingConcrete madeUpAbstract struct1)

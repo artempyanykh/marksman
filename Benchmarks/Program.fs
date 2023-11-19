@@ -6,6 +6,7 @@ open BenchmarkDotNet.Running
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
+open Marksman.Names
 open Marksman.Paths
 open Marksman.Cst
 open Marksman.Doc
@@ -24,7 +25,9 @@ type ReferenceResolution() =
 
         let docs =
             Array.init size (fun i ->
-                let docId = UriWith.mkRooted folderId (LocalPath.ofSystem $"doc{i}.md")
+                let docId =
+                    DocId(UriWith.mkRooted folderId (LocalPath.ofSystem $"doc{i}.md"))
+
                 let links = List.init size (fun toDoc -> $"[[doc{toDoc}.md]]")
                 let contentLines = $"# Doc {i}" :: links
                 let content = String.concat "\n" contentLines

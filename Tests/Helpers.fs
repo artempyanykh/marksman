@@ -4,6 +4,7 @@ open System.Runtime.InteropServices
 open Snapper
 open Marksman.Misc
 open Marksman.Paths
+open Marksman.Names
 open Marksman.Doc
 open Marksman.Folder
 open Marksman.CodeActions
@@ -29,7 +30,7 @@ let mkFolderId str =
 
 let mkDocId folderId str =
     let path = LocalPath.ofSystem str
-    UriWith.mkRooted folderId path
+    DocId(UriWith.mkRooted folderId path)
 
 let checkInlineSnapshot (fmt: 'a -> string) (things: seq<'a>) (snapshot: seq<string>) =
     let lines = Seq.map (fun x -> (fmt x).Lines()) things |> Seq.concat
@@ -60,7 +61,7 @@ type FakeDoc =
             let rootUri = dummyRootPath root |> pathToUri
 
             let docId =
-                UriWith.mkRooted (UriWith.mkRoot rootUri) (LocalPath.ofUri pathUri)
+                DocId(UriWith.mkRooted (UriWith.mkRoot rootUri) (LocalPath.ofUri pathUri))
 
             Doc.mk docId None text
 

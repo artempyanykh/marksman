@@ -27,6 +27,7 @@
         <Compile Include="ServerTests.fs" />
         <Compile Include="PathsTests.fs" />
         <Compile Include="AstTests.fs" />
+        <Compile Include="ConnTest.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

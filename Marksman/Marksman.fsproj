@@ -24,10 +24,10 @@
         <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true"/>
     </Target>
     <ItemGroup>
+        <Compile Include="Misc.fs"/>
         <Compile Include="SuffixTree.fs"/>
         <Compile Include="MMap.fs"/>
         <Compile Include="Graph.fs"/>
-        <Compile Include="Misc.fs"/>
         <Compile Include="Paths.fsi"/>
         <Compile Include="Paths.fs"/>
         <Compile Include="Names.fsi"/>
@@ -41,9 +41,9 @@
         <Compile Include="Index.fs"/>
         <Compile Include="Doc.fsi"/>
         <Compile Include="Doc.fs"/>
-        <Compile Include="Folder.fsi" />
-        <Compile Include="Folder.fs" />
-        <Compile Include="Connections.fs" />
+        <Compile Include="Conn.fs"/>
+        <Compile Include="Folder.fsi"/>
+        <Compile Include="Folder.fs"/>
         <Compile Include="Workspace.fsi"/>
         <Compile Include="Workspace.fs"/>
         <Compile Include="Semato.fs"/>

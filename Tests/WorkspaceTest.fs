@@ -62,7 +62,7 @@ module DocTest =
         let empty = Doc.mk dummyPath None (Text.mkText "")
 
         let insertChange =
-            { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.data; Version = Some 1 }
+            { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.Path; Version = Some 1 }
               ContentChanges =
                 [| { Range = Some(Range.Mk(0, 0, 0, 0))
                      RangeLength = Some 0

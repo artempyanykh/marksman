@@ -234,7 +234,7 @@ let calcDiagnosticsUpdate
             )
 
             for docUri in allDocs do
-                let docPath = UriWith.rootedRelToAbs docUri
+                let docPath = UriWith.rootedRelToAbs docUri.Raw
                 let existingDoc = prevState |> Option.bind (State.tryFindDoc docPath)
                 let existingDocVersion = Option.bind Doc.version existingDoc
 
@@ -266,7 +266,7 @@ let calcDiagnosticsUpdate
                         >> Log.addContext "doc" docUri
                     )
 
-                    let publishParams = { Uri = docUri.uri; Diagnostics = newDocDiag }
+                    let publishParams = { Uri = docUri.Uri; Diagnostics = newDocDiag }
 
                     yield publishParams
     }

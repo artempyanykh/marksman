@@ -1,7 +1,5 @@
 module Marksman.Ast
 
-open System.Collections.Generic
-
 open FSharpPlus.Operators
 
 open Marksman.Misc
@@ -109,6 +107,11 @@ module Element =
         | Element.H heading -> Some heading
         | _ -> None
 
+    let asLinkDef =
+        function
+        | Element.MLD mld -> Some mld
+        | _ -> None
+
     let private getNodeOptData nodeOpt =
         Option.map (fun ({ data = data }: Cst.Node<'A>) -> data) nodeOpt
 
@@ -143,44 +146,4 @@ module Element =
         | Cst.T { data = tag } -> Element.T(Tag tag.name.text) |> Some
         | Cst.YML _ -> None
 
-type Ast = Ast of abs: IndexMap<Element> * concrete: IndexMap<Cst.Element>
-
-module Ast =
-    let elements (Ast (abs, _)) = abs.elements
-
-    let tryFindMatchingAbstract (cel: Cst.Element) (Ast (absMap, concreteMap)) : option<Element> =
-        match Map.tryFind cel concreteMap.revMap with
-        | Some n -> Some absMap.elements[n]
-        | None -> None
-
-    let tryFindMatchingConcrete (ael: Element) (Ast (absMap, concreteMap)) : option<Cst.Element> =
-        match Map.tryFind ael absMap.revMap with
-        | Some n -> Some concreteMap.elements[n]
-        | None -> None
-
-    let ofCst (cst: Cst.Cst) : Ast =
-        let rec go cst =
-            seq {
-                for cel in cst do
-                    match Element.ofCst cel with
-                    | Some ael -> yield cel, ael
-                    | None -> ()
-            }
-
-        let abs = ResizeArray<Element>()
-        let a2n = Dictionary<Element, int>()
-        let concrete = ResizeArray<Cst.Element>()
-        let c2n = Dictionary<Cst.Element, int>()
-        // Accumulate AST elements and mapping
-        for cel, ael in go (Cst.Cst.elements cst) do
-            let n = abs.Count
-            abs.Add(ael)
-            a2n.Add(ael, n)
-            concrete.Add(cel)
-            c2n.Add(cel, n)
-        // Freeze components of the AST
-        let abs = abs.ToArray()
-        let a2n = seq { for KeyValue (k, v) in a2n -> k, v } |> Map.ofSeq
-        let concrete = concrete.ToArray()
-        let c2n = seq { for KeyValue (k, v) in c2n -> k, v } |> Map.ofSeq
-        Ast({ elements = abs; revMap = a2n }, { elements = concrete; revMap = c2n })
+type Ast = { elements: Element[] }

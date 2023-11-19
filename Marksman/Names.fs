@@ -27,7 +27,25 @@ type FolderId = UriWith<RootPath>
 module FolderId =
     let ofUri uri = UriWith.mkRoot uri
 
-type DocId = UriWith<RootedRelPath>
+[<Struct>]
+[<StructuredFormatDisplay("{ShortFormat}")>]
+type DocId =
+    | DocId of UriWith<RootedRelPath>
+
+    member this.Raw =
+        let (DocId uri) = this
+        uri
+
+    member this.Path =
+        let (DocId uri) = this
+        uri.data
+
+    member this.Uri =
+        let (DocId uri) = this
+        uri.uri
+
+    member this.ShortFormat = this.Path |> RootedRelPath.toSystem
+
 
 type InternName = { src: DocId; name: string }
 
@@ -69,7 +87,7 @@ module InternName =
                     UrlEncoded.mkUnchecked (name.TrimStart('/')) |> UrlEncoded.decode
                 )
 
-            let rootPath = RootedRelPath.rootPath src.data
+            let rootPath = RootedRelPath.rootPath src.Path
             let namePath = RootedRelPath.mk rootPath relPath
             Some(ExactAbs namePath)
         else
@@ -78,7 +96,7 @@ module InternName =
                     LocalPath.ofSystem (UrlEncoded.mkUnchecked name |> UrlEncoded.decode)
 
                 if LocalPath.hasDotComponents rawNamePath then
-                    RootedRelPath.directory src.data
+                    RootedRelPath.directory src.Path
                     |> Option.bind (fun dir -> RootedRelPath.combine dir rawNamePath)
                     |> Option.map (fun x -> ExactRel(src, x))
                 else

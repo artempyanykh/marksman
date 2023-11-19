@@ -12,7 +12,7 @@ let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
 
 let lineEndings = [| "\r\n"; "\n" |]
 
-let concatLines (lines: array<string>) : string = String.concat Environment.NewLine lines
+let concatLines (lines: seq<string>) : string = String.concat Environment.NewLine lines
 
 let mkWatchGlob (configuredExts: seq<string>) : string =
     let ext_pattern = "{" + (String.concat "," (configuredExts)) + "}"
@@ -242,7 +242,19 @@ module LinkLabel =
 
     let isSubSequenceOf (LinkLabel other) (LinkLabel this) = other.IsSubSequenceOf(this)
 
-type IndexMap<'E> when 'E: comparison = { elements: 'E[]; revMap: Map<'E, int> }
+[<StructuredFormatDisplay("{AsString}")>]
+type Indented<'A> =
+    | Indented of int * 'A
 
-module IndexMap =
-    let empty () = { elements = [||]; revMap = Map.empty }
+    override this.ToString() =
+        let (Indented (indent, inner)) = this
+
+        let lines =
+            seq {
+                for line in inner.ToString().Lines() do
+                    String.replicate indent " " + line
+            }
+
+        concatLines lines
+
+    member this.AsString = this.ToString()

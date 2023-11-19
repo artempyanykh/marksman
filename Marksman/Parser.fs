@@ -5,10 +5,10 @@ open System.Collections.Generic
 open Ionide.LanguageServerProtocol.Types
 open Markdig.Syntax
 
-open Marksman.Cst
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Text
+open Marksman.MMap
 
 module Markdown =
     open Markdig
@@ -16,6 +16,8 @@ module Markdown =
     open Markdig.Parsers
     open Markdig.Helpers
     open Markdig.Extensions.Yaml
+
+    open Marksman.Cst
 
     type WikiLinkInline
         (
@@ -383,98 +385,146 @@ module Markdown =
 
         elements.ToArray()
 
-let rec private sortElements (text: Text) (elements: array<Element>) : unit =
-    let elemOffsets el =
-        let range = (Element.range el)
+    let rec private sortElements (text: Text) (elements: array<Element>) : unit =
+        let elemOffsets el =
+            let range = (Element.range el)
 
-        let start = text.lineMap.FindOffset(range.Start)
+            let start = text.lineMap.FindOffset(range.Start)
 
-        let end_ = text.lineMap.FindOffset(range.End)
+            let end_ = text.lineMap.FindOffset(range.End)
 
-        (start, end_)
+            (start, end_)
 
-    Array.sortInPlaceBy elemOffsets elements
+        Array.sortInPlaceBy elemOffsets elements
 
-let private buildCst (text: Text) (inputElements: Element[]) : Cst =
-    let nestedDeeperThan (_, baseHeader) (_, otherHeader) =
-        otherHeader.data.level >= baseHeader.data.level
+    let buildCst (text: Text) (inputElements: Element[]) : Cst =
+        let nestedDeeperThan (_, baseHeader) (_, otherHeader) =
+            otherHeader.data.level >= baseHeader.data.level
 
-    let scopeMap = Dictionary()
-    let childMap = Dictionary()
-    let outputElements = ResizeArray()
+        let scopeMap = Dictionary()
+        let childMap = Dictionary()
+        let outputElements = ResizeArray()
 
-    let processEl headStack (idx: int, el: Element) =
-        outputElements.Add(el)
+        let processEl headStack (idx: int, el: Element) =
+            outputElements.Add(el)
 
-        let parentStack, newHeadStack =
-            match el with
-            | H curHead ->
-                // Close headings nested deeper than curHead
-                headStack
-                |> List.takeWhile (nestedDeeperThan (idx, curHead))
-                |> List.iter (fun (idx, _) -> scopeMap.Add(idx, curHead.data.scope.Start))
+            let parentStack, newHeadStack =
+                match el with
+                | H curHead ->
+                    // Close headings nested deeper than curHead
+                    headStack
+                    |> List.takeWhile (nestedDeeperThan (idx, curHead))
+                    |> List.iter (fun (idx, _) -> scopeMap.Add(idx, curHead.data.scope.Start))
 
-                let parentStack =
-                    headStack |> List.skipWhile (nestedDeeperThan (idx, curHead))
+                    let parentStack =
+                        headStack |> List.skipWhile (nestedDeeperThan (idx, curHead))
 
-                parentStack, (idx, curHead) :: parentStack
-            | _ -> headStack, headStack
+                    parentStack, (idx, curHead) :: parentStack
+                | _ -> headStack, headStack
 
-        match parentStack with
-        | [] -> ()
-        | (parentIdx, _) :: _ ->
-            let children =
-                if childMap.ContainsKey(parentIdx) then
-                    childMap.GetValueOrDefault(parentIdx)
-                else
-                    let children = ResizeArray()
-                    childMap.Add(parentIdx, children)
-                    children
-
-            children.Add(idx)
-
-        newHeadStack
-
-    // Add unclosed headings to the scope map with 'text end' scope
-    Array.indexed inputElements
-    |> Array.fold processEl []
-    |> List.iter (fun (idx, _) -> scopeMap.Add(idx, text.EndRange().Start))
-    // Update header scopes
-    for KeyValue (headerIdx, scopeEnd) in scopeMap do
-        match outputElements[headerIdx] with
-        | H header ->
-            let newScope = { Start = header.data.scope.Start; End = scopeEnd }
-
-            outputElements[headerIdx] <-
-                H { header with data = { header.data with scope = newScope } }
-        | other -> failwith $"Unexpected non-heading element at idx {headerIdx}: {other}"
-
-    let childMap =
-        seq {
-            for KeyValue (parentId, childIds) in childMap do
+            match parentStack with
+            | [] -> ()
+            | (parentIdx, _) :: _ ->
                 let children =
-                    childIds.ToArray() |> Array.map (fun i -> outputElements[i])
+                    if childMap.ContainsKey(parentIdx) then
+                        childMap.GetValueOrDefault(parentIdx)
+                    else
+                        let children = ResizeArray()
+                        childMap.Add(parentIdx, children)
+                        children
 
-                sortElements text children
-                let parent = outputElements[parentId]
-                parent, children
-        }
-        |> Map.ofSeq
+                children.Add(idx)
+
+            newHeadStack
+
+        // Add unclosed headings to the scope map with 'text end' scope
+        Array.indexed inputElements
+        |> Array.fold processEl []
+        |> List.iter (fun (idx, _) -> scopeMap.Add(idx, text.EndRange().Start))
+        // Update header scopes
+        for KeyValue (headerIdx, scopeEnd) in scopeMap do
+            match outputElements[headerIdx] with
+            | H header ->
+                let newScope = { Start = header.data.scope.Start; End = scopeEnd }
+
+                outputElements[headerIdx] <-
+                    H { header with data = { header.data with scope = newScope } }
+            | other -> failwith $"Unexpected non-heading element at idx {headerIdx}: {other}"
+
+        let childMap =
+            seq {
+                for KeyValue (parentId, childIds) in childMap do
+                    let children =
+                        childIds.ToArray() |> Array.map (fun i -> outputElements[i])
+
+                    sortElements text children
+                    let parent = outputElements[parentId]
+                    parent, children
+            }
+            |> Map.ofSeq
 
 
-    let elements = outputElements.ToArray()
-    sortElements text elements
+        let elements = outputElements.ToArray()
+        sortElements text elements
 
-    let revMap =
-        elements |> Seq.ofArray |> Seq.mapi (fun id el -> el, id) |> Map.ofSeq
+        { elements = elements; childMap = childMap }
 
-    { elementMap = { elements = elements; revMap = revMap }
-      childMap = childMap }
+type Structure =
+    { cst: Cst.Cst
+      ast: Ast.Ast
+      a2c: MMap<Ast.Element, Cst.Element>
+      c2a: Map<Cst.Element, Ast.Element> }
 
+module Structure =
+    let abstractElements { ast = ast } = ast.elements
+    let concreteElements { cst = cst } = cst.elements
 
-let rec parseText (text: Text) : Cst =
-    if String.IsNullOrEmpty text.content then
-        { elementMap = IndexMap.empty (); childMap = Map.empty }
-    else
-        let flatElements = Markdown.scrapeText text
-        buildCst text flatElements
+    let findMatchingAbstract (cel: Cst.Element) structure : Ast.Element =
+        match Map.tryFind cel structure.c2a with
+        | Some ael -> ael
+        | None -> failwith $"No matching abstract element for: {Cst.Element.fmt cel}"
+
+    let tryFindMatchingConcrete (ael: Ast.Element) structure : Cst.Element[] =
+        structure.a2c
+        |> MMap.tryFind ael
+        |> Option.defaultValue Set.empty
+        |> Set.toArray
+
+    let findMatchingConcrete (ael: Ast.Element) structure : Cst.Element[] =
+        let cels = tryFindMatchingConcrete ael structure
+
+        if Array.isEmpty cels then
+            failwith $"No matching concrete element for: {ael.CompactFormat()}"
+        else
+            cels
+
+    let private ofCst (cst: Cst.Cst) : Structure =
+        let rec go cst =
+            seq {
+                for cel in cst do
+                    match Ast.Element.ofCst cel with
+                    | Some ael -> yield cel, ael
+                    | None -> ()
+            }
+
+        let abs = ResizeArray<Ast.Element>()
+        let mutable a2c = MMap.empty
+        let mutable c2a = Map.empty
+        // Accumulate AST elements and mapping
+        for cel, ael in go cst.elements do
+            abs.Add(ael)
+            a2c <- MMap.add ael cel a2c
+            c2a <- Map.add cel ael c2a
+
+        let ast: Ast.Ast = { elements = abs.ToArray() }
+
+        { cst = cst; ast = ast; a2c = a2c; c2a = c2a }
+
+    let ofText (text: Text) : Structure =
+        if String.IsNullOrEmpty text.content then
+            let cst: Cst.Cst = { elements = [||]; childMap = Map.empty }
+            ofCst cst
+        else
+            let flatElements = Markdown.scrapeText text
+            let cst = Markdown.buildCst text flatElements
+            ofCst cst

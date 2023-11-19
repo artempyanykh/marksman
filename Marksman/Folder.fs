@@ -5,13 +5,16 @@ open System.IO
 
 open Ionide.LanguageServerProtocol.Logging
 
+open Marksman.Ast
 open Marksman.GitIgnore
+open Marksman.Parser
 open Marksman.SuffixTree
 open Marksman.Config
 open Marksman.Doc
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Paths
+open Marksman.MMap
 
 type MultiFile =
     { name: string
@@ -35,6 +38,37 @@ module FolderData =
         | MultiFile { config = config } -> config
 
     let configOrDefault = config >> Config.orDefault
+
+    let tryFindDocByRelPath (path: RelPath) data : option<Doc> =
+        match data with
+        | SingleFile { doc = doc } ->
+            Some doc
+            |> Option.filter (fun x ->
+                let sysPath = ((Doc.path x) |> AbsPath.filenameStem)
+                sysPath.EndsWith(path |> RelPath.filenameStem))
+        | MultiFile { docs = docs } ->
+            let canonPath =
+                path
+                |> CanonDocPath.mk ((configOrDefault data).CoreMarkdownFileExtensions())
+
+            Map.tryFind canonPath docs
+
+    let tryFindDocByPath (uri: AbsPath) data : option<Doc> =
+        match data with
+        | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> Doc.path x = uri)
+        | MultiFile { root = root; docs = docs } ->
+            let canonPath =
+                RootedRelPath.mk root.data (Abs uri)
+                |> RootedRelPath.relPathForced
+                |> CanonDocPath.mk ((configOrDefault data).CoreMarkdownFileExtensions())
+
+            Map.tryFind canonPath docs
+
+    let findDocById (id: DocId) data : Doc =
+        let docRelPath = id.Path |> RootedRelPath.relPathForced
+
+        tryFindDocByRelPath docRelPath data
+        |> Option.defaultWith (fun () -> failwith $"Expected doc could not be found: {id.Uri}")
 
 type FolderLookup =
     { docsBySlug: Map<Slug, Set<Doc>>
@@ -102,6 +136,120 @@ module FolderLookup =
         let byPath = SuffixTree.add docPath doc lookup.docsByPath
         { docsBySlug = bySlug; docsByPath = byPath; config = lookup.config }
 
+    /// Find document matching a slug.
+    let filterDocsBySlug (slug: Slug) (lookup: FolderLookup) : seq<Doc> =
+        lookup.docsBySlug
+        |> Map.tryFind slug
+        |> Option.defaultValue Set.empty
+        |> Set.toSeq
+
+module Oracle =
+    open Conn
+    open Index
+
+    let filterDocsByInternPath
+        (path: InternPath)
+        (data: FolderData)
+        (lookup: FolderLookup)
+        : seq<Doc> =
+        match path with
+        | ExactAbs rooted
+        | ExactRel (_, rooted) ->
+            FolderData.tryFindDocByRelPath (RootedRelPath.relPathForced rooted) data
+            |> Option.toList
+            |> Seq.ofList
+        | Approx relPath ->
+            let canonPath =
+                CanonDocPath.mk
+                    ((FolderData.configOrDefault data).CoreMarkdownFileExtensions())
+                    relPath
+
+            SuffixTree.filterMatchingValues canonPath lookup.docsByPath
+
+    let private filterDocsByName
+        (data: FolderData)
+        (lookup: FolderLookup)
+        (name: InternName)
+        : DocId[] =
+        let byTitle: seq<DocId> =
+            FolderLookup.filterDocsBySlug (InternName.name name |> Slug.ofString) lookup
+            |> Seq.map Doc.id
+
+        let byPath: seq<DocId> =
+            InternName.tryAsPath name
+            |> Option.map (fun path -> filterDocsByInternPath path data lookup |> Seq.map Doc.id)
+            |> Option.defaultValue []
+
+        Set.ofSeq (Seq.append byTitle byPath) |> Set.toArray
+
+    let private resolveToDoc (data: FolderData) (lookup: FolderLookup) fromDoc link =
+        match link with
+        | Link.WL { doc = None }
+        | Link.ML { url = None }
+        | Link.MR _ -> [| Scope.Doc fromDoc |]
+        | Link.WL { doc = Some doc } ->
+            let name = InternName.mkUnchecked fromDoc doc
+            filterDocsByName data lookup name |> Array.map Scope.Doc
+        | Link.ML { url = Some url } ->
+            let exts = (FolderData.configOrDefault data).CoreMarkdownFileExtensions()
+
+            match InternName.mkChecked exts fromDoc url with
+            | Some name -> filterDocsByName data lookup name |> Array.map Scope.Doc
+            | None -> [||]
+        | Link.T _ -> [| Scope.Tag |]
+
+    let private resolveInDoc (data: FolderData) link (inDoc: DocId) : Def[] =
+        let destDoc = FolderData.findDocById inDoc data
+        let destIndex = Doc.index destDoc
+        let destStruct = Doc.structure destDoc
+
+        match link with
+        | Link.WL { heading = None } ->
+            let titles =
+                Index.headings destIndex
+                |> Array.filter (fun { data = hd } -> Cst.Heading.isTitle hd)
+
+            match titles with
+            | [||] -> [| Def.Doc |]
+            | titles ->
+                titles
+                |> Seq.map (fun cel -> Structure.findMatchingAbstract (Cst.H cel) destStruct)
+                |> Seq.choose Element.asHeading
+                |> Seq.map Def.H
+                |> Seq.toArray
+        | Link.ML { anchor = None } -> [| Def.Doc |]
+        | Link.WL { heading = Some heading }
+        | Link.ML { anchor = Some heading } ->
+            Index.filterHeadingBySlug (Slug.ofString heading) destIndex
+            |> Seq.map (fun cel -> Structure.findMatchingAbstract (Cst.H cel) destStruct)
+            |> Seq.choose Element.asHeading
+            |> Seq.map Def.H
+            |> Seq.toArray
+        | Link.MR mdRef ->
+            match
+                Index.tryFindLinkDef mdRef.DestLabel destIndex
+                |> Option.map (fun mdDef ->
+                    Structure.findMatchingAbstract (Cst.MLD mdDef) destStruct)
+                |> Option.bind Element.asLinkDef
+            with
+            | Some linkDef -> [| Def.LD linkDef |]
+            | None -> [||]
+        | Link.T tag -> [| Def.T tag |]
+
+    let oracle data lookup : Oracle =
+        let resolveToScope scope link =
+            match scope, link with
+            | _, Link.T _ -> [| Scope.Tag |]
+            | Scope.Doc docId, link -> resolveToDoc data lookup docId link
+            | _ -> [||]
+
+        let resolveInScope link scope =
+            match link, scope with
+            | Link.T tag, Scope.Tag -> [| Def.T tag |]
+            | link, Scope.Doc docId -> resolveInDoc data link docId
+            | _ -> [||]
+
+        { resolveToScope = resolveToScope; resolveInScope = resolveInScope }
 
 type Folder = { data: FolderData; lookup: FolderLookup }
 
@@ -137,12 +285,9 @@ module Folder =
         | SingleFile _ -> true
         | MultiFile _ -> false
 
-    let config folder =
-        match folder.data with
-        | SingleFile { config = config } -> config
-        | MultiFile { config = config } -> config
+    let config folder = FolderData.config folder.data
 
-    let configOrDefault folder = Config.orDefault (config folder)
+    let configOrDefault folder = FolderData.configOrDefault folder.data
 
     let withConfig config folder =
         match folder.data with
@@ -164,36 +309,12 @@ module Folder =
         | MultiFile { root = root } -> root.data
         | SingleFile { doc = doc } -> Doc.rootPath doc
 
-    let tryFindDocByPath (uri: AbsPath) folder : option<Doc> =
-        match folder.data with
-        | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> Doc.path x = uri)
-        | MultiFile { root = root; docs = docs } ->
-            let canonPath =
-                RootedRelPath.mk root.data (Abs uri)
-                |> RootedRelPath.relPathForced
-                |> CanonDocPath.mk ((configOrDefault folder).CoreMarkdownFileExtensions())
+    let rec tryFindDocByPath (uri: AbsPath) folder : option<Doc> =
+        FolderData.tryFindDocByPath uri folder.data
 
-            Map.tryFind canonPath docs
+    let tryFindDocByRelPath (path: RelPath) folder = FolderData.tryFindDocByRelPath path folder.data
 
-    let tryFindDocByRelPath (path: RelPath) folder : option<Doc> =
-        match folder.data with
-        | SingleFile { doc = doc } ->
-            Some doc
-            |> Option.filter (fun x ->
-                let sysPath = ((Doc.path x) |> AbsPath.filenameStem)
-                sysPath.EndsWith(path |> RelPath.filenameStem))
-        | MultiFile { docs = docs } ->
-            let canonPath =
-                path
-                |> CanonDocPath.mk ((configOrDefault folder).CoreMarkdownFileExtensions())
-
-            Map.tryFind canonPath docs
-
-    let findDocById (id: DocId) folder : Doc =
-        let docRelPath = id.data |> RootedRelPath.relPathForced
-
-        tryFindDocByRelPath docRelPath folder
-        |> Option.defaultWith (fun () -> failwith $"Expected doc could not be found: {id.uri}")
+    let findDocById (id: DocId) folder : Doc = FolderData.findDocById id folder.data
 
     let private readIgnoreFiles (root: LocalPath) : array<string> =
         let lines = ResizeArray()
@@ -370,7 +491,7 @@ module Folder =
         match folder.data with
         | MultiFile mf ->
             let canonPath =
-                docId.data
+                docId.Path
                 |> RootedRelPath.relPathForced
                 |> CanonDocPath.mk ((configOrDefault folder).CoreMarkdownFileExtensions())
 
@@ -392,7 +513,7 @@ module Folder =
     let closeDoc (docId: DocId) (folder: Folder) : option<Folder> =
         match folder.data with
         | MultiFile { root = root } ->
-            match Doc.tryLoad root (Abs <| RootedRelPath.toAbs docId.data) with
+            match Doc.tryLoad root (Abs <| RootedRelPath.toAbs docId.Path) with
             | Some doc -> withDoc doc folder |> Some
             | _ -> withoutDoc docId folder
         | SingleFile { doc = doc } ->
@@ -402,13 +523,8 @@ module Folder =
             else
                 None
 
-    /// Find document matching a slug.
-    /// First check for full match. When nothing matches, check fuzzy substring match.
     let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
-        folder.lookup.docsBySlug
-        |> Map.tryFind slug
-        |> Option.defaultValue Set.empty
-        |> Set.toSeq
+        FolderLookup.filterDocsBySlug slug folder.lookup
 
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()
@@ -437,3 +553,16 @@ module Folder =
 
             SuffixTree.filterMatchingValues canonPath folder.lookup.docsByPath
 
+    let oracle folder = Oracle.oracle folder.data folder.lookup
+
+    let syms folder =
+        let mutable mapping = MMap.empty
+
+        for doc in docs folder do
+            mapping <- MMap.add (Doc.id doc) (Conn.Sym.Def Conn.Def.Doc) mapping
+
+            for el in (Doc.ast doc).elements do
+                let sym = Conn.Sym.ofElement el
+                mapping <- MMap.add (Doc.id doc) sym mapping
+
+        mapping

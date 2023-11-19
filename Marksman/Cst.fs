@@ -344,10 +344,10 @@ module Element =
         asHeading el |>> Node.data |>> Heading.isTitle
         |> Option.defaultValue false
 
-type Cst = { elementMap: IndexMap<Element>; childMap: Map<Element, Element[]> }
+type Cst = { elements: Element[]; childMap: Map<Element, Element[]> }
 
 module Cst =
-    let elements (cst: Cst) : Element[] = cst.elementMap.elements
+    let elements (cst: Cst) : Element[] = cst.elements
 
     let children cst el = Map.tryFind el cst.childMap |> Option.defaultValue [||]
 

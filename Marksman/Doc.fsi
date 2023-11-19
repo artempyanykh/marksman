@@ -1,12 +1,14 @@
 module Marksman.Doc
 
 open Ionide.LanguageServerProtocol.Types
-open Marksman.Cst
-open Marksman.Index
+
 open Marksman.Misc
 open Marksman.Names
+open Marksman.Parser
 open Marksman.Paths
 open Marksman.Text
+open Marksman.Cst
+open Marksman.Index
 
 [<Sealed>]
 type Doc =
@@ -24,7 +26,9 @@ module Doc =
     val pathFromRoot: Doc -> RelPath
     val text: Doc -> Text
     val version: Doc -> option<int>
+    val structure: Doc -> Structure
     val cst: Doc -> Cst
+    val ast: Doc -> Ast.Ast
     val title: Doc -> option<Node<Heading>>
     val name: Doc -> string
     val slug: Doc -> Slug

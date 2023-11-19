@@ -1,5 +1,7 @@
 module Marksman.MMap
 
+open Marksman.Misc
+
 type MMap<'K, 'V> when 'K: comparison and 'V: comparison = MMap of Map<'K, Set<'V>>
 
 module MMap =
@@ -29,41 +31,23 @@ module MMap =
 
     let addEmpty k (MMap m) = Map.add k Set.empty m |> MMap
 
-    let fold f state (MMap m) = Map.fold f state m
+    let foldSet f state (MMap m) = Map.fold f state m
 
-type MMap2<'K1, 'K2, 'V> when 'K1: comparison and 'K2: comparison and 'V: comparison =
-    | MMap2 of Map<'K1, MMap<'K2, 'V>>
+    let fold f state (MMap m) =
+        let f acc k vs = Set.fold (flip f k) acc vs
+        Map.fold f state m
 
-module MMap2 =
-    let add (outerKey, innerKey) v (MMap2 map) =
-        let innerMap = Map.tryFind outerKey map |> Option.defaultValue MMap.empty
+    let mapKeys f (MMap m) =
+        let m = Map.fold (fun acc k vs -> Map.add (f k) vs acc) Map.empty m
+        MMap m
 
-        let innerMap = MMap.add innerKey v innerMap
-        Map.add outerKey innerMap map |> MMap2
+    let iter f (MMap m) = m |> Map.iter (f >> Set.iter)
 
-    let addEmpty (outerKey, innerKey) (MMap2 map as mm2) =
-        match Map.tryFind outerKey map with
-        | None -> mm2
-        | Some innerMap -> Map.add outerKey (MMap.addEmpty innerKey innerMap) map |> MMap2
+    let toSeq (MMap m) =
+        seq {
+            for KeyValue (k, vs) in m do
+                for v in vs do
+                    yield (k, v)
+        }
 
-
-    let removeValue (outerKey, innerKey) v (MMap2 map as mm2) =
-        match Map.tryFind outerKey map with
-        | None -> mm2
-        | Some innerMap ->
-            let innerMap = MMap.removeValue innerKey v innerMap
-
-            let map =
-                if MMap.isEmpty innerMap then
-                    Map.remove outerKey map
-                else
-                    Map.add outerKey innerMap map
-
-            MMap2(map)
-
-    let empty = MMap2 Map.empty
-
-    let isEmpty (MMap2 map) = Map.isEmpty map
-
-    let tryFind (outerKey, innerKey) (MMap2 map) =
-        Map.tryFind outerKey map |> Option.bind (MMap.tryFind innerKey)
+    let toSetSeq (MMap m) = Map.toSeq m

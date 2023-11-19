@@ -17,7 +17,7 @@ let tagToSymbolName (t: Node<Tag>) : string = $"Tag: {t.data.name.text}"
 let tagToSymbolInfo (docUri: DocId) (t: Node<Tag>) : SymbolInformation =
     let name = tagToSymbolName t
     let kind = SymbolKind.String
-    let location = { Uri = docUri.uri; Range = t.range }
+    let location = { Uri = docUri.Uri; Range = t.range }
 
     let sym =
         { Name = name
@@ -30,7 +30,7 @@ let tagToSymbolInfo (docUri: DocId) (t: Node<Tag>) : SymbolInformation =
 let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
     let name = headingToSymbolName h
     let kind = SymbolKind.String
-    let location = { Uri = docUri.uri; Range = h.range }
+    let location = { Uri = docUri.Uri; Range = h.range }
 
     let sym =
         { Name = name

@@ -26,7 +26,13 @@ type FolderId = UriWith<RootPath>
 module FolderId =
     val ofUri: DocumentUri -> FolderId
 
-type DocId = UriWith<RootedRelPath>
+[<Struct>]
+type DocId =
+    | DocId of UriWith<RootedRelPath>
+
+    member Path: RootedRelPath
+    member Uri: DocumentUri
+    member Raw: UriWith<RootedRelPath>
 
 type InternName = { src: DocId; name: string }
 

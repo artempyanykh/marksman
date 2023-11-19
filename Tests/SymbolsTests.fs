@@ -26,23 +26,23 @@ module WorkspaceSymbol =
             [ { Name = "H1: A"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc1); Range = Range.Mk(0, 0, 0, 3) } }
+                Location = { Uri = doc1.Id.Uri; Range = Range.Mk(0, 0, 0, 3) } }
               { Name = "Tag: tag1"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc1); Range = Range.Mk(1, 0, 1, 5) } }
+                Location = { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
               { Name = "H1: B"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc2); Range = Range.Mk(0, 0, 0, 3) } }
+                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(0, 0, 0, 3) } }
               { Name = "Tag: tag1"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc2); Range = Range.Mk(1, 0, 1, 5) } }
+                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
               { Name = "Tag: tag2"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc2); Range = Range.Mk(1, 6, 1, 11) } } ],
+                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } } ],
             symbols
         )
 
@@ -54,15 +54,15 @@ module WorkspaceSymbol =
             [ { Name = "Tag: tag1"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc1); Range = Range.Mk(1, 0, 1, 5) } }
+                Location = { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
               { Name = "Tag: tag1"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc2); Range = Range.Mk(1, 0, 1, 5) } }
+                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
               { Name = "Tag: tag2"
                 Kind = SymbolKind.String
                 ContainerName = None
-                Location = { Uri = (Doc.uri doc2); Range = Range.Mk(1, 6, 1, 11) } } ],
+                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } } ],
             symbols
         )
 

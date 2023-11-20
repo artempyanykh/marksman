@@ -37,6 +37,12 @@ type Def =
         | LD ld -> ld.CompactFormat()
         | T (Tag name) -> $"#{name}"
 
+module Def =
+    let isDoc =
+        function
+        | Def.Doc -> true
+        | _ -> false
+
 [<RequireQualifiedAccess>]
 [<StructuredFormatDisplay("{CompactFormat}")>]
 type Scope =
@@ -113,7 +119,7 @@ type Conn =
       unresolved: Graph<UnresolvedNode>
       lastTouched: Set<Node> }
 
-    member private this.ResolvedPP() =
+    member private this.ResolvedCompactFormat() =
         let byScope =
             this.resolved.edges
             |> MMap.toSetSeq
@@ -136,7 +142,7 @@ type Conn =
 
         concatLines lines
 
-    member private this.UnresolvedPP() =
+    member private this.UnresolvedCompactFormat() =
         let edges = this.unresolved.edges |> MMap.toSeq
 
         let lines =
@@ -147,7 +153,7 @@ type Conn =
 
         concatLines lines
 
-    member this.PP() =
+    member this.CompactFormat() =
         let lines =
             seq {
                 yield "Links:"
@@ -167,9 +173,9 @@ type Conn =
                         yield Indented(4, def.CompactFormat()).ToString()
 
                 yield "Resolved:"
-                yield Indented(2, this.ResolvedPP()).ToString()
+                yield Indented(2, this.ResolvedCompactFormat()).ToString()
                 yield "Unresolved:"
-                yield Indented(2, this.UnresolvedPP()).ToString()
+                yield Indented(2, this.UnresolvedCompactFormat()).ToString()
                 yield "Last touched:"
 
                 for scope, sym in this.lastTouched do
@@ -191,16 +197,16 @@ module Conn =
         let mutable { links = links
                       defs = defs
                       resolved = resolved
-                      unresolved = unresolved
-                      lastTouched = lastTouched } =
+                      unresolved = unresolved } =
             conn
 
-        let mutable resolveLinks = Set.empty
+        let mutable lastTouched = Set.empty
+        let mutable toResolveSet = Set.empty
 
         let addUnresolvedLinkToQueue =
             function
             | UnresolvedNode.Link (scope, link) ->
-                resolveLinks <- Set.add (scope, link) resolveLinks
+                toResolveSet <- Set.add (scope, link) toResolveSet
             | _ -> ()
 
         // First we remove all links to avoid re-resolving links that are no longer part of the graph
@@ -228,18 +234,29 @@ module Conn =
 
             let cb =
                 function
-                | scope, Sym.Link link -> resolveLinks <- Set.add (scope, link) resolveLinks
+                | scope, Sym.Link link -> toResolveSet <- Set.add (scope, link) toResolveSet
                 | _, Sym.Def _ -> ()
 
             defs <- MMap.removeValue scope def defs
             resolved <- Graph.removeVertexWithCallback cb node resolved
 
+            // When the doc is removed we need to remove all unresolved links within this doc's scope
+            match def with
+            | Def.Doc ->
+                unresolved <- Graph.removeVertex (UnresolvedNode.Scope(InScope scope)) unresolved
+            | _ -> ()
+
+        let mutable docWasAdded = false
+
         for scope, sym as node in added do
             match sym with
-            | Sym.Link link -> resolveLinks <- Set.add (scope, link) resolveLinks
+            | Sym.Link link -> toResolveSet <- Set.add (scope, link) toResolveSet
             | Sym.Def def ->
                 defs <- MMap.add scope def defs
                 resolved <- Graph.addVertex node resolved
+
+                if Def.isDoc def then
+                    docWasAdded <- true
 
                 // When we add a new def, things that were previously unresolved within the scope
                 // could become resolvable
@@ -249,15 +266,17 @@ module Conn =
                         (UnresolvedNode.Scope(InScope scope))
                         unresolved
 
-        // Finally, we need to re-resolve all previously unresolved links within the global scope
-        unresolved <-
-            Graph.removeVertexWithCallback
-                addUnresolvedLinkToQueue
-                (UnresolvedNode.Scope(Global))
-                unresolved
+        // Finally, if any new docs were added we need to re-resolve all previously unresolved links
+        // within the global scope
+        if docWasAdded then
+            unresolved <-
+                Graph.removeVertexWithCallback
+                    addUnresolvedLinkToQueue
+                    (UnresolvedNode.Scope(Global))
+                    unresolved
 
         // Now we run link resolution while updating both resolved and unresolved graphs
-        for scope, link in resolveLinks do
+        for scope, link in toResolveSet do
             links <- MMap.add scope link links
             lastTouched <- Set.add (scope, Sym.Link link) lastTouched
 

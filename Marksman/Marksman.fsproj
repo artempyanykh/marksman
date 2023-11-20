@@ -39,9 +39,9 @@
         <Compile Include="Ast.fs"/>
         <Compile Include="Parser.fs"/>
         <Compile Include="Index.fs"/>
+        <Compile Include="Conn.fs"/>
         <Compile Include="Doc.fsi"/>
         <Compile Include="Doc.fs"/>
-        <Compile Include="Conn.fs"/>
         <Compile Include="Folder.fsi"/>
         <Compile Include="Folder.fs"/>
         <Compile Include="Workspace.fsi"/>

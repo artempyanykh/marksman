@@ -145,3 +145,14 @@ module Doc =
     let slug (doc: Doc) : Slug = name doc |> Slug.ofString
 
     let version (doc: Doc) : option<int> = doc.version
+
+    let syms (doc: Doc) : seq<Conn.Sym> =
+        seq {
+            yield (Conn.Sym.Def Conn.Def.Doc)
+
+            for el in (ast doc).elements do
+                yield Conn.Sym.ofElement el
+        }
+
+    let symsDifference (beforeDoc: Doc) (afterDoc: Doc) : Difference<Conn.Sym> =
+        Difference.mk (syms beforeDoc) (syms afterDoc)

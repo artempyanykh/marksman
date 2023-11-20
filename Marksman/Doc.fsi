@@ -29,6 +29,8 @@ module Doc =
     val structure: Doc -> Structure
     val cst: Doc -> Cst
     val ast: Doc -> Ast.Ast
+    val syms: Doc -> seq<Conn.Sym>
+    val symsDifference: Doc -> Doc -> Difference<Conn.Sym>
     val title: Doc -> option<Node<Heading>>
     val name: Doc -> string
     val slug: Doc -> Slug

@@ -555,14 +555,11 @@ module Folder =
 
     let oracle folder = Oracle.oracle folder.data folder.lookup
 
-    let syms folder =
+    let syms (folder: Folder) =
         let mutable mapping = MMap.empty
 
         for doc in docs folder do
-            mapping <- MMap.add (Doc.id doc) (Conn.Sym.Def Conn.Def.Doc) mapping
-
-            for el in (Doc.ast doc).elements do
-                let sym = Conn.Sym.ofElement el
+            for sym in Doc.syms doc do
                 mapping <- MMap.add (Doc.id doc) sym mapping
 
         mapping

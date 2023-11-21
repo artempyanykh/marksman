@@ -4,7 +4,10 @@ open Ionide.LanguageServerProtocol.Types
 
 val systemPathToUriString: string -> DocumentUri
 
+[<Struct>]
 type AbsPath = AbsPath of string
+
+[<Struct>]
 type RelPath = RelPath of string
 
 type LocalPath =
@@ -46,6 +49,7 @@ module LocalPath =
     val filenameStem: LocalPath -> string
     val directory: LocalPath -> LocalPath
 
+[<Struct>]
 type RootPath =
     | RootPath of AbsPath
 
@@ -62,6 +66,7 @@ module RootPath =
     val filename: RootPath -> string
     val filenameStem: RootPath -> string
 
+[<Struct>]
 type RootedRelPath =
     private
         { root: RootPath

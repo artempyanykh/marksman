@@ -29,6 +29,7 @@ module FolderId =
 
 [<Struct>]
 [<StructuredFormatDisplay("{ShortFormat}")>]
+[<CustomEquality; CustomComparison>]
 type DocId =
     | DocId of UriWith<RootedRelPath>
 
@@ -45,6 +46,33 @@ type DocId =
         uri.uri
 
     member this.ShortFormat = this.Path |> RootedRelPath.toSystem
+
+    interface IEquatable<DocId> with
+        member this.Equals(that: DocId) =
+            let (DocId thisUri) = this
+            let (DocId thatUri) = that
+            thisUri.uri = thatUri.uri
+
+    override this.Equals(that) =
+        match that with
+        | :? DocId as that -> (this :> IEquatable<_>).Equals(that)
+        | _ -> false
+
+    override this.GetHashCode() =
+        let (DocId uri) = this
+        hash uri.uri
+
+    interface IComparable<DocId> with
+        member this.CompareTo(that: DocId) =
+            let (DocId thisUri) = this
+            let (DocId thatUri) = that
+            compare thisUri.uri thatUri.uri
+
+    interface IComparable with
+        member this.CompareTo(that: obj) =
+            match that with
+            | :? DocId as that -> (this :> IComparable<_>).CompareTo(that)
+            | _ -> failwith $"Can't compare DocId with other types: {that}"
 
 
 type InternName = { src: DocId; name: string }

@@ -272,3 +272,5 @@ module Difference =
 
     let map f { added = added; removed = removed } =
         { added = Set.map f added; removed = Set.map f removed }
+
+type FullDifference<'A> when 'A: comparison = { added: Set<'A>; removed: Set<'A>; changed: Set<'A> }

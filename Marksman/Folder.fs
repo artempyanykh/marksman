@@ -64,10 +64,12 @@ module FolderData =
 
             Map.tryFind canonPath docs
 
-    let findDocById (id: DocId) data : Doc =
+    let tryFindDocById (id: DocId) data : option<Doc> =
         let docRelPath = id.Path |> RootedRelPath.relPathForced
-
         tryFindDocByRelPath docRelPath data
+
+    let findDocById (id: DocId) data : Doc =
+        tryFindDocById id data
         |> Option.defaultWith (fun () -> failwith $"Expected doc could not be found: {id.Uri}")
 
 type FolderLookup =
@@ -314,7 +316,9 @@ module Folder =
 
     let tryFindDocByRelPath (path: RelPath) folder = FolderData.tryFindDocByRelPath path folder.data
 
-    let findDocById (id: DocId) folder : Doc = FolderData.findDocById id folder.data
+    let tryFindDocById (id: DocId) folder = FolderData.tryFindDocById id folder.data
+
+    let findDocById (id: DocId) folder = FolderData.findDocById id folder.data
 
     let private readIgnoreFiles (root: LocalPath) : array<string> =
         let lines = ResizeArray()

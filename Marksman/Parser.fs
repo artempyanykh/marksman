@@ -47,25 +47,28 @@ module Markdown =
         do this.OpeningCharacters <- [| '#' |]
 
         override this.Match(processor, slice) =
-            let start = slice.Start
-            let offsetStart = processor.GetSourcePosition(slice.Start)
-
-            let shouldAccept (c: char) = c.IsAlphaNumeric() || c = '-' || c = '_'
-
-            while (shouldAccept (slice.PeekChar())) do
-                slice.NextChar() |> ignore
-
-            let end_ = slice.Start
-            let offsetEnd = offsetStart + (end_ - start)
-
-            if end_ > start then
-                let text = slice.Text.Substring(start, end_ - start + 1)
-                let tag = TagInline(text)
-                tag.Span <- SourceSpan(offsetStart, offsetEnd)
-                processor.Inline <- tag
-                true
-            else
+            // tags should not be placed inside words, URLs etc.
+            if (slice.PeekCharExtra -1).IsAlphaNumeric() then
                 false
+            else
+                let start = slice.Start
+                let offsetStart = processor.GetSourcePosition(slice.Start)
+                let shouldAccept (c: char) = c.IsAlphaNumeric() || c = '-' || c = '_'
+
+                while (shouldAccept (slice.PeekChar())) do
+                    slice.NextChar() |> ignore
+
+                let end_ = slice.Start
+                let offsetEnd = offsetStart + (end_ - start)
+
+                if end_ > start then
+                    let text = slice.Text.Substring(start, end_ - start + 1)
+                    let tag = TagInline(text)
+                    tag.Span <- SourceSpan(offsetStart, offsetEnd)
+                    processor.Inline <- tag
+                    true
+                else
+                    false
 
     /// <summary>Match links of the form `[[doc#heading|title]]`, where at least one of `doc` and `#heading` must be present (`|title` may be omitted).</summary>
     type WikiLinkParser() as this =

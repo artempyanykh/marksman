@@ -27,12 +27,17 @@ module FolderId =
     val ofUri: DocumentUri -> FolderId
 
 [<Struct>]
+[<CustomEquality; CustomComparison>]
 type DocId =
     | DocId of UriWith<RootedRelPath>
 
     member Path: RootedRelPath
     member Uri: DocumentUri
     member Raw: UriWith<RootedRelPath>
+
+    interface System.IEquatable<DocId>
+    interface System.IComparable<DocId>
+    interface System.IComparable
 
 type InternName = { src: DocId; name: string }
 

@@ -88,6 +88,7 @@ module DirSeparator =
         else
             Forward
 
+[<Struct>]
 type AbsPath =
     | AbsPath of string
 
@@ -95,7 +96,7 @@ type AbsPath =
         let (AbsPath raw) = this
         AbsPath(Path.GetDirectoryName(raw))
 
-and RelPath =
+and [<Struct>] RelPath =
     | RelPath of string
 
     member this.GetDirectoryName() : AbsPath =
@@ -279,6 +280,7 @@ module LocalPath =
         let dir = Path.GetDirectoryName(toSystem path)
         ofSystem dir
 
+[<Struct>]
 type RootPath =
     | RootPath of AbsPath
 
@@ -307,6 +309,7 @@ module RootPath =
     let filename (RootPath p) = AbsPath.filename p
     let filenameStem (RootPath p) = AbsPath.filenameStem p
 
+[<Struct>]
 type RootedRelPath = { root: RootPath; path: option<RelPath> }
 
 module RootedRelPath =

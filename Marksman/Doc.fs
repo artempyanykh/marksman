@@ -29,21 +29,31 @@ type Doc =
 
     member this.Id = this.id
 
+    interface IEquatable<Doc> with
+        member this.Equals(other) = this.id = other.id && this.text = other.text
+
     override this.Equals(obj) =
         match obj with
-        | :? Doc as other -> this.id = other.id && this.version = other.version
+        | :? Doc as other -> (this :> IEquatable<_>).Equals(other)
         | _ -> false
 
-    override this.GetHashCode() = HashCode.Combine(hash this.id, hash this.version)
+    override this.GetHashCode() = HashCode.Combine(hash this.id, hash this.text)
+
+    interface IComparable<Doc> with
+        member this.CompareTo(other) =
+            match compare this.id other.id with
+            | 0 ->
+                match compare this.text other.text with
+                | 0 -> compare this.version other.version
+                | non0 -> non0
+            | non0 -> non0
 
     interface IComparable with
         member this.CompareTo(obj) =
             match obj with
-            | :? Doc as other ->
-                match compare this.id other.id with
-                | 0 -> compare this.version other.version
-                | non0 -> non0
+            | :? Doc as other -> (this :> IComparable<_>).CompareTo(other)
             | _ -> failwith $"Comparison with non-Doc type: {obj}"
+
 
 module Doc =
 

@@ -68,9 +68,30 @@ type LineMap =
         | None, _ -> failwith $"Range start outside of line map: {range}"
         | _, None -> failwith $"Range end outside of line map: {range}"
 
+
+[<CustomEquality; CustomComparison>]
 type Text =
     { content: string
       lineMap: LineMap }
+
+    override this.Equals(other: obj) =
+        match other with
+        | :? Text as other -> this.content = other.content
+        | _ -> false
+
+    override this.GetHashCode() = this.content.GetHashCode()
+
+    interface IEquatable<Text> with
+        member this.Equals(other: Text) = this.content = other.content
+
+    interface IComparable<Text> with
+        member this.CompareTo(other: Text) = this.content.CompareTo(other.content)
+
+    interface IComparable with
+        member this.CompareTo(other: obj) =
+            match other with
+            | :? Text as other -> this.content.CompareTo(other.content)
+            | _ -> failwith $"Cannot compare Text with other types: {other}"
 
     member this.Substring(range: Range) : string =
         if range.IsEmpty() then

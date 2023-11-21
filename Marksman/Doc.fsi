@@ -17,6 +17,8 @@ type Doc =
     member RelPath: RelPath
 
     interface System.IComparable
+    interface System.IComparable<Doc>
+    interface System.IEquatable<Doc>
 
 module Doc =
     val id: Doc -> DocId

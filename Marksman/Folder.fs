@@ -131,7 +131,7 @@ module FolderLookup =
 
         let updateBySlug =
             function
-            | None -> None
+            | None -> Some(Set.singleton doc)
             | Some docs -> Set.add doc docs |> Some
 
         let bySlug = Map.change slug updateBySlug lookup.docsBySlug

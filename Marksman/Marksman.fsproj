@@ -47,6 +47,7 @@
         <Compile Include="Workspace.fsi"/>
         <Compile Include="Workspace.fs"/>
         <Compile Include="Semato.fs"/>
+        <Compile Include="Refs.fsi"/>
         <Compile Include="Refs.fs"/>
         <Compile Include="Diag.fs"/>
         <Compile Include="State.fs"/>

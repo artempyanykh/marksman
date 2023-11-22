@@ -48,9 +48,9 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
 let isCrossFileLink uref =
     match uref with
-    | Uref.Doc _ -> true
+    | Uref.Doc _
     | Uref.Heading(doc = Some _) -> true
-    | Uref.Heading(doc = None) -> false
+    | Uref.Heading(doc = None)
     | Uref.LinkDef _ -> false
 
 let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =

@@ -78,12 +78,6 @@ module Uref =
         | T _
         | MLD _ -> None
 
-    let hasExplicitDoc =
-        function
-        | Uref.Doc _ -> true
-        | Uref.Heading(doc = Some _) -> true
-        | Uref.Heading(doc = None) -> false
-        | Uref.LinkDef _ -> false
 
 [<RequireQualifiedAccess>]
 type FileLinkKind =

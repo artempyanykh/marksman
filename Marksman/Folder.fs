@@ -39,6 +39,12 @@ module FolderData =
 
     let configOrDefault = config >> Config.orDefault
 
+    let docs data =
+        match data with
+        | SingleFile { doc = doc } -> Seq.singleton doc
+        | MultiFile { docs = docs } -> Map.values docs
+
+
     let tryFindDocByRelPath (path: RelPath) data : option<Doc> =
         match data with
         | SingleFile { doc = doc } ->
@@ -71,6 +77,15 @@ module FolderData =
     let findDocById (id: DocId) data : Doc =
         tryFindDocById id data
         |> Option.defaultWith (fun () -> failwith $"Expected doc could not be found: {id.Uri}")
+
+    let syms (data: FolderData) =
+        let mutable mapping = MMap.empty
+
+        for doc in docs data do
+            for sym in Doc.syms doc do
+                mapping <- MMap.add (Doc.id doc) sym mapping
+
+        mapping
 
 type FolderLookup =
     { docsBySlug: Map<Slug, Set<Doc>>
@@ -253,34 +268,12 @@ module Oracle =
 
         { resolveToScope = resolveToScope; resolveInScope = resolveInScope }
 
-type Folder = { data: FolderData; lookup: FolderLookup }
+type Folder = { data: FolderData; lookup: FolderLookup; conn: Conn.Conn }
 
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
     let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
-
-    let mk data =
-        let lookup = FolderLookup.ofData data
-        { data = data; lookup = lookup }
-
-    let singleFile doc config : Folder =
-        let data = SingleFile { doc = doc; config = config }
-        mk data
-
-    let multiFile name root (docs: seq<Doc>) config =
-        let byCanonPath =
-            docs
-            |> Seq.map (fun doc ->
-                Doc.pathFromRoot doc
-                |> CanonDocPath.mk ((Config.orDefault config).CoreMarkdownFileExtensions()),
-                doc)
-            |> Map.ofSeq
-
-        let data =
-            MultiFile({ name = name; root = root; docs = byCanonPath; config = config })
-
-        mk data
 
     let isSingleFile folder =
         match folder.data with
@@ -291,15 +284,9 @@ module Folder =
 
     let configOrDefault folder = FolderData.configOrDefault folder.data
 
-    let withConfig config folder =
-        match folder.data with
-        | SingleFile folder -> SingleFile { folder with config = config } |> mk
-        | MultiFile folder -> MultiFile { folder with config = config } |> mk
+    let docs folder = FolderData.docs folder.data
 
-    let docs folder =
-        match folder.data with
-        | SingleFile { doc = doc } -> Seq.singleton doc
-        | MultiFile { docs = docs } -> Map.values docs
+    let conn { conn = conn } = conn
 
     let id folder =
         match folder.data with
@@ -315,8 +302,6 @@ module Folder =
         FolderData.tryFindDocByPath uri folder.data
 
     let tryFindDocByRelPath (path: RelPath) folder = FolderData.tryFindDocByRelPath path folder.data
-
-    let tryFindDocById (id: DocId) folder = FolderData.tryFindDocById id folder.data
 
     let findDocById (id: DocId) folder = FolderData.findDocById id folder.data
 
@@ -432,6 +417,101 @@ module Folder =
 
             None
 
+    let oracle folder = Oracle.oracle folder.data folder.lookup
+
+    let syms (folder: Folder) = FolderData.syms folder.data
+
+    /// Identify added, removed, changed, and unchanged docs between
+    /// two folders.
+    let docsDifference (before: Folder) (after: Folder) =
+        let idsBefore = docs before |> Seq.map Doc.id |> Set.ofSeq
+        let idsAfter = docs after |> Seq.map Doc.id |> Set.ofSeq
+
+        let idsRemoved = idsBefore - idsAfter
+        let idsAdded = idsAfter - idsBefore
+        let idsBoth = Set.intersect idsBefore idsAfter
+
+        let idsChanged =
+            seq {
+                for id in idsBoth do
+                    let beforeDoc = findDocById id before
+                    let afterDoc = findDocById id after
+
+                    if beforeDoc <> afterDoc then
+                        yield id
+            }
+            |> Set.ofSeq
+
+        let idsUnchanged = idsBoth - idsChanged
+
+        { added = idsAdded
+          removed = idsRemoved
+          changed = idsChanged
+          unchanged = idsUnchanged }
+
+    let symsDifference (before: Folder) (after: Folder) =
+        let docsDifference = docsDifference before after
+        let mutable added = Set.empty
+        let mutable removed = Set.empty
+
+        for id in docsDifference.removed do
+            let doc = findDocById id before
+
+            let nodesInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
+            removed <- removed + nodesInDoc
+
+        for id in docsDifference.added do
+            let doc = findDocById id after
+
+            let nodesInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
+            added <- added + nodesInDoc
+
+        for id in docsDifference.changed do
+            let beforeDoc = findDocById id before
+            let afterDoc = findDocById id after
+            let docDiff = Doc.symsDifference beforeDoc afterDoc
+
+            let removedNodes = Conn.Sym.allScopedToDoc id docDiff.removed |> Set.ofSeq
+            removed <- removed + removedNodes
+
+            let addedNodes = Conn.Sym.allScopedToDoc id docDiff.added |> Set.ofSeq
+            added <- added + addedNodes
+
+        let symsDifference = { added = added; removed = removed }
+
+        docsDifference, symsDifference
+
+    let mk data =
+        let lookup = FolderLookup.ofData data
+        let conn = Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
+        { data = data; lookup = lookup; conn = conn }
+
+    let singleFile doc config : Folder =
+        let data = SingleFile { doc = doc; config = config }
+        mk data
+
+    let multiFile name root (docs: seq<Doc>) config =
+        let byCanonPath =
+            docs
+            |> Seq.map (fun doc ->
+                Doc.pathFromRoot doc
+                |> CanonDocPath.mk ((Config.orDefault config).CoreMarkdownFileExtensions()),
+                doc)
+            |> Map.ofSeq
+
+        let data =
+            MultiFile({ name = name; root = root; docs = byCanonPath; config = config })
+
+        mk data
+
+    let withConfig config folder =
+        if config = (FolderData.config folder.data) then
+            folder
+        else
+            match folder.data with
+            | SingleFile folder -> SingleFile { folder with config = config } |> mk
+            | MultiFile folder -> MultiFile { folder with config = config } |> mk
+
     let tryLoad (userConfig: option<Config>) (name: string) (folderId: FolderId) : option<Folder> =
         logger.trace (
             Log.setMessage "Loading folder documents"
@@ -461,7 +541,7 @@ module Folder =
 
             None
 
-    let withDoc (newDoc: Doc) { data = data; lookup = lookup } : Folder =
+    let withDoc (newDoc: Doc) { data = data; lookup = lookup; conn = conn } : Folder =
         match data with
         | MultiFile folder ->
             if newDoc.RootPath <> folder.RootPath then
@@ -473,17 +553,33 @@ module Folder =
                     ((FolderData.configOrDefault data).CoreMarkdownFileExtensions())
                     newDoc.RelPath
 
+            let existingDoc = Map.tryFind canonPath folder.docs
+
+            let data =
+                MultiFile { folder with docs = Map.add canonPath newDoc folder.docs }
+
             let lookup =
-                match Map.tryFind canonPath folder.docs with
+                match existingDoc with
                 | None -> lookup
                 | Some doc -> FolderLookup.withoutDoc doc lookup
 
             let lookup = FolderLookup.withDoc newDoc lookup
 
-            let data =
-                MultiFile { folder with docs = Map.add canonPath newDoc folder.docs }
+            let conn =
+                let diff =
+                    match existingDoc with
+                    | None ->
+                        let newSyms =
+                            Doc.syms newDoc |> Conn.Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
 
-            { data = data; lookup = lookup }
+                        { added = newSyms; removed = Set.empty }
+                    | Some existingDoc ->
+                        Doc.symsDifference existingDoc newDoc
+                        |> Difference.map (Conn.Sym.scopedToDoc newDoc.Id)
+
+                Conn.Conn.update (Oracle.oracle data lookup) diff conn
+
+            { data = data; lookup = lookup; conn = conn }
         | SingleFile ({ doc = existingDoc } as folder) ->
             if newDoc.Id <> existingDoc.Id then
                 failwith
@@ -504,9 +600,16 @@ module Folder =
             | Some doc ->
                 let docs = Map.remove canonPath mf.docs
                 let data = MultiFile { mf with docs = docs }
-
                 let lookup = FolderLookup.withoutDoc doc folder.lookup
-                Some { data = data; lookup = lookup }
+
+                let conn =
+                    let removedSyms =
+                        Doc.syms doc |> Conn.Sym.allScopedToDoc docId |> Set.ofSeq
+
+                    let diff = { added = Set.empty; removed = removedSyms }
+                    Conn.Conn.update (Oracle.oracle data lookup) diff folder.conn
+
+                Some { data = data; lookup = lookup; conn = conn }
         | SingleFile { doc = doc } ->
             if doc.Id <> docId then
                 failwith
@@ -556,75 +659,3 @@ module Folder =
                 CanonDocPath.mk ((configOrDefault folder).CoreMarkdownFileExtensions()) relPath
 
             SuffixTree.filterMatchingValues canonPath folder.lookup.docsByPath
-
-    let oracle folder = Oracle.oracle folder.data folder.lookup
-
-    let syms (folder: Folder) =
-        let mutable mapping = MMap.empty
-
-        for doc in docs folder do
-            for sym in Doc.syms doc do
-                mapping <- MMap.add (Doc.id doc) sym mapping
-
-        mapping
-
-    /// Identify added, removed, changed, and unchanged docs between
-    /// two folders.
-    let docsDifference (before: Folder) (after: Folder) =
-        let idsBefore = docs before |> Seq.map Doc.id |> Set.ofSeq
-        let idsAfter = docs after |> Seq.map Doc.id |> Set.ofSeq
-
-        let idsRemoved = idsBefore - idsAfter
-        let idsAdded = idsAfter - idsBefore
-        let idsBoth = Set.intersect idsBefore idsAfter
-
-        let idsChanged =
-            seq {
-                for id in idsBoth do
-                    let beforeDoc = findDocById id before
-                    let afterDoc = findDocById id after
-
-                    if beforeDoc <> afterDoc then
-                        yield id
-            }
-            |> Set.ofSeq
-
-        let idsUnchanged = idsBoth - idsChanged
-
-        { added = idsAdded
-          removed = idsRemoved
-          changed = idsChanged
-          unchanged = idsUnchanged }
-
-    let symsDifference (before: Folder) (after: Folder) =
-        let docsDifference = docsDifference before after
-        let mutable added = Set.empty
-        let mutable removed = Set.empty
-        let mkDocNode id sym = Conn.Scope.Doc id, sym
-
-        for id in docsDifference.removed do
-            let doc = findDocById id before
-
-            let nodesInDoc = Doc.syms doc |> Seq.map (mkDocNode id) |> Set.ofSeq
-            removed <- removed + nodesInDoc
-
-        for id in docsDifference.added do
-            let doc = findDocById id after
-
-            let nodesInDoc = Doc.syms doc |> Seq.map (mkDocNode id) |> Set.ofSeq
-            added <- added + nodesInDoc
-
-        for id in docsDifference.changed do
-            let beforeDoc = findDocById id before
-            let afterDoc = findDocById id after
-            let docDiff = Doc.symsDifference beforeDoc afterDoc
-
-            let removedNodes = docDiff.removed |> Seq.map (mkDocNode id) |> Set.ofSeq
-            removed <- removed + removedNodes
-
-            let addedNodes = docDiff.added |> Seq.map (mkDocNode id) |> Set.ofSeq
-            added <- added + addedNodes
-
-        let symsDifference = { added = added; removed = removed }
-
-        docsDifference, symsDifference

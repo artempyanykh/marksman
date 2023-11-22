@@ -264,6 +264,8 @@ type Difference<'A> when 'A: comparison = { added: Set<'A>; removed: Set<'A> }
 module Difference =
     let empty = { added = Set.empty; removed = Set.empty }
 
+    let isEmpty { added = added; removed = removed } = Set.isEmpty added && Set.isEmpty removed
+
     let mk (before: seq<'A>) (after: seq<'A>) : Difference<'A> =
         let before = Set.ofSeq before
         let after = Set.ofSeq after

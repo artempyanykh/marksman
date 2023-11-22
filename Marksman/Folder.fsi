@@ -38,6 +38,6 @@ module Folder =
     val filterDocsByInternPath: InternPath -> Folder -> seq<Doc>
 
     val oracle: Folder -> Conn.Oracle
+    val conn: Folder -> Conn.Conn
     val syms: Folder -> MMap<DocId, Conn.Sym>
-
     val symsDifference: Folder -> Folder -> FullDifference<DocId> * Difference<Conn.Node>

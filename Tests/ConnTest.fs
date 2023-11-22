@@ -8,7 +8,6 @@ open Snapper.Attributes
 open Marksman.Misc
 open Marksman.Helpers
 open Marksman.MMap
-open Marksman.Doc
 open Marksman.Folder
 open Marksman.Conn
 
@@ -82,19 +81,13 @@ module ConnGraphTests =
     [<Fact>]
     let removeDoc () =
         let f1 = FakeFolder.Mk([ d1; d1_dup; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
+        let f2 = Folder.withoutDoc d1_dup.Id f1 |> Option.get
 
-        let f2 = FakeFolder.Mk([ d1; d2; d3 ])
-
-        let _, diff = Folder.symsDifference f1 f2
-        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
-
-        checkSnapshot conn
+        checkSnapshot (Folder.conn f2)
 
     [<Fact>]
     let addDoc () =
         let f1 = FakeFolder.Mk([ d1; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
         let dNA =
             FakeDoc.Mk(
@@ -104,17 +97,12 @@ module ConnGraphTests =
                        "" |]
             )
 
-        let f2 = FakeFolder.Mk([ d1; d2; d3; dNA ])
-
-        let _, diff = Folder.symsDifference f1 f2
-        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
-
-        checkSnapshot conn
+        let f2 = Folder.withDoc dNA f1
+        checkSnapshot (Folder.conn f2)
 
     [<Fact>]
     let addLinkDef () =
         let f1 = FakeFolder.Mk([ d1; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
         let d3Update =
             FakeDoc.Mk(
@@ -131,17 +119,12 @@ module ConnGraphTests =
                        "" |]
             )
 
-        let f2 = FakeFolder.Mk([ d1; d2; d3Update ])
-
-        let _, diff = Folder.symsDifference f1 f2
-        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
-
-        checkSnapshot conn
+        let f2 = Folder.withDoc d3Update f1
+        checkSnapshot (Folder.conn f2)
 
     [<Fact>]
     let removeHeading () =
         let f1 = FakeFolder.Mk([ d1; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
         let d1Update =
             FakeDoc.Mk(
@@ -154,9 +137,5 @@ module ConnGraphTests =
                        "" |]
             )
 
-        let f2 = FakeFolder.Mk([ d1Update; d2; d3 ])
-
-        let _, diff = Folder.symsDifference f1 f2
-        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
-
-        checkSnapshot conn
+        let f2 = Folder.withDoc d1Update f1
+        checkSnapshot (Folder.conn f2)

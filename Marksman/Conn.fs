@@ -1,5 +1,7 @@
 module Marksman.Conn
 
+open Ionide.LanguageServerProtocol.Logging
+
 open Marksman.Misc
 open Marksman.MMap
 open Marksman.Ast
@@ -66,6 +68,9 @@ type Sym =
         | Link link -> link.CompactFormat()
         | Def def -> def.CompactFormat()
 
+
+type Node = Scope * Sym
+
 module Sym =
     let asLink =
         function
@@ -86,12 +91,16 @@ module Sym =
         | Ast.Element.WL wl -> Sym.Link(Link.WL wl)
         | Ast.Element.MLD ld -> Sym.Def(Def.LD ld)
 
+    let scoped (scope: Scope) (sym: Sym) = scope, sym
+
+    let scopedToDoc (docId: DocId) (sym: Sym) = Scope.Doc docId, sym
+
+    let allScopedToDoc (docId: DocId) (syms: seq<Sym>) = syms |> Seq.map (scopedToDoc docId)
+
 
 type Oracle =
     { resolveToScope: Scope -> Link -> Scope[]
       resolveInScope: Link -> Scope -> Def[] }
-
-type Node = Scope * Sym
 
 module Node =
     let asLinkNode (scope, sym) = Sym.asLink sym |> Option.map (fun link -> scope, link)
@@ -185,6 +194,7 @@ type Conn =
         concatLines lines
 
 module Conn =
+    let private logger = LogProvider.getLoggerByName "Conn"
 
     let empty =
         { links = MMap.empty
@@ -193,7 +203,17 @@ module Conn =
           unresolved = Graph.empty
           lastTouched = Set.empty }
 
-    let update (oracle: Oracle) (added: Set<Node>) (removed: Set<Node>) (conn: Conn) : Conn =
+    let updateAux
+        (oracle: Oracle)
+        ({ added = added; removed = removed }: Difference<Node>)
+        (conn: Conn)
+        : Conn =
+        logger.trace (
+            Log.setMessage "update: started"
+            >> Log.addContext "#added" (Set.count added)
+            >> Log.addContext "#removed" (Set.count removed)
+        )
+
         let mutable { links = links
                       defs = defs
                       resolved = resolved
@@ -306,14 +326,33 @@ module Conn =
                             (targetScope, Sym.Def targetDef)
                             resolved
 
+        logger.trace (
+            Log.setMessage "Finished updating conn"
+            >> Log.addContext "#touched" (Set.count lastTouched)
+        )
+
         { links = links
           defs = defs
           resolved = resolved
           unresolved = unresolved
           lastTouched = lastTouched }
 
+    let update oracle diff conn =
+        if Difference.isEmpty diff then
+            logger.trace (Log.setMessage "update: skipping empty diff")
+            conn
+        else
+            updateAux oracle diff conn
+
     let mk (oracle: Oracle) (nodes: MMap<DocId, Sym>) : Conn =
+        // Backtrace can be helpful in tracking down when full rebuilds are requested
+        // let trace = System.Diagnostics.StackTrace()
+        logger.trace (
+            Log.setMessage "mk: full rebuild started"
+        // >> Log.addContext "backtrace" (trace.ToString())
+        )
+
         let added =
             MMap.fold (fun acc docId sym -> Set.add (Scope.Doc docId, sym) acc) Set.empty nodes
 
-        update oracle added Set.empty empty
+        update oracle { added = added; removed = Set.empty } empty

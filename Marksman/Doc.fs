@@ -42,10 +42,7 @@ type Doc =
     interface IComparable<Doc> with
         member this.CompareTo(other) =
             match compare this.id other.id with
-            | 0 ->
-                match compare this.text other.text with
-                | 0 -> compare this.version other.version
-                | non0 -> non0
+            | 0 -> compare this.text other.text
             | non0 -> non0
 
     interface IComparable with

@@ -81,23 +81,20 @@ module ConnGraphTests =
 
     [<Fact>]
     let removeDoc () =
-        let f = FakeFolder.Mk([ d1; d1_dup; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f) (Folder.syms f)
+        let f1 = FakeFolder.Mk([ d1; d1_dup; d2; d3 ])
+        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
-        let f = FakeFolder.Mk([ d1; d2; d3 ])
+        let f2 = FakeFolder.Mk([ d1; d2; d3 ])
 
-        let removed =
-            Doc.syms d1_dup
-            |> Seq.map (fun s -> Scope.Doc(Doc.id d1_dup), s)
-            |> Set.ofSeq
+        let _, diff = Folder.symsDifference f1 f2
+        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
 
-        let conn = Conn.update (Folder.oracle f) Set.empty removed conn
         checkSnapshot conn
 
     [<Fact>]
     let addDoc () =
-        let f = FakeFolder.Mk([ d1; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f) (Folder.syms f)
+        let f1 = FakeFolder.Mk([ d1; d2; d3 ])
+        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
         let dNA =
             FakeDoc.Mk(
@@ -107,20 +104,17 @@ module ConnGraphTests =
                        "" |]
             )
 
-        let f = FakeFolder.Mk([ d1; d2; d3; dNA ])
+        let f2 = FakeFolder.Mk([ d1; d2; d3; dNA ])
 
-        let added =
-            Doc.syms dNA
-            |> Seq.map (fun s -> Scope.Doc(Doc.id dNA), s)
-            |> Set.ofSeq
+        let _, diff = Folder.symsDifference f1 f2
+        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
 
-        let conn = Conn.update (Folder.oracle f) added Set.empty conn
         checkSnapshot conn
 
     [<Fact>]
     let addLinkDef () =
-        let f = FakeFolder.Mk([ d1; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f) (Folder.syms f)
+        let f1 = FakeFolder.Mk([ d1; d2; d3 ])
+        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
         let d3Update =
             FakeDoc.Mk(
@@ -137,19 +131,17 @@ module ConnGraphTests =
                        "" |]
             )
 
-        let f = FakeFolder.Mk([ d1; d2; d3Update ])
+        let f2 = FakeFolder.Mk([ d1; d2; d3Update ])
 
-        let diff =
-            Doc.symsDifference d3 d3Update
-            |> Difference.map (fun s -> Scope.Doc(Doc.id d3), s)
+        let _, diff = Folder.symsDifference f1 f2
+        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
 
-        let conn = Conn.update (Folder.oracle f) diff.added diff.removed conn
         checkSnapshot conn
 
     [<Fact>]
     let removeHeading () =
-        let f = FakeFolder.Mk([ d1; d2; d3 ])
-        let conn = Conn.mk (Folder.oracle f) (Folder.syms f)
+        let f1 = FakeFolder.Mk([ d1; d2; d3 ])
+        let conn = Conn.mk (Folder.oracle f1) (Folder.syms f1)
 
         let d1Update =
             FakeDoc.Mk(
@@ -162,11 +154,9 @@ module ConnGraphTests =
                        "" |]
             )
 
-        let f = FakeFolder.Mk([ d1Update; d2; d3 ])
+        let f2 = FakeFolder.Mk([ d1Update; d2; d3 ])
 
-        let diff =
-            Doc.symsDifference d1 d1Update
-            |> Difference.map (fun s -> Scope.Doc(Doc.id d1), s)
+        let _, diff = Folder.symsDifference f1 f2
+        let conn = Conn.update (Folder.oracle f2) diff.added diff.removed conn
 
-        let conn = Conn.update (Folder.oracle f) diff.added diff.removed conn
         checkSnapshot conn

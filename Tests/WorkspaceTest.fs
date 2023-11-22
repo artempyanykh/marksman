@@ -53,6 +53,16 @@ module FolderTest =
         Assert.Equal(0, Folder.filterDocsByInternPath (Approx(RelPath "doc1")) f |> Seq.length)
         Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "doc2")) f |> Seq.length)
 
+        // Adding a new doc; both by slug and by path should reflect
+        let d3 = FakeDoc.Mk(content = "# Title 3", path = "doc3.md")
+        let f = Folder.withDoc d3 f
+        Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "doc3")) f |> Seq.length)
+        Assert.Equal(0, Folder.filterDocsByInternPath (Approx(RelPath "doc4")) f |> Seq.length)
+
+        Assert.Equal(1, Folder.filterDocsBySlug (Slug.ofString "Title 3") f |> Seq.length)
+        Assert.Equal(0, Folder.filterDocsBySlug (Slug.ofString "Title 4") f |> Seq.length)
+
+
 module DocTest =
     [<Fact>]
     let applyLspChange () =

@@ -567,3 +567,64 @@ module Folder =
                 mapping <- MMap.add (Doc.id doc) sym mapping
 
         mapping
+
+    /// Identify added, removed, changed, and unchanged docs between
+    /// two folders.
+    let docsDifference (before: Folder) (after: Folder) =
+        let idsBefore = docs before |> Seq.map Doc.id |> Set.ofSeq
+        let idsAfter = docs after |> Seq.map Doc.id |> Set.ofSeq
+
+        let idsRemoved = idsBefore - idsAfter
+        let idsAdded = idsAfter - idsBefore
+        let idsBoth = Set.intersect idsBefore idsAfter
+
+        let idsChanged =
+            seq {
+                for id in idsBoth do
+                    let beforeDoc = findDocById id before
+                    let afterDoc = findDocById id after
+
+                    if beforeDoc <> afterDoc then
+                        yield id
+            }
+            |> Set.ofSeq
+
+        let idsUnchanged = idsBoth - idsChanged
+
+        { added = idsAdded
+          removed = idsRemoved
+          changed = idsChanged
+          unchanged = idsUnchanged }
+
+    let symsDifference (before: Folder) (after: Folder) =
+        let docsDifference = docsDifference before after
+        let mutable added = Set.empty
+        let mutable removed = Set.empty
+        let mkDocNode id sym = Conn.Scope.Doc id, sym
+
+        for id in docsDifference.removed do
+            let doc = findDocById id before
+
+            let nodesInDoc = Doc.syms doc |> Seq.map (mkDocNode id) |> Set.ofSeq
+            removed <- removed + nodesInDoc
+
+        for id in docsDifference.added do
+            let doc = findDocById id after
+
+            let nodesInDoc = Doc.syms doc |> Seq.map (mkDocNode id) |> Set.ofSeq
+            added <- added + nodesInDoc
+
+        for id in docsDifference.changed do
+            let beforeDoc = findDocById id before
+            let afterDoc = findDocById id after
+            let docDiff = Doc.symsDifference beforeDoc afterDoc
+
+            let removedNodes = docDiff.removed |> Seq.map (mkDocNode id) |> Set.ofSeq
+            removed <- removed + removedNodes
+
+            let addedNodes = docDiff.added |> Seq.map (mkDocNode id) |> Set.ofSeq
+            added <- added + addedNodes
+
+        let symsDifference = { added = added; removed = removed }
+
+        docsDifference, symsDifference

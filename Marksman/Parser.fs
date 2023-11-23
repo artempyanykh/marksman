@@ -502,7 +502,7 @@ module Structure =
         let rec go cst =
             seq {
                 for cel in cst do
-                    match Ast.Element.ofCst cel with
+                    match Cst.Element.toAbstract cel with
                     | Some ael -> yield cel, ael
                     | None -> ()
             }

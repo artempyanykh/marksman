@@ -453,25 +453,25 @@ module Folder =
         for id in docsDifference.removed do
             let doc = findDocById id before
 
-            let nodesInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
-            removed <- removed + nodesInDoc
+            let symsInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
+            removed <- removed + symsInDoc
 
         for id in docsDifference.added do
             let doc = findDocById id after
 
-            let nodesInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
-            added <- added + nodesInDoc
+            let symsInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
+            added <- added + symsInDoc
 
         for id in docsDifference.changed do
             let beforeDoc = findDocById id before
             let afterDoc = findDocById id after
             let docDiff = Doc.symsDifference beforeDoc afterDoc
 
-            let removedNodes = Conn.Sym.allScopedToDoc id docDiff.removed |> Set.ofSeq
-            removed <- removed + removedNodes
+            let removedSyms = Conn.Sym.allScopedToDoc id docDiff.removed |> Set.ofSeq
+            removed <- removed + removedSyms
 
-            let addedNodes = Conn.Sym.allScopedToDoc id docDiff.added |> Set.ofSeq
-            added <- added + addedNodes
+            let addedSyms = Conn.Sym.allScopedToDoc id docDiff.added |> Set.ofSeq
+            added <- added + addedSyms
 
         let symsDifference = { added = added; removed = removed }
 

@@ -183,11 +183,7 @@ module Oracle =
 
             SuffixTree.filterMatchingValues canonPath lookup.docsByPath
 
-    let private filterDocsByName
-        (data: FolderData)
-        (lookup: FolderLookup)
-        (name: InternName)
-        : DocId[] =
+    let filterDocsByName (data: FolderData) (lookup: FolderLookup) (name: InternName) : seq<DocId> =
         let byTitle: seq<DocId> =
             FolderLookup.filterDocsBySlug (InternName.name name |> Slug.ofString) lookup
             |> Seq.map Doc.id
@@ -197,7 +193,7 @@ module Oracle =
             |> Option.map (fun path -> filterDocsByInternPath path data lookup |> Seq.map Doc.id)
             |> Option.defaultValue []
 
-        Set.ofSeq (Seq.append byTitle byPath) |> Set.toArray
+        Set.ofSeq (Seq.append byTitle byPath)
 
     let private resolveToDoc (data: FolderData) (lookup: FolderLookup) fromDoc link =
         match link with
@@ -206,12 +202,12 @@ module Oracle =
         | Link.MR _ -> [| Scope.Doc fromDoc |]
         | Link.WL { doc = Some doc } ->
             let name = InternName.mkUnchecked fromDoc doc
-            filterDocsByName data lookup name |> Array.map Scope.Doc
+            filterDocsByName data lookup name |> Seq.map Scope.Doc |> Seq.toArray
         | Link.ML { url = Some url } ->
             let exts = (FolderData.configOrDefault data).CoreMarkdownFileExtensions()
 
             match InternName.mkChecked exts fromDoc url with
-            | Some name -> filterDocsByName data lookup name |> Array.map Scope.Doc
+            | Some name -> filterDocsByName data lookup name |> Seq.map Scope.Doc |> Seq.toArray
             | None -> [||]
         | Link.T _ -> [| Scope.Tag |]
 
@@ -630,9 +626,6 @@ module Folder =
             else
                 None
 
-    let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
-        FolderLookup.filterDocsBySlug slug folder.lookup
-
     let tryFindDocByUrl (folderRelUrl: string) (folder: Folder) : option<Doc> =
         let urlEncoded = folderRelUrl.AbsPathUrlEncode()
 
@@ -647,15 +640,12 @@ module Folder =
         | SingleFile _ -> 1
         | MultiFile { docs = docs } -> docs.Values.Count
 
-    let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
-        match path with
-        | ExactAbs rooted
-        | ExactRel (_, rooted) ->
-            tryFindDocByRelPath (RootedRelPath.relPathForced rooted) folder
-            |> Option.toList
-            |> Seq.ofList
-        | Approx relPath ->
-            let canonPath =
-                CanonDocPath.mk ((configOrDefault folder).CoreMarkdownFileExtensions()) relPath
+    let filterDocsBySlug (slug: Slug) (folder: Folder) : seq<Doc> =
+        FolderLookup.filterDocsBySlug slug folder.lookup
 
-            SuffixTree.filterMatchingValues canonPath folder.lookup.docsByPath
+    let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
+        Oracle.filterDocsByInternPath path folder.data folder.lookup
+
+    let filterDocsByName (name: InternName) (folder: Folder) : seq<Doc> =
+        Oracle.filterDocsByName folder.data folder.lookup name
+        |> Seq.map (flip findDocById folder)

@@ -36,6 +36,7 @@ module Folder =
     val findDocById: DocId -> Folder -> Doc
     val filterDocsBySlug: Slug -> Folder -> seq<Doc>
     val filterDocsByInternPath: InternPath -> Folder -> seq<Doc>
+    val filterDocsByName: InternName -> Folder -> seq<Doc>
 
     val oracle: Folder -> Conn.Oracle
     val conn: Folder -> Conn.Conn

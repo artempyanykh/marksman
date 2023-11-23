@@ -69,7 +69,7 @@ type Sym =
         | Def def -> def.CompactFormat()
 
 
-type Node = Scope * Sym
+type ScopedSym = Scope * Sym
 
 module Sym =
     let asLink =
@@ -102,16 +102,16 @@ type Oracle =
     { resolveToScope: Scope -> Link -> Scope[]
       resolveInScope: Link -> Scope -> Def[] }
 
-module Node =
-    let asLinkNode (scope, sym) = Sym.asLink sym |> Option.map (fun link -> scope, link)
-    let asDefNode (scope, sym) = Sym.asDef sym |> Option.map (fun def -> scope, def)
+module ScopedSym =
+    let asLink (scope, sym) = Sym.asLink sym |> Option.map (fun link -> scope, link)
+    let asDef (scope, sym) = Sym.asDef sym |> Option.map (fun def -> scope, def)
 
 type UnresolvedScope =
     | Global
     | InScope of Scope
 
 [<RequireQualifiedAccess>]
-type UnresolvedNode =
+type Unresolved =
     | Link of Scope * Link
     | Scope of UnresolvedScope
 
@@ -124,9 +124,9 @@ type UnresolvedNode =
 type Conn =
     { links: MMap<Scope, Link>
       defs: MMap<Scope, Def>
-      resolved: Graph<Node>
-      unresolved: Graph<UnresolvedNode>
-      lastTouched: Set<Node> }
+      resolved: Graph<ScopedSym>
+      unresolved: Graph<Unresolved>
+      lastTouched: Set<ScopedSym> }
 
     member private this.ResolvedCompactFormat() =
         let byScope =
@@ -205,7 +205,7 @@ module Conn =
 
     let updateAux
         (oracle: Oracle)
-        ({ added = added; removed = removed }: Difference<Node>)
+        ({ added = added; removed = removed }: Difference<ScopedSym>)
         (conn: Conn)
         : Conn =
         logger.trace (
@@ -225,20 +225,19 @@ module Conn =
 
         let addUnresolvedLinkToQueue =
             function
-            | UnresolvedNode.Link (scope, link) ->
-                toResolveSet <- Set.add (scope, link) toResolveSet
+            | Unresolved.Link (scope, link) -> toResolveSet <- Set.add (scope, link) toResolveSet
             | _ -> ()
 
         // First we remove all links to avoid re-resolving links that are no longer part of the graph
-        let removedLinks = removed |> Set.toSeq |> Seq.choose Node.asLinkNode
+        let removedLinks = removed |> Set.toSeq |> Seq.choose ScopedSym.asLink
 
         for scope, link in removedLinks do
-            let node = (scope, Sym.Link link)
+            let scopedSym = (scope, Sym.Link link)
             links <- MMap.removeValue scope link links
-            resolved <- Graph.removeVertex node resolved
-            unresolved <- Graph.removeVertex (UnresolvedNode.Link(scope, link)) unresolved
+            resolved <- Graph.removeVertex scopedSym resolved
+            unresolved <- Graph.removeVertex (Unresolved.Link(scope, link)) unresolved
             // Add removed link to lastTouched because removing a broken link can affect the diagnostic
-            lastTouched <- Set.add node lastTouched
+            lastTouched <- Set.add scopedSym lastTouched
 
         // Then we remove all defs. When we remove a def:
         // 1. some previously resolved links could become broken; we need to remember them and
@@ -247,10 +246,10 @@ module Conn =
         //    may start pointing to a single def, and hence affect diagnostics.
         // This means that we need to collect everything that was pointing to the def, and re-run
         // link resolution using an oracle.
-        let removedDefs = removed |> Set.toSeq |> Seq.choose Node.asDefNode
+        let removedDefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asDef
 
         for scope, def in removedDefs do
-            let node = (scope, Sym.Def def)
+            let scopedSym = (scope, Sym.Def def)
 
             let cb =
                 function
@@ -258,22 +257,22 @@ module Conn =
                 | _, Sym.Def _ -> ()
 
             defs <- MMap.removeValue scope def defs
-            resolved <- Graph.removeVertexWithCallback cb node resolved
+            resolved <- Graph.removeVertexWithCallback cb scopedSym resolved
 
             // When the doc is removed we need to remove all unresolved links within this doc's scope
             match def with
             | Def.Doc ->
-                unresolved <- Graph.removeVertex (UnresolvedNode.Scope(InScope scope)) unresolved
+                unresolved <- Graph.removeVertex (Unresolved.Scope(InScope scope)) unresolved
             | _ -> ()
 
         let mutable docWasAdded = false
 
-        for scope, sym as node in added do
+        for scope, sym as scopedSym in added do
             match sym with
             | Sym.Link link -> toResolveSet <- Set.add (scope, link) toResolveSet
             | Sym.Def def ->
                 defs <- MMap.add scope def defs
-                resolved <- Graph.addVertex node resolved
+                resolved <- Graph.addVertex scopedSym resolved
 
                 if Def.isDoc def then
                     docWasAdded <- true
@@ -283,7 +282,7 @@ module Conn =
                 unresolved <-
                     Graph.removeVertexWithCallback
                         addUnresolvedLinkToQueue
-                        (UnresolvedNode.Scope(InScope scope))
+                        (Unresolved.Scope(InScope scope))
                         unresolved
 
         // Finally, if any new docs were added we need to re-resolve all previously unresolved links
@@ -292,7 +291,7 @@ module Conn =
             unresolved <-
                 Graph.removeVertexWithCallback
                     addUnresolvedLinkToQueue
-                    (UnresolvedNode.Scope(Global))
+                    (Unresolved.Scope(Global))
                     unresolved
 
         // Now we run link resolution while updating both resolved and unresolved graphs
@@ -305,8 +304,8 @@ module Conn =
             if Array.isEmpty targetScopes then
                 unresolved <-
                     Graph.addEdge
-                        (UnresolvedNode.Link(scope, link))
-                        (UnresolvedNode.Scope(Global))
+                        (Unresolved.Link(scope, link))
+                        (Unresolved.Scope(Global))
                         unresolved
 
             for targetScope in targetScopes do
@@ -315,8 +314,8 @@ module Conn =
                 if Array.isEmpty targetDefs then
                     unresolved <-
                         Graph.addEdge
-                            (UnresolvedNode.Link(scope, link))
-                            (UnresolvedNode.Scope(InScope targetScope))
+                            (Unresolved.Link(scope, link))
+                            (Unresolved.Scope(InScope targetScope))
                             unresolved
 
                 for targetDef in targetDefs do
@@ -344,7 +343,7 @@ module Conn =
         else
             updateAux oracle diff conn
 
-    let mk (oracle: Oracle) (nodes: MMap<DocId, Sym>) : Conn =
+    let mk (oracle: Oracle) (symMap: MMap<DocId, Sym>) : Conn =
         // Backtrace can be helpful in tracking down when full rebuilds are requested
         // let trace = System.Diagnostics.StackTrace()
         logger.trace (
@@ -353,6 +352,6 @@ module Conn =
         )
 
         let added =
-            MMap.fold (fun acc docId sym -> Set.add (Scope.Doc docId, sym) acc) Set.empty nodes
+            MMap.fold (fun acc docId sym -> Set.add (Scope.Doc docId, sym) acc) Set.empty symMap
 
         update oracle { added = added; removed = Set.empty } empty

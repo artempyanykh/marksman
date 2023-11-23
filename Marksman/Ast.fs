@@ -14,11 +14,6 @@ type Heading =
         let prefix = String.replicate this.level "#"
         $"{prefix} {this.text} {{{this.id.Raw}}}"
 
-    static member OfCst(cHead: Cst.Heading) : Heading =
-        { level = cHead.level
-          text = cHead.title.text
-          id = Cst.Heading.slug cHead }
-
 type WikiLink =
     { doc: option<string>
       heading: option<string> }
@@ -77,9 +72,6 @@ type MdLinkDef =
 
     member this.CompactFormat() = $"[{this.label}]: {UrlEncoded.raw this.url}"
 
-    static member OfCst(mdDef: Cst.MdLinkDef) : MdLinkDef =
-        { label = mdDef.label.text; url = mdDef.url.data }
-
 [<Struct>]
 type Tag = Tag of string
 
@@ -111,39 +103,5 @@ module Element =
         function
         | Element.MLD mld -> Some mld
         | _ -> None
-
-    let private getNodeOptData nodeOpt =
-        Option.map (fun ({ data = data }: Cst.Node<'A>) -> data) nodeOpt
-
-    let private getNodeOptText nodeOpt =
-        Option.map (fun ({ text = text }: Cst.Node<'A>) -> text) nodeOpt
-
-    let ofCst (cel: Cst.Element) : option<Element> =
-        match cel with
-        | Cst.H { data = cHead } -> Heading.OfCst cHead |> Element.H |> Some
-        | Cst.WL { data = cWiki } ->
-            Element.WL
-                { doc = getNodeOptData cWiki.doc |>> WikiEncoded.decode
-                  heading = getNodeOptData cWiki.heading |>> WikiEncoded.decode }
-            |> Some
-        | Cst.ML { data = mdLink } ->
-            match mdLink with
-            | Cst.MdLink.IL (text, url, _) ->
-                let urlNode = url |>> Cst.Url.ofUrlNode
-
-                let url =
-                    urlNode >>= (fun x -> x.url) |>> (fun x -> UrlEncoded.decode x.data)
-
-                let anchor =
-                    urlNode >>= (fun x -> x.anchor)
-                    |>> (fun x -> UrlEncoded.decode x.data)
-
-                Element.ML { text = text.text; url = url; anchor = anchor } |> Some
-            | Cst.MdLink.RF (text, label) -> Element.MR(Full(text.text, label.text)) |> Some
-            | Cst.MdLink.RC label -> Element.MR(Collapsed(label.text)) |> Some
-            | Cst.MdLink.RS label -> Element.MR(Shortcut(label.text)) |> Some
-        | Cst.MLD { data = mdDef } -> MdLinkDef.OfCst mdDef |> Element.MLD |> Some
-        | Cst.T { data = tag } -> Element.T(Tag tag.name.text) |> Some
-        | Cst.YML _ -> None
 
 type Ast = { elements: Element[] }

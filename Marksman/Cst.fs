@@ -219,6 +219,10 @@ module MdLinkDef =
 
     let name (mld: MdLinkDef) = mld.label |> Node.text
 
+    let toAbstract (mdDef: MdLinkDef) : Ast.MdLinkDef =
+        { label = mdDef.label.text; url = mdDef.url.data }
+
+
 type Tag = { name: TextNode }
 
 module Tag =
@@ -284,6 +288,10 @@ module Heading =
 
     let scope (heading: Heading) : Range = heading.scope
 
+    let toAbstract (cHead: Heading) : Ast.Heading =
+        { level = cHead.level; text = cHead.title.text; id = slug cHead }
+
+
 module Element =
     let fmt = fmtElement
 
@@ -343,6 +351,40 @@ module Element =
     let isTitle el =
         asHeading el |>> Node.data |>> Heading.isTitle
         |> Option.defaultValue false
+
+    let private getNodeOptData nodeOpt =
+        Option.map (fun ({ data = data }: Node<'A>) -> data) nodeOpt
+
+    let private getNodeOptText nodeOpt =
+        Option.map (fun ({ text = text }: Node<'A>) -> text) nodeOpt
+
+    let toAbstract (cel: Element) : option<Ast.Element> =
+        match cel with
+        | H { data = cHead } -> Heading.toAbstract cHead |> Ast.Element.H |> Some
+        | WL { data = cWiki } ->
+            let doc = getNodeOptData cWiki.doc |>> WikiEncoded.decode
+            let heading = getNodeOptData cWiki.heading |>> WikiEncoded.decode
+            Ast.Element.WL { doc = doc; heading = heading } |> Some
+        | ML { data = mdLink } ->
+            match mdLink with
+            | MdLink.IL (text, url, _) ->
+                let urlNode = url |>> Url.ofUrlNode
+
+                let url =
+                    urlNode >>= (fun x -> x.url) |>> (fun x -> UrlEncoded.decode x.data)
+
+                let anchor =
+                    urlNode >>= (fun x -> x.anchor)
+                    |>> (fun x -> UrlEncoded.decode x.data)
+
+                Ast.Element.ML { text = text.text; url = url; anchor = anchor }
+                |> Some
+            | MdLink.RF (text, label) -> Ast.Element.MR(Ast.Full(text.text, label.text)) |> Some
+            | MdLink.RC label -> Ast.Element.MR(Ast.Collapsed(label.text)) |> Some
+            | MdLink.RS label -> Ast.Element.MR(Ast.Shortcut(label.text)) |> Some
+        | MLD { data = mdDef } -> MdLinkDef.toAbstract mdDef |> Ast.Element.MLD |> Some
+        | T { data = tag } -> Ast.Element.T(Ast.Tag tag.name.text) |> Some
+        | YML _ -> None
 
 type Cst = { elements: Element[]; childMap: Map<Element, Element[]> }
 

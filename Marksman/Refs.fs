@@ -5,6 +5,7 @@ open FSharpPlus.Operators
 open FSharpPlus.GenericBuilders
 open Ionide.LanguageServerProtocol.Types
 
+open Marksman.Config
 open Marksman.Cst
 open Marksman.Index
 open Marksman.Misc
@@ -107,49 +108,36 @@ module FileLink =
     let filterMatchingDocs (folder: Folder) (name: InternName) : seq<FileLink> =
         let completionStyle = (Folder.configOrDefault folder).ComplWikiStyle()
 
-        let byTitle: Map<Doc, FileLinkKind> =
-            Folder.filterDocsBySlug (InternName.name name |> Slug.ofString) folder
-            |> Seq.map (fun doc -> doc, FileLinkKind.Title)
-            |> Map.ofSeq
+        let rawName = InternName.name name
+        let nameSlug = Slug.ofString rawName
+        let namePath = InternName.tryAsPath name
 
-        let byPath: Map<Doc, FileLinkKind> =
-            InternName.tryAsPath name
+        let linkKindAsPath doc =
+            namePath
             |> Option.map (fun path ->
                 let relPath = InternPath.toRel path
+                let docPath = Doc.pathFromRoot doc
 
-                let docs = Folder.filterDocsByInternPath path folder
+                if docPath = relPath then
+                    FileLinkKind.FilePath
+                else if (RelPath.filenameStem docPath) = (RelPath.filenameStem relPath) then
+                    FileLinkKind.FileStem
+                else
+                    FileLinkKind.FileName)
 
-                docs
-                |> Seq.map (fun doc ->
-                    let docPath = Doc.pathFromRoot doc
+        let linkKind doc =
+            match completionStyle, Doc.slug doc = nameSlug, linkKindAsPath doc with
+            | TitleSlug, true, _
+            | _, true, None -> FileLinkKind.Title
+            | _, _, Some fileKind -> fileKind
+            | _, _, None -> FileLinkKind.FileName
 
-                    let linkKind =
-                        if docPath = relPath then
-                            FileLinkKind.FilePath
-                        else if (RelPath.filenameStem docPath) = (RelPath.filenameStem relPath) then
-                            FileLinkKind.FileStem
-                        else
-                            FileLinkKind.FileName
-
-                    doc, linkKind))
-            |> Option.defaultValue []
-            |> Map.ofSeq
-
-        let main, aux =
-            if completionStyle = Config.TitleSlug then
-                byTitle, byPath
-            else
-                byPath, byTitle
-
-        let merged =
-            let aux = Map.keys main |> Seq.fold (flip Map.remove) aux
-            Map.fold (fun m k v -> Map.add k v m) aux main
-
-        let link = InternName.name name
+        let matchingDocs = Folder.filterDocsByName name folder
 
         seq {
-            for KeyValue (doc, linkKind) in merged do
-                yield { link = link; kind = linkKind; dest = doc }
+            for doc in matchingDocs do
+                let kind = linkKind doc
+                { link = rawName; kind = kind; dest = doc }
         }
 
 

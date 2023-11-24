@@ -9,22 +9,6 @@ open Marksman.Names
 
 type InternNameNode = Node<InternName>
 
-/// Unresolved reference.
-[<RequireQualifiedAccess>]
-type Uref =
-    | Doc of InternNameNode
-    | Heading of doc: option<InternNameNode> * heading: HeadingNode
-    | LinkDef of TextNode
-
-and HeadingNode =
-    | Wiki of WikiEncodedNode
-    | Url of UrlEncodedNode
-
-    member DecodedText: string
-
-module Uref =
-    val ofElement: seq<string> -> DocId -> Element -> Uref option
-
 [<RequireQualifiedAccess>]
 type FileLinkKind =
     | FilePath

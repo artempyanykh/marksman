@@ -80,7 +80,7 @@ let noDiagOnNonMarkdownFiles () =
 
     Assert.Equal<string * string>(
         [ "fake.md", "Link to non-existent document 'bad.md'"
-          "fake.md", "Link to non-existent document 'another%20bad.md'" ],
+          "fake.md", "Link to non-existent document 'another bad.md'" ],
         diag
     )
 

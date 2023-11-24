@@ -49,7 +49,7 @@ let mkWorkspaceEdit
     for docEdit in docEdits do
         docEdit.Edits |> Array.sortInPlaceWith (fun x y -> -(compare x y))
 
-    let docChanges = docEdits |> Array.map (DocumentChange.TextDocumentEdit)
+    let docChanges = docEdits |> Array.map DocumentChange.TextDocumentEdit
 
     if supportsDocumentEdit then
         { Changes = None; DocumentChanges = Some docChanges }

@@ -812,13 +812,8 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docUri state
 
-                    let configuredExts =
-                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
-
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let! uref = Uref.ofElement configuredExts (Doc.id srcDoc) atPos
-
-                    let refs = Dest.tryResolveUref uref srcDoc folder
+                    let refs = Dest.tryResolveElement folder srcDoc atPos
 
                     let locs =
                         refs
@@ -842,15 +837,11 @@ type MarksmanServer(client: MarksmanClient) =
                 monad {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docUri state
 
-                    let configuredExts =
-                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
-
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let! uref = Uref.ofElement configuredExts (Doc.id srcDoc) atPos
                     // NOTE: Due to ambiguity there may be several sources for hover. Since hover
                     // request requires a single result we return the first. When links are not
                     // ambiguous this is OK, otherwise the author is to blame for ambiguity anyway.
-                    let! ref = Dest.tryResolveUref uref srcDoc folder |> Seq.tryHead
+                    let! ref = Dest.tryResolveElement folder srcDoc atPos |> Seq.tryHead
 
                     let destScope = Dest.scope ref
 

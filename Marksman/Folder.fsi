@@ -4,7 +4,7 @@ open Marksman.Misc
 open Marksman.MMap
 open Marksman.Config
 open Marksman.Names
-open Marksman.Sym
+open Marksman.Syms
 open Marksman.Paths
 open Marksman.Doc
 

@@ -11,12 +11,11 @@ module Lsp = Ionide.LanguageServerProtocol.Types
 
 open Marksman.Cst
 open Marksman.Index
-open Marksman.Misc
 open Marksman.Refs
 
 type Entry =
-    | AmbiguousLink of Element * Uref * array<Dest>
-    | BrokenLink of Element * Uref
+    | AmbiguousLink of Element * Syms.Ref * array<Dest>
+    | BrokenLink of Element * Syms.Ref
     | NonBreakableWhitespace of Lsp.Range
 
 let code: Entry -> string =
@@ -46,24 +45,27 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
             [ NonBreakableWhitespace(whitespaceRange) ])
 
-let isCrossFileLink uref =
-    match uref with
-    | Uref.Doc _
-    | Uref.Heading(doc = Some _) -> true
-    | Uref.Heading(doc = None)
-    | Uref.LinkDef _ -> false
+let isCrossFileLink sym =
+    match sym with
+    | Syms.SectionRef (Some _, _) -> true
+    | Syms.SectionRef _
+    | Syms.LinkDefRef _ -> false
+
 
 let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
-    let configuredExts = (Folder.configuredMarkdownExts folder)
+    let exts = Folder.configuredMarkdownExts folder
 
-    let uref = Uref.ofElement configuredExts (Doc.id doc) link
+    let sym =
+        doc.Structure
+        |> Structure.Structure.tryFindSymbolForConcrete link
+        |> Option.bind Syms.Sym.asRef
 
-    match uref with
+    match sym with
     | None -> []
-    | Some uref ->
-        let refs = Dest.tryResolveUref uref doc folder |> Array.ofSeq
+    | Some sym ->
+        let refs = Dest.tryResolveElement folder doc link |> Array.ofSeq
 
-        if Folder.isSingleFile folder && isCrossFileLink uref then
+        if Folder.isSingleFile folder && isCrossFileLink sym then
             []
         else if refs.Length = 1 then
             []
@@ -72,19 +74,19 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
             // Inline shortcut links often are a part of regular text.
             // Raising diagnostics on them would be noisy.
             | ML { data = MdLink.RS _ } -> []
-            | ML { data = MdLink.IL _ } ->
-                match uref with
-                | Uref.Doc { data = name } ->
+            | ML { data = MdLink.IL (_, url, _) } ->
+                match url with
+                | Some { data = url } ->
                     // Inline links to docs that don't look like a markdown file should not
                     // produce diagnostics
-                    if isMarkdownFile configuredExts (InternName.name name) then
-                        [ BrokenLink(link, uref) ]
+                    if Misc.isMarkdownFile exts (UrlEncoded.decode url) then
+                        [ BrokenLink(link, sym) ]
                     else
                         []
-                | _ -> [ BrokenLink(link, uref) ]
-            | _ -> [ BrokenLink(link, uref) ]
+                | _ -> [ BrokenLink(link, sym) ]
+            | _ -> [ BrokenLink(link, sym) ]
         else
-            [ AmbiguousLink(link, uref, refs) ]
+            [ AmbiguousLink(link, sym, refs) ]
 
 let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
     let links = Doc.index >> Index.links <| doc
@@ -103,29 +105,29 @@ let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
             Doc.id doc, docDiag
     }
 
-let refToHuman (ref: Dest) : string =
+let destToHuman (ref: Dest) : string =
     match ref with
-    | Dest.Doc { dest = doc } -> $"document {Doc.name doc}"
+    | Dest.Doc { doc = doc } -> $"document {Doc.name doc}"
     | Dest.Heading (docLink, { data = heading }) ->
         $"heading {Heading.name heading} in the document {Doc.name (DocLink.doc docLink)}"
     | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
     | Dest.Tag (doc, { data = tag }) -> $"tag {tag.name} in the document {Doc.name doc}"
 
-let docRefToHuman (name: string) : string = $"document '{name}'"
+let docToHuman (name: string) : string = $"document '{name}'"
 
-let urefToHuman (uref: Uref) : string =
-    match uref with
-    | Uref.Doc { text = rawDocName } -> docRefToHuman rawDocName
-    | Uref.Heading (docLink, heading) ->
-        match docLink with
-        | None -> $"heading '{heading.DecodedText}'"
-        | Some { data = docName } ->
-            $"heading '{heading.DecodedText}' in {docRefToHuman docName.name}"
-    | Uref.LinkDef ld -> $"link definition with the label '{Node.text ld}'"
+let refToHuman (ref: Syms.Ref) : string =
+    match ref with
+    | Syms.SectionRef (None, None) -> failwith $"Internal error: malformed SectionRef: {ref}"
+    | Syms.SectionRef (Some docName, None) -> docToHuman docName
+    | Syms.SectionRef (docName, Some heading) ->
+        match docName with
+        | None -> $"heading '{heading}'"
+        | Some docName -> $"heading '{heading}' in {docToHuman docName}"
+    | Syms.LinkDefRef ld -> $"link definition with the label '{ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
     match diag with
-    | AmbiguousLink (el, uref, refs) ->
+    | AmbiguousLink (el, ref, dests) ->
         let severity =
             match el with
             | WL _ -> Lsp.DiagnosticSeverity.Error
@@ -135,23 +137,23 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
             | T _
             | YML _ -> Lsp.DiagnosticSeverity.Information
 
-        let mkRelated ref : DiagnosticRelatedInformation =
-            let loc = Dest.location ref
+        let mkRelated dest : DiagnosticRelatedInformation =
+            let loc = Dest.location dest
             let msg = $"Duplicate definition of {refToHuman ref}"
             { Location = loc; Message = msg }
 
-        let related = refs |> Array.map mkRelated
+        let related = dests |> Array.map mkRelated
 
         { Range = Element.range el
           Severity = Some severity
           Code = Some(code diag)
           CodeDescription = None
           Source = Some "Marksman"
-          Message = $"Ambiguous link to {urefToHuman uref}"
+          Message = $"Ambiguous link to {refToHuman ref}"
           RelatedInformation = Some related
           Tags = None
           Data = None }
-    | BrokenLink (el, uref) ->
+    | BrokenLink (el, ref) ->
         let severity =
             match el with
             | WL _ -> Lsp.DiagnosticSeverity.Error
@@ -161,7 +163,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
             | T _
             | YML _ -> Lsp.DiagnosticSeverity.Information
 
-        let msg = $"Link to non-existent {urefToHuman uref}"
+        let msg = $"Link to non-existent {refToHuman ref}"
 
         { Range = Element.range el
           Severity = Some severity

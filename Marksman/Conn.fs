@@ -6,7 +6,7 @@ open Marksman.Misc
 open Marksman.MMap
 open Marksman.Names
 open Marksman.Graph
-open Marksman.Sym
+open Marksman.Syms
 
 
 type Oracle =
@@ -155,7 +155,7 @@ module Conn =
         let removedRefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asRef
 
         for scope, ref in removedRefs do
-            let scopedSym = (scope, Sym.Sym.Ref ref)
+            let scopedSym = (scope, Syms.Sym.Ref ref)
             // Add removed link to lastTouched because removing a broken link can affect the diagnostic
             lastTouched <- Set.add scopedSym lastTouched
 
@@ -166,7 +166,7 @@ module Conn =
         let removedTags = removed |> Set.toSeq |> Seq.choose ScopedSym.asTag
 
         for scope, tag in removedTags do
-            let scopedSym = (scope, Sym.Sym.Tag tag)
+            let scopedSym = (scope, Syms.Sym.Tag tag)
             lastTouched <- Set.add scopedSym lastTouched
 
             tags <- MMap.removeValue scope tag tags
@@ -182,7 +182,7 @@ module Conn =
         let removedDefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asDef
 
         for scope, def in removedDefs do
-            let scopedSym = (scope, Sym.Sym.Def def)
+            let scopedSym = (scope, Syms.Sym.Def def)
             lastTouched <- Set.add scopedSym lastTouched
 
             let cb =
@@ -224,7 +224,7 @@ module Conn =
             | Sym.Tag tag ->
                 tags <- MMap.add scope tag tags
                 // We can resolve tag right away into the Global scope
-                resolved <- Graph.addEdge scopedSym (Scope.Global, Sym.Sym.Tag tag) resolved
+                resolved <- Graph.addEdge scopedSym (Scope.Global, Syms.Sym.Tag tag) resolved
 
         // Finally, if any new docs were added we need to re-resolve all previously unresolved links
         // within the global scope
@@ -237,7 +237,7 @@ module Conn =
 
         // Now we run link resolution while updating both resolved and unresolved graphs
         for scope, link in toResolveSet do
-            let srcSym = (scope, Sym.Sym.Ref link)
+            let srcSym = (scope, Syms.Sym.Ref link)
             lastTouched <- Set.add srcSym lastTouched
             refs <- MMap.add scope link refs
 
@@ -261,7 +261,7 @@ module Conn =
                             unresolved
 
                 for targetDef in targetDefs do
-                    let targetSym = (targetScope, Sym.Sym.Def targetDef)
+                    let targetSym = (targetScope, Syms.Sym.Def targetDef)
                     lastTouched <- Set.add targetSym lastTouched
                     resolved <- Graph.addEdge srcSym targetSym resolved
 
@@ -296,3 +296,9 @@ module Conn =
             MMap.fold (fun acc docId sym -> Set.add (Scope.Doc docId, sym) acc) Set.empty symMap
 
         update oracle { added = added; removed = Set.empty } empty
+
+module Query =
+    let resolve (scopedSym: ScopedSym) (conn: Conn) =
+        conn.resolved.edges
+        |> MMap.tryFind scopedSym
+        |> Option.defaultValue Set.empty

@@ -125,7 +125,7 @@ module TableOfContents =
         | BeforeMarker -> None
         | other ->
             logger.warn (
-                Log.setMessage $"TOC detection failed - end marker was not found"
+                Log.setMessage "TOC detection failed - end marker was not found"
                 >> Log.addContext "finalState" other
             )
 

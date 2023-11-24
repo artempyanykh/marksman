@@ -15,7 +15,7 @@ let lineEndings = [| "\r\n"; "\n" |]
 let concatLines (lines: seq<string>) : string = String.concat Environment.NewLine lines
 
 let mkWatchGlob (configuredExts: seq<string>) : string =
-    let ext_pattern = "{" + (String.concat "," (configuredExts)) + "}"
+    let ext_pattern = "{" + (String.concat "," configuredExts) + "}"
     $"**/*.{ext_pattern}"
 
 let isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)

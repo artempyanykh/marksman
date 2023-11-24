@@ -1,18 +1,17 @@
-module Marksman.Sym
+module Marksman.Syms
 
 open System
 
 open Marksman.Misc
 open Marksman.Names
 
-[<RequireQualifiedAccess>]
 type Ref =
-    | Section of doc: option<string> * section: option<string>
-    | LinkDef of LinkLabel
+    | SectionRef of doc: option<string> * section: option<string>
+    | LinkDefRef of LinkLabel
 
     member this.CompactFormat() =
         match this with
-        | Section (doc, section) ->
+        | SectionRef (doc, section) ->
             let doc = Option.defaultValue String.Empty doc
 
             let section =
@@ -21,7 +20,17 @@ type Ref =
                 |> Option.defaultValue String.Empty
 
             $"[[{doc}{section}]]"
-        | LinkDef label -> $"[{label}]"
+        | LinkDefRef label -> $"[{label}]"
+
+    member this.ToSection() =
+        match this with
+        | SectionRef (d, s) -> (d, s)
+        | LinkDefRef _ -> failwith $"Ref.ToSection: {this} is not a Section"
+
+    member this.ToLinkDef() =
+        match this with
+        | LinkDefRef label -> label
+        | SectionRef _ -> failwith $"Ref.ToLinkDef: {this} is not a LinkDef"
 
 [<Struct>]
 type Tag =
@@ -29,7 +38,6 @@ type Tag =
 
     member this.CompactFormat() = $"#{this}"
 
-[<RequireQualifiedAccess>]
 type Def =
     | Doc
     | Header of level: int * id: string
@@ -74,6 +82,12 @@ type Sym =
         | Def def -> def.CompactFormat()
         | Tag tag -> tag.CompactFormat()
 
+    member this.ToRef() =
+        match this with
+        | Ref ref -> ref
+        | Def _
+        | Tag _ -> failwith $"Sym.ToRef: {this} is not a Ref"
+
 [<RequireQualifiedAccess>]
 [<StructuredFormatDisplay("{CompactFormat}")>]
 type Scope =
@@ -92,7 +106,7 @@ type ScopedSym = Scope * Sym
 module Sym =
     let asRef =
         function
-        | Sym.Ref link -> Some link
+        | Sym.Ref ref -> Some ref
         | Sym.Def _
         | Sym.Tag _ -> None
 
@@ -107,6 +121,8 @@ module Sym =
         | Sym.Tag tag -> Some tag
         | Sym.Ref _
         | Sym.Def _ -> None
+
+    let isDoc sym = asDef sym |> Option.map Def.isDoc |> Option.defaultValue false
 
     let scoped (scope: Scope) (sym: Sym) = scope, sym
 

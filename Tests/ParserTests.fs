@@ -374,6 +374,16 @@ module TagsTests =
             [ "T: name=tag1; range=(0,1)-(0,5) @ (0,0)-(0,5)"
               "T: name=tag2; range=(0,7)-(0,11) @ (0,6)-(0,11)" ]
 
+    [<Fact>]
+    let tags_nested () =
+        let text = "#tag1/subtag1,#tag2/subtag2/subsubtag2"
+        let cst = scrapeString text
+
+        checkInlineSnapshot
+            cst
+            [ "T: name=tag1/subtag1; range=(0,1)-(0,13) @ (0,0)-(0,13)"
+              "T: name=tag2/subtag2/subsubtag2; range=(0,15)-(0,38) @ (0,14)-(0,38)" ]
+
 module DocUrlTests =
     let mkUrlNode str =
         Node.mk str (Range.Mk(0, 0, 0, str.Length)) (UrlEncoded.mkUnchecked str)

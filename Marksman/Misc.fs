@@ -167,6 +167,12 @@ let isPotentiallyMarkdownFile (configuredExts: seq<string>) (path: string) : boo
     | "" -> true
     | _ -> isMarkdownFile configuredExts path
 
+let isPotentiallyInternalRef (configuredExts: seq<string>) (name: string) : bool =
+    if Uri.IsWellFormedUriString(name, UriKind.Absolute) then
+        false
+    else
+        isPotentiallyMarkdownFile configuredExts name
+
 let fmtOption fmt value =
     match value with
     | Some value -> $"{fmt value}"
@@ -230,7 +236,17 @@ type Range with
 
     member this.ContainsInclusive(pos: Position) : bool = this.Start <= pos && pos <= this.End
 
-type LinkLabel = private LinkLabel of string
+[<Struct>]
+[<StructuredFormatDisplay("{AsString}")>]
+type LinkLabel =
+    private
+    | LinkLabel of string
+
+    override this.ToString() =
+        let (LinkLabel s) = this
+        s
+
+    member this.AsString = this.ToString()
 
 module LinkLabel =
     let private consecutiveWhitespacePattern = Regex(@"\s+")

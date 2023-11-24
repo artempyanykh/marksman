@@ -23,7 +23,7 @@ and HeadingNode =
     member DecodedText: string
 
 module Uref =
-    val ofElement: string array -> DocId -> Element -> Uref option
+    val ofElement: seq<string> -> DocId -> Element -> Uref option
 
 [<RequireQualifiedAccess>]
 type FileLinkKind =

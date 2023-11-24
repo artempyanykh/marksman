@@ -63,7 +63,7 @@ type FakeDoc =
             let docId =
                 DocId(UriWith.mkRooted (UriWith.mkRoot rootUri) (LocalPath.ofUri pathUri))
 
-            Doc.mk docId None text
+            Doc.mk Config.defaultMarkdownExtensions docId None text
 
         static member Mk(contentLines: array<string>, ?path: string) : Doc =
             let content = String.concat System.Environment.NewLine contentLines

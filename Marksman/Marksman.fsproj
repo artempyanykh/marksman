@@ -27,6 +27,7 @@
         <Compile Include="Misc.fs"/>
         <Compile Include="SuffixTree.fs"/>
         <Compile Include="MMap.fs"/>
+        <Compile Include="Mapping.fs" />
         <Compile Include="Graph.fs"/>
         <Compile Include="Paths.fsi"/>
         <Compile Include="Paths.fs"/>
@@ -35,8 +36,10 @@
         <Compile Include="GitIgnore.fs"/>
         <Compile Include="Config.fs"/>
         <Compile Include="Text.fs"/>
+        <Compile Include="Sym.fs"/>
         <Compile Include="Ast.fs"/>
         <Compile Include="Cst.fs"/>
+        <Compile Include="Structure.fs"/>
         <Compile Include="Parser.fs"/>
         <Compile Include="Index.fs"/>
         <Compile Include="Conn.fs"/>

@@ -22,7 +22,7 @@ module InternNameNode =
         { text = node.text; range = node.range; data = name }
 
     let ofUrlChecked
-        (configuredExts: array<string>)
+        (configuredExts: seq<string>)
         (src: DocId)
         ({ text = text; range = range; data = data }: UrlEncodedNode)
         : option<InternNameNode> =
@@ -46,7 +46,7 @@ and HeadingNode =
         | Url n -> n.text.UrlDecode()
 
 module Uref =
-    let ofElement (configuredExts: array<string>) (srcId: DocId) (el: Element) : option<Uref> =
+    let ofElement (configuredExts: seq<string>) (srcId: DocId) (el: Element) : option<Uref> =
         match el with
         | WL wl ->
             match wl.data.doc, wl.data.heading with

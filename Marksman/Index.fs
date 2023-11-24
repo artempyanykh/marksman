@@ -18,7 +18,7 @@ type Index =
       yamlFrontMatter: option<TextNode> }
 
 module Index =
-    let ofCst (cst: Cst) : Index =
+    let ofCst (cels: Cst.Element[]) : Index =
         let titles = ResizeArray()
         let headingsBySlug = Dictionary<Slug, ResizeArray<Node<Heading>>>()
         let wikiLinks = ResizeArray()
@@ -28,7 +28,7 @@ module Index =
         let tags = ResizeArray()
         let mutable yaml = None
 
-        for el in Cst.elements cst do
+        for el in cels do
             match el with
             | H hn ->
                 let slug = Heading.slug hn.data

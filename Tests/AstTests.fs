@@ -1,12 +1,12 @@
 module Marksman.AstTests
 
-open Marksman.Parser
 open Xunit
 open Snapper
 
 open Marksman.Ast
+open Marksman.Structure
 
-let parseString content = Structure.ofText (Text.mkText content)
+let parseString content = Parser.parse Config.defaultMarkdownExtensions (Text.mkText content)
 
 let checkInlineSnapshot =
     Helpers.checkInlineSnapshot (fun (el: Element) -> el.CompactFormat())
@@ -28,7 +28,7 @@ This is a #tag
 [collapsedRef]: DefURL
 """
 
-let ast1 = struct1.ast
+let ast1 = struct1.Ast
 
 [<Fact>]
 let testAstShape () =
@@ -61,4 +61,4 @@ let testAstLookup () =
     Assert.Equal(sub1, shouldBeSub1)
 
     let madeUpAbstract = Element.MR(Collapsed "WAT")
-    Assert.Empty(Structure.tryFindMatchingConcrete madeUpAbstract struct1)
+    Assert.Equal(Structure.tryFindMatchingConcrete madeUpAbstract struct1, None)

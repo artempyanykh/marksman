@@ -53,7 +53,7 @@ module Markdown =
             else
                 let start = slice.Start
                 let offsetStart = processor.GetSourcePosition(slice.Start)
-                let shouldAccept (c: char) = c.IsAlphaNumeric() || c = '-' || c = '_'
+                let shouldAccept (c: char) = c.IsAlphaNumeric() || c = '-' || c = '_' || c = '/'
 
                 while (shouldAccept (slice.PeekChar())) do
                     slice.NextChar() |> ignore

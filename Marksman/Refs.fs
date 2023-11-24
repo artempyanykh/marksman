@@ -30,57 +30,6 @@ module InternNameNode =
         InternName.mkChecked configuredExts src (UrlEncoded.decode data)
         |> Option.map (fun name -> { text = text; range = range; data = name })
 
-/// Unresolved reference.
-[<RequireQualifiedAccess>]
-type Uref =
-    | Doc of InternNameNode
-    | Heading of doc: option<InternNameNode> * heading: HeadingNode
-    | LinkDef of TextNode
-
-and HeadingNode =
-    | Wiki of WikiEncodedNode
-    | Url of UrlEncodedNode
-
-    member this.DecodedText =
-        match this with
-        | Wiki n -> n.text.UrlDecode()
-        | Url n -> n.text.UrlDecode()
-
-module Uref =
-    let ofElement (configuredExts: seq<string>) (srcId: DocId) (el: Element) : option<Uref> =
-        match el with
-        | WL wl ->
-            match wl.data.doc, wl.data.heading with
-            | Some doc, Some heading ->
-                Uref.Heading(Some(InternNameNode.ofWikiUnchecked srcId doc), Wiki heading)
-                |> Some
-            | Some doc, None -> Uref.Doc(InternNameNode.ofWikiUnchecked srcId doc) |> Some
-            | None, Some heading -> Uref.Heading(None, Wiki heading) |> Some
-            | None, None -> None
-        | ML ml ->
-            match ml.data with
-            | MdLink.IL (_, Some url, _) ->
-                let docUrl = Url.ofUrlNode url
-
-                match docUrl.url, docUrl.anchor with
-                | Some url, Some anchor ->
-                    InternNameNode.ofUrlChecked configuredExts srcId url
-                    |> Option.map (fun sym -> Uref.Heading(Some(sym), Url anchor))
-                | Some url, None ->
-                    InternNameNode.ofUrlChecked configuredExts srcId url
-                    |> Option.map Uref.Doc
-                | None, Some anchor -> Uref.Heading(None, Url anchor) |> Some
-                | None, None -> None
-            | MdLink.IL (_, None, _) -> None
-            | MdLink.RS label
-            | MdLink.RC label
-            | MdLink.RF (_, label) -> Some(Uref.LinkDef label)
-        | H _
-        | YML _
-        | T _
-        | MLD _ -> None
-
-
 [<RequireQualifiedAccess>]
 type FileLinkKind =
     | FilePath

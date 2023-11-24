@@ -9,13 +9,14 @@ open Marksman.Paths
 open Marksman.Text
 open Marksman.Cst
 open Marksman.Index
-open Marksman.Sym
+open Marksman.Syms
 
 [<Sealed>]
 type Doc =
     member Id: DocId
     member RootPath: RootPath
     member RelPath: RelPath
+    member Structure: Structure
 
     interface System.IComparable
     interface System.IComparable<Doc>

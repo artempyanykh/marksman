@@ -35,10 +35,10 @@ type FileLinkKind =
 type FileLink =
     { link: string
       kind: FileLinkKind
-      dest: Doc }
+      doc: Doc }
 
 module FileLink =
-    val dest: FileLink -> Doc
+    val doc: FileLink -> Doc
     val filterMatchingDocs: Folder -> InternName -> seq<FileLink>
     val filterFuzzyMatchingDocs: Folder -> InternName -> seq<Doc>
 
@@ -62,5 +62,5 @@ module Dest =
     val scope: Dest -> Range
     val location: Dest -> Location
 
-    val tryResolveUref: Uref -> Doc -> Folder -> seq<Dest>
+    val tryResolveElement: Folder -> Doc -> Element -> seq<Dest>
     val findElementRefs: bool -> Folder -> Doc -> Element -> seq<Doc * Element * Dest array>

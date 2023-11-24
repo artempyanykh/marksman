@@ -29,6 +29,8 @@ type Doc =
 
     member this.Id = this.id
 
+    member this.Structure = this.structure
+
     interface IEquatable<Doc> with
         member this.Equals(other) = this.id = other.id && this.text = other.text
 
@@ -53,7 +55,7 @@ type Doc =
 
 
 module Doc =
-    open Marksman.Sym
+    open Marksman.Syms
 
     let logger = LogProvider.getLoggerByName "Doc"
 

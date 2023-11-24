@@ -125,19 +125,17 @@ let createMissingFile
 
     monad' {
         let! atPos = Doc.index doc |> Index.linkAtPos pos
-        let! uref = Uref.ofElement configuredExts (Doc.id doc) atPos
-        let refs = Dest.tryResolveUref uref doc folder
+        let refs = Dest.tryResolveElement folder doc atPos
 
         // Early return if the file exists
         do! guard (Seq.isEmpty refs)
 
         let! name =
-            match uref with
-            | Uref.Doc name -> Some name.data
-            | Uref.Heading (Some name, _) -> Some name.data
+            match doc.Structure |> Structure.Structure.tryFindSymbolForConcrete atPos with
+            | Some (Syms.Sym.Ref (Syms.SectionRef (Some name, _))) -> Some name
             | _ -> None
 
-        let! internPath = InternName.tryAsPath name
+        let! internPath = InternName.tryAsPath { name = name; src = doc.Id }
 
         let relPath =
             InternPath.toRel internPath

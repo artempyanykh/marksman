@@ -48,7 +48,8 @@ let testAstLookup () =
     let sub1 = ast1.elements[3]
     sub1.CompactFormat().ShouldMatchInlineSnapshot("## Sub 1 {sub-1}")
 
-    let csub1 = (Structure.findMatchingConcrete sub1 struct1) |> List.ofArray
+    let csub1 =
+        (Structure.findConcreteForAbstract sub1 struct1) |> Array.ofSeq
 
     Helpers.checkInlineSnapshot
         Cst.Element.fmt
@@ -61,4 +62,4 @@ let testAstLookup () =
     Assert.Equal(sub1, shouldBeSub1)
 
     let madeUpAbstract = Element.MR(Collapsed "WAT")
-    Assert.Equal(Structure.tryFindMatchingConcrete madeUpAbstract struct1, None)
+    Assert.Equal(Structure.tryFindConcreteForAbstract madeUpAbstract struct1, None)

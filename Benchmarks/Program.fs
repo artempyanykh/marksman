@@ -53,8 +53,7 @@ type ReferenceResolution() =
         let link =
             Doc.index doc |> Index.linkAtPos (Position.Mk(1, 3)) |> Option.get
 
-        let uref = Uref.ofElement [| "md" |] doc.Id link |> Option.get
-        let refs = Dest.tryResolveUref uref doc this.Folder |> Seq.toArray
+        let refs = Dest.tryResolveElement this.Folder doc link |> Seq.toArray
         refs |> ignore
 
     [<Benchmark>]

@@ -14,7 +14,7 @@ open Marksman.Misc
 open Marksman.Names
 open Marksman.Paths
 open Marksman.MMap
-open Marksman.Sym
+open Marksman.Syms
 
 type MultiFile =
     { name: string
@@ -194,31 +194,34 @@ module Oracle =
 
     let private resolveToDoc (data: FolderData) (lookup: FolderLookup) (fromDoc: DocId) (ref: Ref) =
         match ref with
-        | Ref.Section (Some doc, _) ->
+        | Ref.SectionRef (Some doc, _) ->
             let internName = InternName.mkUnchecked fromDoc doc
 
             filterDocsByName data lookup internName
             |> Seq.map Scope.Doc
             |> Seq.toArray
-        | Ref.Section (None, _)
-        | Ref.LinkDef _ -> [| Scope.Doc fromDoc |]
+        | Ref.SectionRef (None, _)
+        | Ref.LinkDefRef _ -> [| Scope.Doc fromDoc |]
 
     let private resolveInDoc (data: FolderData) (ref: Ref) (inDoc: DocId) : Def[] =
         let destDoc = FolderData.findDocById inDoc data
         let destStruct = Doc.structure destDoc
 
         match ref with
-        | Ref.Section (_, None) ->
-            Structure.symbols destStruct
-            |> Seq.choose Sym.asDef
-            |> Seq.filter Def.isTitle
-            |> Seq.toArray
-        | Ref.Section (_, Some section) ->
+        | Ref.SectionRef (_, None) ->
+            let titles =
+                Structure.symbols destStruct
+                |> Seq.choose Sym.asDef
+                |> Seq.filter Def.isTitle
+                |> Seq.toArray
+
+            if Array.isEmpty titles then [| Doc |] else titles
+        | Ref.SectionRef (_, Some section) ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
             |> Seq.filter (Def.isHeaderWithId section)
             |> Seq.toArray
-        | Ref.LinkDef label ->
+        | Ref.LinkDefRef label ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
             |> Seq.filter (Def.isLinkDefWithLabel label)

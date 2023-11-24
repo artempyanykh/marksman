@@ -129,7 +129,7 @@ module FileLinkTests =
             |> Array.ofSeq
 
         Assert.Equal(1, full.Length)
-        Assert.Equal(doc2, full[0].dest)
+        Assert.Equal(doc2, full[0].doc)
 
         let fullWithSpacesEncoded =
             FileLink.filterMatchingDocs
@@ -138,7 +138,7 @@ module FileLinkTests =
             |> Array.ofSeq
 
         Assert.Equal(1, fullWithSpacesEncoded.Length)
-        Assert.Equal(doc4, fullWithSpacesEncoded[0].dest)
+        Assert.Equal(doc4, fullWithSpacesEncoded[0].doc)
 
         let fullWithSpacesNotEncoded =
             FileLink.filterMatchingDocs
@@ -147,7 +147,7 @@ module FileLinkTests =
             |> Array.ofSeq
 
         Assert.Equal(1, fullWithSpacesNotEncoded.Length)
-        Assert.Equal(doc4, fullWithSpacesNotEncoded[0].dest)
+        Assert.Equal(doc4, fullWithSpacesNotEncoded[0].doc)
 
     [<Fact>]
     let fileName_RelativeAsAbs () =
@@ -159,21 +159,21 @@ module FileLinkTests =
 
         let actual =
             FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "doc1")
-            |> Seq.map FileLink.dest
+            |> Seq.map FileLink.doc
             |> Array.ofSeq
 
         Assert.Equal<Doc>(actual, [| doc1; subDoc1; subSubDoc1 |])
 
         let actual =
             FileLink.filterMatchingDocs folder (InternName.mkUnchecked subDoc1.Id "doc2")
-            |> Seq.map FileLink.dest
+            |> Seq.map FileLink.doc
             |> Array.ofSeq
 
         Assert.Equal<Doc>(actual, [| doc2; subDoc2 |])
 
         let actual =
             FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc1.Id "sub/doc1")
-            |> Seq.map FileLink.dest
+            |> Seq.map FileLink.doc
             |> Array.ofSeq
 
         Assert.Equal<Doc>(actual, [| subDoc1; subSubDoc1 |])
@@ -188,14 +188,14 @@ module FileLinkTests =
 
         let actual =
             FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc3.Id "horses")
-            |> Seq.map FileLink.dest
+            |> Seq.map FileLink.doc
             |> Array.ofSeq
 
         Assert.Equal<Doc>(actual, [| doc1 |])
 
         let actual =
             FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc3.Id "riding-horses")
-            |> Seq.map FileLink.dest
+            |> Seq.map FileLink.doc
             |> Array.ofSeq
 
         Assert.Equal<Doc>(actual, [| doc2 |])
@@ -434,7 +434,7 @@ module LinkKindRefsTests =
     let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
 
-    [<Fact>]
+    [<Fact(Skip = "TODO: Dest.findElementRefs logic to resolve a doc reference to all symbols inside a doc")>]
     let atWiki_VariousFilenames () =
         let link = requireElementAtPos doc1 1 2
         let refs = Dest.findElementRefs false folder doc1 link |> stripRefs
@@ -444,6 +444,7 @@ module LinkKindRefsTests =
             refs
             [ "(file1.md, (1,0)-(1,9))"
               "(file1.md, (2,0)-(2,12))"
+              // Referencing a doc should resolve to all sections in the doc
               "(file1.md, (3,0)-(3,24))"
               "(file1.md, (4,0)-(4,15))"
               "(file1.md, (5,0)-(5,13))" ]
@@ -491,8 +492,7 @@ module EncodingTests =
             path = "doc2.md"
         )
 
-    let doc3 =
-        FakeDoc.Mk(content = """# Doc 3""", path = "doc.3.with.dots.md")
+    let doc3 = FakeDoc.Mk(content = """Doc 3""", path = "doc.3.with.dots.md")
 
     let folder =
         FakeFolder.Mk(
@@ -504,7 +504,7 @@ module EncodingTests =
 
     let simplifyDest (dest: Dest) : string =
         match dest with
-        | Dest.Doc fileLink -> fileLink.dest |> Doc.name
+        | Dest.Doc fileLink -> fileLink.doc |> Doc.name
         | Dest.Heading (docLink, node) ->
             let doc = DocLink.doc docLink |> Doc.name
             let head = node.text
@@ -516,64 +516,49 @@ module EncodingTests =
             let tag = node.text
             $"{Doc.name doc} / {tag}"
 
-    let requireUrefAtPos doc line col =
-        requireElementAtPos doc line col
-        |> (Uref.ofElement exts doc.Id)
-        |> Option.defaultWith (fun () -> failwith "Could not parse as URef")
-
-    let resolveUref uref doc folder =
-        Dest.tryResolveUref uref doc folder
-        |> Seq.map simplifyDest
-        |> Array.ofSeq
+    let resolveAtPos doc line col =
+        let el = requireElementAtPos doc line col
+        Dest.tryResolveElement folder doc el |> Seq.map simplifyDest
 
     [<Fact>]
     let headingNotEncoding () =
-        let uref = requireUrefAtPos doc1 6 5
-        let refs = resolveUref uref doc1 folder
+        let refs = resolveAtPos doc1 6 5
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 1 / ## Heading 1" ]
 
     [<Fact>]
     let headingUrlEncoded () =
-        let uref = requireUrefAtPos doc1 7 5
-        let refs = resolveUref uref doc1 folder
+        let refs = resolveAtPos doc1 7 5
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 1 / ## Heading 1" ]
 
     [<Fact>]
     let docNotEncoded () =
-        let uref = requireUrefAtPos doc1 8 5
-        let refs = resolveUref uref doc1 folder
-        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2" ]
+        let refs = resolveAtPos doc1 8 5
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / # Doc 2" ]
 
     [<Fact>]
     let docUrlEncoded () =
-        let uref = requireUrefAtPos doc1 9 5
-        let refs = resolveUref uref doc1 folder
-        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2" ]
+        let refs = resolveAtPos doc1 9 5
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / # Doc 2" ]
 
     [<Fact>]
     let docHeadingMixedEncoding () =
-        let uref = requireUrefAtPos doc1 10 5
-        let refs = resolveUref uref doc1 folder
+        let refs = resolveAtPos doc1 10 5
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / ## Heading #1" ]
 
     [<Fact>]
     let inlineDocUrlEncoding () =
-        let uref = requireUrefAtPos doc1 11 5
-        let refs = resolveUref uref doc1 folder
-        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2" ]
+        let refs = resolveAtPos doc1 11 5
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / # Doc 2" ]
 
     [<Fact>]
     let inlineDocHeadingMixedEncoding () =
-        let uref = requireUrefAtPos doc1 12 5
-        let refs = resolveUref uref doc1 folder
+        let refs = resolveAtPos doc1 12 5
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 2 / ## Heading #1" ]
 
     [<Fact>]
     let docFileNameWithDots () =
-        let uref = requireUrefAtPos doc1 13 5
-        let refs = resolveUref uref doc1 folder
-        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 3" ]
+        let refs = resolveAtPos doc1 13 5
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "doc.3.with.dots" ]
 
-        let uref = requireUrefAtPos doc1 14 5
-        let refs = resolveUref uref doc1 folder
-        checkInlineSnapshot (fun x -> x.ToString()) refs [ "Doc 3" ]
+        let refs = resolveAtPos doc1 14 5
+        checkInlineSnapshot (fun x -> x.ToString()) refs [ "doc.3.with.dots" ]

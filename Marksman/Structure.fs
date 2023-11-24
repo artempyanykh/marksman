@@ -1,6 +1,8 @@
 module Marksman.Structure
 
-open Marksman.Sym
+open FSharpPlus.GenericBuilders
+
+open Marksman.Syms
 open Marksman.Mapping
 
 type Structure =
@@ -21,22 +23,43 @@ module Structure =
     let concreteElements { cst = cst } = cst.elements
     let symbols { sym = sym } = sym
 
+    let tryFindMatchingAbstract (cel: Cst.Element) structure : option<Ast.Element> =
+        Mapping.tryImage cel structure.c2a
+
     let findMatchingAbstract (cel: Cst.Element) structure : Ast.Element =
-        match Mapping.tryImage cel structure.c2a with
-        | Some ael -> ael
-        | None -> failwith $"No matching abstract element for: {Cst.Element.fmt cel}"
+        tryFindMatchingAbstract cel structure
+        |> Option.defaultWith (fun () ->
+            failwith $"No matching abstract element for: {Cst.Element.fmt cel}")
 
-    let tryFindMatchingConcrete (ael: Ast.Element) structure : option<Cst.Element[]> =
-        Mapping.tryPreImage ael structure.c2a |> Option.map Set.toArray
+    // DON'T USE. ONLY FOR TESTING
+    let tryFindConcreteForAbstract (ael: Ast.Element) structure : option<Set<Cst.Element>> =
+        Mapping.tryPreImage ael structure.c2a
 
-    let findMatchingConcrete (ael: Ast.Element) structure : Cst.Element[] =
+    let findConcreteForAbstract (ael: Ast.Element) structure : Set<Cst.Element> =
         let cels =
-            tryFindMatchingConcrete ael structure |> Option.defaultValue [||]
+            tryFindConcreteForAbstract ael structure
+            |> Option.defaultValue Set.empty
 
-        if Array.isEmpty cels then
+        if Set.isEmpty cels then
             failwith $"No matching concrete element for: {ael.CompactFormat()}"
         else
             cels
+
+    let tryFindSymbolForAbstract (ael: Ast.Element) structure : option<Sym> =
+        Mapping.tryImage ael structure.a2s
+
+    let tryFindSymbolForConcrete (cel: Cst.Element) structure : option<Sym> =
+        monad' {
+            let! ael = tryFindMatchingAbstract cel structure
+            return! tryFindSymbolForAbstract ael structure
+        }
+
+    let findAbstractForSymbol (sym: Sym) structure : Set<Ast.Element> =
+        Mapping.preImage sym structure.a2s
+
+    let findConcreteForSymbol (sym: Sym) structure : Set<Cst.Element> =
+        findAbstractForSymbol sym structure
+        |> Set.fold (fun acc ael -> acc + findConcreteForAbstract ael structure) Set.empty
 
     let ofCst (exts: seq<string>) (cst: Cst.Cst) : Structure =
         let rec go cst =
@@ -52,8 +75,8 @@ module Structure =
 
         let abs = ResizeArray<Ast.Element>()
 
-        let syms = ResizeArray<Sym.Sym>()
-        syms.Add(Sym.Sym.Def Def.Doc)
+        let syms = ResizeArray<Syms.Sym>()
+        syms.Add(Syms.Sym.Def Def.Doc)
 
         let mutable c2a = Mapping.empty
         let mutable a2s = Mapping.empty

@@ -2,7 +2,7 @@ module Marksman.Ast
 
 open Marksman.Misc
 open Marksman.Names
-open Marksman.Sym
+open Marksman.Syms
 
 type Heading =
     { level: int
@@ -107,11 +107,12 @@ module Element =
     let toSym (exts: seq<string>) (el: Element) : option<Sym> =
         match el with
         | Element.H { level = level; id = id } ->
-            Sym.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
+            Syms.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
         // Wiki-links mapping
         | Element.WL { doc = None; heading = None } -> None
         | Element.WL { doc = doc; heading = heading } ->
-            Sym.Sym.Ref(Ref.Section(doc, heading)) |> Some
+            let section = heading |> Option.map Slug.str
+            Syms.Sym.Ref(Ref.SectionRef(doc, section)) |> Some
         // Markdown links mapping
         | Element.ML { url = url; anchor = anchor } ->
             let urlIsRef =
@@ -119,12 +120,12 @@ module Element =
 
             match urlIsRef, anchor with
             | None, None -> None
-            | None, Some anchor -> Some(Sym.Sym.Ref(Ref.Section(None, Some anchor)))
+            | None, Some anchor -> Some(Syms.Sym.Ref(Ref.SectionRef(None, Some anchor)))
             | Some (_, false), _ -> None
-            | Some (url, true), anchor -> Some(Sym.Sym.Ref(Ref.Section(Some url, anchor)))
+            | Some (url, true), anchor -> Some(Syms.Sym.Ref(Ref.SectionRef(Some url, anchor)))
         // The rest
-        | Element.MR mdRef -> Some(Sym.Sym.Ref(Ref.LinkDef(mdRef.DestLabel)))
-        | Element.MLD mdLinkDef -> Some(Sym.Sym.Def(Def.LinkDef(mdLinkDef.Label)))
-        | Element.T (Tag tag) -> Some(Sym.Sym.Tag(Sym.Tag tag))
+        | Element.MR mdRef -> Some(Syms.Sym.Ref(Ref.LinkDefRef(mdRef.DestLabel)))
+        | Element.MLD mdLinkDef -> Some(Syms.Sym.Def(Def.LinkDef(mdLinkDef.Label)))
+        | Element.T (Tag tag) -> Some(Syms.Sym.Tag(Syms.Tag tag))
 
 type Ast = { elements: Element[] }

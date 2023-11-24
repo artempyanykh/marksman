@@ -549,8 +549,7 @@ type MarksmanServer(client: MarksmanClient) =
             // We'd need to add dynamic registration of capabilities on the server side.
             let configuredExts =
                 Workspace.folders workspace
-                |> Seq.map Folder.configOrDefault
-                |> Seq.collect (fun c -> c.CoreMarkdownFileExtensions())
+                |> Seq.collect Folder.configuredMarkdownExts
                 |> Seq.distinct
                 |> Array.ofSeq
 
@@ -621,7 +620,9 @@ type MarksmanServer(client: MarksmanClient) =
             let newState =
                 match State.tryFindFolderAndDoc docPath state with
                 | Some (folder, doc) ->
-                    let newDoc = Doc.applyLspChange par doc
+                    let newDoc =
+                        Doc.applyLspChange (Folder.configuredMarkdownExts folder) par doc
+
                     let newFolder = Folder.withDoc newDoc folder
 
                     State.updateFolder newFolder state |> Some
@@ -671,18 +672,17 @@ type MarksmanServer(client: MarksmanClient) =
                             >> Log.addContext "root" singletonRoot
                         )
 
-                        let doc = Doc.fromLsp singletonRoot par.TextDocument
+                        let doc = Doc.fromLsp configuredExts singletonRoot par.TextDocument
                         let userConfig = (State.workspace state) |> Workspace.userConfig
                         let newFolder = Folder.singleFile doc userConfig
                         State.updateFolder newFolder state
                     else
                         state
                 | Some folder ->
-                    let configuredExts =
-                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+                    let configuredExts = (Folder.configuredMarkdownExts folder)
 
                     if isMarkdownFile configuredExts (AbsPath.toSystem path.data) then
-                        let doc = Doc.fromLsp (Folder.id folder) par.TextDocument
+                        let doc = Doc.fromLsp configuredExts (Folder.id folder) par.TextDocument
                         let newFolder = Folder.withDoc doc folder
                         State.updateFolder newFolder state
                     else
@@ -719,7 +719,7 @@ type MarksmanServer(client: MarksmanClient) =
                         (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
 
                     if isMarkdownFile configuredExts (AbsPath.toSystem docUri.data) then
-                        match Doc.tryLoad (Folder.id folder) (Abs docUri.data) with
+                        match Doc.tryLoad configuredExts (Folder.id folder) (Abs docUri.data) with
                         | Some doc ->
                             let newFolder = Folder.withDoc doc folder
                             newState <- State.updateFolder newFolder newState

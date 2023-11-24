@@ -4,126 +4,39 @@ open Ionide.LanguageServerProtocol.Logging
 
 open Marksman.Misc
 open Marksman.MMap
-open Marksman.Ast
 open Marksman.Names
 open Marksman.Graph
-
-[<RequireQualifiedAccess>]
-type Link =
-    | WL of WikiLink
-    | ML of MdLink
-    | MR of MdRef
-    | T of Tag
-
-    member this.AsElement() =
-        match this with
-        | WL wl -> Element.WL wl
-        | ML ml -> Element.ML ml
-        | MR mr -> Element.MR mr
-        | T t -> Element.T t
-
-    member this.CompactFormat() = this.AsElement().CompactFormat()
-
-
-[<RequireQualifiedAccess>]
-type Def =
-    | Doc
-    | H of Heading
-    | LD of MdLinkDef
-    | T of Tag
-
-    member this.CompactFormat() =
-        match this with
-        | Doc -> "Doc"
-        | H h -> h.CompactFormat()
-        | LD ld -> ld.CompactFormat()
-        | T (Tag name) -> $"#{name}"
-
-module Def =
-    let isDoc =
-        function
-        | Def.Doc -> true
-        | _ -> false
-
-[<RequireQualifiedAccess>]
-[<StructuredFormatDisplay("{CompactFormat}")>]
-type Scope =
-    | Doc of DocId
-    | Tag
-
-    override this.ToString() =
-        match this with
-        | Doc docId -> $"{docId}"
-        | Tag -> "Tag"
-
-    member this.CompactFormat = this.ToString()
-
-[<RequireQualifiedAccess>]
-type Sym =
-    | Link of Link
-    | Def of Def
-
-    member this.CompactFormat() =
-        match this with
-        | Link link -> link.CompactFormat()
-        | Def def -> def.CompactFormat()
-
-
-type ScopedSym = Scope * Sym
-
-module Sym =
-    let asLink =
-        function
-        | Sym.Link link -> Some link
-        | Sym.Def _ -> None
-
-    let asDef =
-        function
-        | Sym.Def def -> Some def
-        | Sym.Link _ -> None
-
-    let ofElement (el: Ast.Element) : Sym =
-        match el with
-        | Ast.Element.H h -> Sym.Def(Def.H h)
-        | Ast.Element.T t -> Sym.Def(Def.T t)
-        | Ast.Element.ML ml -> Sym.Link(Link.ML ml)
-        | Ast.Element.MR mr -> Sym.Link(Link.MR mr)
-        | Ast.Element.WL wl -> Sym.Link(Link.WL wl)
-        | Ast.Element.MLD ld -> Sym.Def(Def.LD ld)
-
-    let scoped (scope: Scope) (sym: Sym) = scope, sym
-
-    let scopedToDoc (docId: DocId) (sym: Sym) = Scope.Doc docId, sym
-
-    let allScopedToDoc (docId: DocId) (syms: seq<Sym>) = syms |> Seq.map (scopedToDoc docId)
+open Marksman.Sym
 
 
 type Oracle =
-    { resolveToScope: Scope -> Link -> Scope[]
-      resolveInScope: Link -> Scope -> Def[] }
+    { resolveToScope: Scope -> Ref -> Scope[]
+      resolveInScope: Ref -> Scope -> Def[] }
 
 module ScopedSym =
-    let asLink (scope, sym) = Sym.asLink sym |> Option.map (fun link -> scope, link)
+    let asRef (scope, sym) = Sym.asRef sym |> Option.map (fun link -> scope, link)
     let asDef (scope, sym) = Sym.asDef sym |> Option.map (fun def -> scope, def)
+    let asTag (scope, sym) = Sym.asTag sym |> Option.map (fun tag -> scope, tag)
 
 type UnresolvedScope =
-    | Global
+    | FullyUnknown
     | InScope of Scope
 
 [<RequireQualifiedAccess>]
 type Unresolved =
-    | Link of Scope * Link
+    | Ref of Scope * Ref
     | Scope of UnresolvedScope
 
     member this.CompactFormat() =
         match this with
-        | Link (scope, link) -> $"{link.CompactFormat()} @ {scope}"
-        | Scope Global -> "Global"
+        | Ref (scope, ref) -> $"{ref.CompactFormat()} @ {scope}"
+        | Scope FullyUnknown -> "FullyUnknown"
         | Scope (InScope scope) -> $"{scope}"
 
 type Conn =
-    { links: MMap<Scope, Link>
+    { refs: MMap<Scope, Ref>
       defs: MMap<Scope, Def>
+      tags: MMap<Scope, Tag>
       resolved: Graph<ScopedSym>
       unresolved: Graph<Unresolved>
       lastTouched: Set<ScopedSym> }
@@ -165,21 +78,29 @@ type Conn =
     member this.CompactFormat() =
         let lines =
             seq {
-                yield "Links:"
+                if this.refs |> MMap.isEmpty |> not then
+                    yield "Refs:"
 
-                for scope, links in MMap.toSetSeq this.links do
-                    yield $"  {scope}:"
+                    for scope, links in MMap.toSetSeq this.refs do
+                        yield $"  {scope}:"
 
-                    for link in links do
-                        yield Indented(4, link.CompactFormat()).ToString()
+                        for link in links do
+                            yield Indented(4, link.CompactFormat()).ToString()
 
-                yield "Defs:"
+                if this.defs |> MMap.isEmpty |> not then
+                    yield "Defs:"
 
-                for scope, defs in MMap.toSetSeq this.defs do
-                    yield $"  {scope}:"
+                    for scope, defs in MMap.toSetSeq this.defs do
+                        yield $"  {scope}:"
 
-                    for def in defs do
-                        yield Indented(4, def.CompactFormat()).ToString()
+                        for def in defs do
+                            yield Indented(4, def.CompactFormat()).ToString()
+
+                if this.tags |> MMap.isEmpty |> not then
+                    yield "Tags:"
+
+                    for _, tag in MMap.toSeq this.tags do
+                        yield Indented(4, tag.CompactFormat()).ToString()
 
                 yield "Resolved:"
                 yield Indented(2, this.ResolvedCompactFormat()).ToString()
@@ -197,8 +118,9 @@ module Conn =
     let private logger = LogProvider.getLoggerByName "Conn"
 
     let empty =
-        { links = MMap.empty
+        { refs = MMap.empty
           defs = MMap.empty
+          tags = MMap.empty
           resolved = Graph.empty
           unresolved = Graph.empty
           lastTouched = Set.empty }
@@ -214,8 +136,9 @@ module Conn =
             >> Log.addContext "#removed" (Set.count removed)
         )
 
-        let mutable { links = links
+        let mutable { refs = refs
                       defs = defs
+                      tags = tags
                       resolved = resolved
                       unresolved = unresolved } =
             conn
@@ -223,21 +146,31 @@ module Conn =
         let mutable lastTouched = Set.empty
         let mutable toResolveSet = Set.empty
 
-        let addUnresolvedLinkToQueue =
+        let addUnresolvedRefToQueue =
             function
-            | Unresolved.Link (scope, link) -> toResolveSet <- Set.add (scope, link) toResolveSet
-            | _ -> ()
+            | Unresolved.Ref (scope, ref) -> toResolveSet <- Set.add (scope, ref) toResolveSet
+            | Unresolved.Scope _ -> ()
 
         // First we remove all links to avoid re-resolving links that are no longer part of the graph
-        let removedLinks = removed |> Set.toSeq |> Seq.choose ScopedSym.asLink
+        let removedRefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asRef
 
-        for scope, link in removedLinks do
-            let scopedSym = (scope, Sym.Link link)
-            links <- MMap.removeValue scope link links
-            resolved <- Graph.removeVertex scopedSym resolved
-            unresolved <- Graph.removeVertex (Unresolved.Link(scope, link)) unresolved
+        for scope, ref in removedRefs do
+            let scopedSym = (scope, Sym.Sym.Ref ref)
             // Add removed link to lastTouched because removing a broken link can affect the diagnostic
             lastTouched <- Set.add scopedSym lastTouched
+
+            refs <- MMap.removeValue scope ref refs
+            resolved <- Graph.removeVertex scopedSym resolved
+            unresolved <- Graph.removeVertex (Unresolved.Ref(scope, ref)) unresolved
+
+        let removedTags = removed |> Set.toSeq |> Seq.choose ScopedSym.asTag
+
+        for scope, tag in removedTags do
+            let scopedSym = (scope, Sym.Sym.Tag tag)
+            lastTouched <- Set.add scopedSym lastTouched
+
+            tags <- MMap.removeValue scope tag tags
+            resolved <- Graph.removeVertex scopedSym resolved
 
         // Then we remove all defs. When we remove a def:
         // 1. some previously resolved links could become broken; we need to remember them and
@@ -249,12 +182,14 @@ module Conn =
         let removedDefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asDef
 
         for scope, def in removedDefs do
-            let scopedSym = (scope, Sym.Def def)
+            let scopedSym = (scope, Sym.Sym.Def def)
+            lastTouched <- Set.add scopedSym lastTouched
 
             let cb =
                 function
-                | scope, Sym.Link link -> toResolveSet <- Set.add (scope, link) toResolveSet
-                | _, Sym.Def _ -> ()
+                | scope, Sym.Ref link -> toResolveSet <- Set.add (scope, link) toResolveSet
+                | _, Sym.Def _
+                | _, Sym.Tag _ -> ()
 
             defs <- MMap.removeValue scope def defs
             resolved <- Graph.removeVertexWithCallback cb scopedSym resolved
@@ -268,8 +203,10 @@ module Conn =
         let mutable docWasAdded = false
 
         for scope, sym as scopedSym in added do
+            lastTouched <- Set.add scopedSym lastTouched
+
             match sym with
-            | Sym.Link link -> toResolveSet <- Set.add (scope, link) toResolveSet
+            | Sym.Ref link -> toResolveSet <- Set.add (scope, link) toResolveSet
             | Sym.Def def ->
                 defs <- MMap.add scope def defs
                 resolved <- Graph.addVertex scopedSym resolved
@@ -281,31 +218,36 @@ module Conn =
                 // could become resolvable
                 unresolved <-
                     Graph.removeVertexWithCallback
-                        addUnresolvedLinkToQueue
+                        addUnresolvedRefToQueue
                         (Unresolved.Scope(InScope scope))
                         unresolved
+            | Sym.Tag tag ->
+                tags <- MMap.add scope tag tags
+                // We can resolve tag right away into the Global scope
+                resolved <- Graph.addEdge scopedSym (Scope.Global, Sym.Sym.Tag tag) resolved
 
         // Finally, if any new docs were added we need to re-resolve all previously unresolved links
         // within the global scope
         if docWasAdded then
             unresolved <-
                 Graph.removeVertexWithCallback
-                    addUnresolvedLinkToQueue
-                    (Unresolved.Scope(Global))
+                    addUnresolvedRefToQueue
+                    (Unresolved.Scope(FullyUnknown))
                     unresolved
 
         // Now we run link resolution while updating both resolved and unresolved graphs
         for scope, link in toResolveSet do
-            links <- MMap.add scope link links
-            lastTouched <- Set.add (scope, Sym.Link link) lastTouched
+            let srcSym = (scope, Sym.Sym.Ref link)
+            lastTouched <- Set.add srcSym lastTouched
+            refs <- MMap.add scope link refs
 
             let targetScopes = oracle.resolveToScope scope link
 
             if Array.isEmpty targetScopes then
                 unresolved <-
                     Graph.addEdge
-                        (Unresolved.Link(scope, link))
-                        (Unresolved.Scope(Global))
+                        (Unresolved.Ref(scope, link))
+                        (Unresolved.Scope(FullyUnknown))
                         unresolved
 
             for targetScope in targetScopes do
@@ -314,24 +256,23 @@ module Conn =
                 if Array.isEmpty targetDefs then
                     unresolved <-
                         Graph.addEdge
-                            (Unresolved.Link(scope, link))
+                            (Unresolved.Ref(scope, link))
                             (Unresolved.Scope(InScope targetScope))
                             unresolved
 
                 for targetDef in targetDefs do
-                    resolved <-
-                        Graph.addEdge
-                            (scope, Sym.Link link)
-                            (targetScope, Sym.Def targetDef)
-                            resolved
+                    let targetSym = (targetScope, Sym.Sym.Def targetDef)
+                    lastTouched <- Set.add targetSym lastTouched
+                    resolved <- Graph.addEdge srcSym targetSym resolved
 
         logger.trace (
             Log.setMessage "Finished updating conn"
             >> Log.addContext "#touched" (Set.count lastTouched)
         )
 
-        { links = links
+        { refs = refs
           defs = defs
+          tags = tags
           resolved = resolved
           unresolved = unresolved
           lastTouched = lastTouched }

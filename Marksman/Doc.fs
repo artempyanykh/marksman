@@ -11,7 +11,7 @@ open Marksman.Names
 open Marksman.Text
 open Marksman.Index
 open Marksman.Paths
-open Marksman.Parser
+open Marksman.Structure
 
 open Marksman.Cst
 
@@ -53,12 +53,13 @@ type Doc =
 
 
 module Doc =
+    open Marksman.Sym
 
     let logger = LogProvider.getLoggerByName "Doc"
 
-    let mk id version text =
-        let structure = Structure.ofText text
-        let index = Index.ofCst structure.cst
+    let mk exts id version text =
+        let structure = Parser.parse exts text
+        let index = Index.ofCst (Structure.concreteElements structure)
 
         { id = id
           version = version
@@ -69,9 +70,9 @@ module Doc =
     let id { id = id } = id
     let text doc = doc.text
 
-    let withText newText doc =
-        let newStructure = Structure.ofText newText
-        let newIndex = Index.ofCst newStructure.cst
+    let withText exts newText doc =
+        let newStructure = Parser.parse exts newText
+        let newIndex = Index.ofCst (Structure.concreteElements newStructure)
 
         { doc with
             text = newText
@@ -79,7 +80,7 @@ module Doc =
             index = newIndex }
 
 
-    let applyLspChange (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =
+    let applyLspChange exts (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =
         let newVersion = change.TextDocument.Version
 
         logger.trace (
@@ -105,16 +106,16 @@ module Doc =
 
         let newText = applyTextChange change.ContentChanges doc.text
 
-        { withText newText doc with version = newVersion }
+        { withText exts newText doc with version = newVersion }
 
-    let fromLsp (folderId: FolderId) (item: TextDocumentItem) : Doc =
+    let fromLsp exts (folderId: FolderId) (item: TextDocumentItem) : Doc =
         let path = LocalPath.ofUri item.Uri
         let id = DocId(UriWith.mkRooted folderId path)
         let text = mkText item.Text
 
-        mk id (Some item.Version) text
+        mk exts id (Some item.Version) text
 
-    let tryLoad (folderId: FolderId) (path: LocalPath) : option<Doc> =
+    let tryLoad exts (folderId: FolderId) (path: LocalPath) : option<Doc> =
         try
             let content =
                 using (new StreamReader(LocalPath.toSystem path)) (fun f -> f.ReadToEnd())
@@ -123,7 +124,7 @@ module Doc =
 
             let id = DocId(UriWith.mkRooted folderId path)
 
-            Some(mk id None text)
+            Some(mk exts id None text)
         with :? FileNotFoundException ->
             None
 
@@ -140,9 +141,9 @@ module Doc =
 
     let structure (doc: Doc) : Structure = doc.structure
 
-    let cst (doc: Doc) : Cst = doc.structure.cst
+    let cst (doc: Doc) : Cst = doc.structure.Cst
 
-    let ast (doc: Doc) : Ast.Ast = doc.structure.ast
+    let ast (doc: Doc) : Ast.Ast = doc.structure.Ast
 
     let name (doc: Doc) : string =
         match title doc with
@@ -153,13 +154,7 @@ module Doc =
 
     let version (doc: Doc) : option<int> = doc.version
 
-    let syms (doc: Doc) : seq<Conn.Sym> =
-        seq {
-            yield (Conn.Sym.Def Conn.Def.Doc)
+    let syms (doc: Doc) : seq<Sym> = doc.structure.Symbols
 
-            for el in (ast doc).elements do
-                yield Conn.Sym.ofElement el
-        }
-
-    let symsDifference (beforeDoc: Doc) (afterDoc: Doc) : Difference<Conn.Sym> =
+    let symsDifference (beforeDoc: Doc) (afterDoc: Doc) : Difference<Sym> =
         Difference.mk (syms beforeDoc) (syms afterDoc)

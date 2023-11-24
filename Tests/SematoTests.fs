@@ -21,7 +21,9 @@ Start with [[a-wiki-link]]. Then a [ref-link].
 <blank>
 End with [[wiki-link-no-eol]] and #tag."""
 
-    let doc = Doc.mk docPath None (Text.mkText content)
+    let doc =
+        Doc.mk Config.defaultMarkdownExtensions docPath None (Text.mkText content)
+
     let data = Token.ofIndexEncoded (Doc.index doc)
     Assert.Equal(5 * 5, data.Length)
 

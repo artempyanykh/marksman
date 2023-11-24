@@ -247,3 +247,6 @@ module Config =
     let userConfigFile = Path.Join(userConfigDir, "config.toml")
 
     let orDefault configOpt = Option.defaultValue Config.Default configOpt
+
+let defaultMarkdownExtensions =
+    Config.Default.CoreMarkdownFileExtensions() |> Seq.ofArray

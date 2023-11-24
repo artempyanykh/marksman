@@ -119,8 +119,7 @@ let createMissingFile
     (doc: Doc)
     (folder: Folder)
     : CreateFileAction option =
-    let configuredExts =
-        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+    let configuredExts = (Folder.configuredMarkdownExts folder)
 
     let pos = range.Start
 

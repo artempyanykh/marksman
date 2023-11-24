@@ -4,6 +4,7 @@ open Marksman.Misc
 open Marksman.MMap
 open Marksman.Config
 open Marksman.Names
+open Marksman.Sym
 open Marksman.Paths
 open Marksman.Doc
 
@@ -16,6 +17,8 @@ module Folder =
     val config: Folder -> option<Config>
     val configOrDefault: Folder -> Config
     val withConfig: option<Config> -> Folder -> Folder
+
+    val configuredMarkdownExts: Folder -> seq<string>
 
     val docs: Folder -> seq<Doc>
     val docCount: Folder -> int
@@ -40,5 +43,5 @@ module Folder =
 
     val oracle: Folder -> Conn.Oracle
     val conn: Folder -> Conn.Conn
-    val syms: Folder -> MMap<DocId, Conn.Sym>
-    val symsDifference: Folder -> Folder -> FullDifference<DocId> * Difference<Conn.ScopedSym>
+    val syms: Folder -> MMap<DocId, Sym>
+    val symsDifference: Folder -> Folder -> FullDifference<DocId> * Difference<ScopedSym>

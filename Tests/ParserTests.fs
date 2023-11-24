@@ -8,6 +8,7 @@ open Snapper.Attributes
 open Xunit
 
 open Marksman.Cst
+open Marksman.Structure
 open Marksman.Parser
 open Marksman.Misc
 open Marksman.Helpers
@@ -20,7 +21,9 @@ let checkSnapshot (document: array<Element>) =
 
 let checkInlineSnapshot = checkInlineSnapshot Element.fmt
 
-let scrapeString content = Structure.ofText (Text.mkText content) |> Structure.concreteElements
+let scrapeString content =
+    parse Config.defaultMarkdownExtensions (Text.mkText content)
+    |> Structure.concreteElements
 
 [<StoreSnapshotsPerClass>]
 module HeadingTests =

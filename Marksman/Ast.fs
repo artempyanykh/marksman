@@ -1,9 +1,8 @@
 module Marksman.Ast
 
-open FSharpPlus.Operators
-
 open Marksman.Misc
 open Marksman.Names
+open Marksman.Sym
 
 type Heading =
     { level: int
@@ -70,6 +69,7 @@ type MdLinkDef =
     { label: string
       url: UrlEncoded }
 
+    member this.Label = LinkLabel.ofString this.label
     member this.CompactFormat() = $"[{this.label}]: {UrlEncoded.raw this.url}"
 
 [<Struct>]
@@ -103,5 +103,28 @@ module Element =
         function
         | Element.MLD mld -> Some mld
         | _ -> None
+
+    let toSym (exts: seq<string>) (el: Element) : option<Sym> =
+        match el with
+        | Element.H { level = level; id = id } ->
+            Sym.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
+        // Wiki-links mapping
+        | Element.WL { doc = None; heading = None } -> None
+        | Element.WL { doc = doc; heading = heading } ->
+            Sym.Sym.Ref(Ref.Section(doc, heading)) |> Some
+        // Markdown links mapping
+        | Element.ML { url = url; anchor = anchor } ->
+            let urlIsRef =
+                url |> Option.map (fun url -> url, isPotentiallyInternalRef exts url)
+
+            match urlIsRef, anchor with
+            | None, None -> None
+            | None, Some anchor -> Some(Sym.Sym.Ref(Ref.Section(None, Some anchor)))
+            | Some (_, false), _ -> None
+            | Some (url, true), anchor -> Some(Sym.Sym.Ref(Ref.Section(Some url, anchor)))
+        // The rest
+        | Element.MR mdRef -> Some(Sym.Sym.Ref(Ref.LinkDef(mdRef.DestLabel)))
+        | Element.MLD mdLinkDef -> Some(Sym.Sym.Def(Def.LinkDef(mdLinkDef.Label)))
+        | Element.T (Tag tag) -> Some(Sym.Sym.Tag(Sym.Tag tag))
 
 type Ast = { elements: Element[] }

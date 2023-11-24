@@ -93,9 +93,7 @@ module InternName =
     let mkUnchecked src name = { src = src; name = name }
 
     let mkChecked exts src name =
-        if Uri.IsWellFormedUriString(name, UriKind.Absolute) then
-            None
-        else if isPotentiallyMarkdownFile exts name then
+        if isPotentiallyInternalRef exts name then
             Some({ src = src; name = name })
         else
             None

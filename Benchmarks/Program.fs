@@ -32,7 +32,7 @@ type ReferenceResolution() =
                 let contentLines = $"# Doc {i}" :: links
                 let content = String.concat "\n" contentLines
                 let text = Text.mkText content
-                Doc.mk docId None text)
+                Doc.mk Config.defaultMarkdownExtensions docId None text)
 
         Folder.multiFile "docs" folderId docs None
 

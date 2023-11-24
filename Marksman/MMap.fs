@@ -29,6 +29,10 @@ module MMap =
 
     let tryFind k (MMap m) = Map.tryFind k m
 
+    let find k (MMap m) = Map.find k m
+
+    let containsKey k (MMap m) = Map.containsKey k m
+
     let addEmpty k (MMap m) = Map.add k Set.empty m |> MMap
 
     let foldSet f state (MMap m) = Map.fold f state m

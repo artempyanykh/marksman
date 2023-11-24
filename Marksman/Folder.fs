@@ -5,9 +5,8 @@ open System.IO
 
 open Ionide.LanguageServerProtocol.Logging
 
-open Marksman.Ast
+open Marksman.Structure
 open Marksman.GitIgnore
-open Marksman.Parser
 open Marksman.SuffixTree
 open Marksman.Config
 open Marksman.Doc
@@ -15,6 +14,7 @@ open Marksman.Misc
 open Marksman.Names
 open Marksman.Paths
 open Marksman.MMap
+open Marksman.Sym
 
 type MultiFile =
     { name: string
@@ -96,9 +96,7 @@ module FolderLookup =
     let ofData (data: FolderData) =
         let config = FolderData.config data
 
-        let mdExt =
-            (config |> Option.defaultValue Config.Default)
-                .CoreMarkdownFileExtensions()
+        let mdExt = (FolderData.configOrDefault data).CoreMarkdownFileExtensions()
 
         match data with
         | SingleFile data ->
@@ -162,7 +160,6 @@ module FolderLookup =
 
 module Oracle =
     open Conn
-    open Index
 
     let filterDocsByInternPath
         (path: InternPath)
@@ -195,71 +192,47 @@ module Oracle =
 
         Set.ofSeq (Seq.append byTitle byPath)
 
-    let private resolveToDoc (data: FolderData) (lookup: FolderLookup) fromDoc link =
-        match link with
-        | Link.WL { doc = None }
-        | Link.ML { url = None }
-        | Link.MR _ -> [| Scope.Doc fromDoc |]
-        | Link.WL { doc = Some doc } ->
-            let name = InternName.mkUnchecked fromDoc doc
-            filterDocsByName data lookup name |> Seq.map Scope.Doc |> Seq.toArray
-        | Link.ML { url = Some url } ->
-            let exts = (FolderData.configOrDefault data).CoreMarkdownFileExtensions()
+    let private resolveToDoc (data: FolderData) (lookup: FolderLookup) (fromDoc: DocId) (ref: Ref) =
+        match ref with
+        | Ref.Section (Some doc, _) ->
+            let internName = InternName.mkUnchecked fromDoc doc
 
-            match InternName.mkChecked exts fromDoc url with
-            | Some name -> filterDocsByName data lookup name |> Seq.map Scope.Doc |> Seq.toArray
-            | None -> [||]
-        | Link.T _ -> [| Scope.Tag |]
+            filterDocsByName data lookup internName
+            |> Seq.map Scope.Doc
+            |> Seq.toArray
+        | Ref.Section (None, _)
+        | Ref.LinkDef _ -> [| Scope.Doc fromDoc |]
 
-    let private resolveInDoc (data: FolderData) link (inDoc: DocId) : Def[] =
+    let private resolveInDoc (data: FolderData) (ref: Ref) (inDoc: DocId) : Def[] =
         let destDoc = FolderData.findDocById inDoc data
-        let destIndex = Doc.index destDoc
         let destStruct = Doc.structure destDoc
 
-        match link with
-        | Link.WL { heading = None } ->
-            let titles =
-                Index.headings destIndex
-                |> Array.filter (fun { data = hd } -> Cst.Heading.isTitle hd)
-
-            match titles with
-            | [||] -> [| Def.Doc |]
-            | titles ->
-                titles
-                |> Seq.map (fun cel -> Structure.findMatchingAbstract (Cst.H cel) destStruct)
-                |> Seq.choose Element.asHeading
-                |> Seq.map Def.H
-                |> Seq.toArray
-        | Link.ML { anchor = None } -> [| Def.Doc |]
-        | Link.WL { heading = Some heading }
-        | Link.ML { anchor = Some heading } ->
-            Index.filterHeadingBySlug (Slug.ofString heading) destIndex
-            |> Seq.map (fun cel -> Structure.findMatchingAbstract (Cst.H cel) destStruct)
-            |> Seq.choose Element.asHeading
-            |> Seq.map Def.H
+        match ref with
+        | Ref.Section (_, None) ->
+            Structure.symbols destStruct
+            |> Seq.choose Sym.asDef
+            |> Seq.filter Def.isTitle
             |> Seq.toArray
-        | Link.MR mdRef ->
-            match
-                Index.tryFindLinkDef mdRef.DestLabel destIndex
-                |> Option.map (fun mdDef ->
-                    Structure.findMatchingAbstract (Cst.MLD mdDef) destStruct)
-                |> Option.bind Element.asLinkDef
-            with
-            | Some linkDef -> [| Def.LD linkDef |]
-            | None -> [||]
-        | Link.T tag -> [| Def.T tag |]
+        | Ref.Section (_, Some section) ->
+            Structure.symbols destStruct
+            |> Seq.choose Sym.asDef
+            |> Seq.filter (Def.isHeaderWithId section)
+            |> Seq.toArray
+        | Ref.LinkDef label ->
+            Structure.symbols destStruct
+            |> Seq.choose Sym.asDef
+            |> Seq.filter (Def.isLinkDefWithLabel label)
+            |> Seq.toArray
 
     let oracle data lookup : Oracle =
-        let resolveToScope scope link =
-            match scope, link with
-            | _, Link.T _ -> [| Scope.Tag |]
-            | Scope.Doc docId, link -> resolveToDoc data lookup docId link
+        let resolveToScope scope ref =
+            match scope, ref with
+            | Scope.Doc docId, ref -> resolveToDoc data lookup docId ref
             | _ -> [||]
 
-        let resolveInScope link scope =
-            match link, scope with
-            | Link.T tag, Scope.Tag -> [| Def.T tag |]
-            | link, Scope.Doc docId -> resolveInDoc data link docId
+        let resolveInScope ref scope =
+            match ref, scope with
+            | ref, Scope.Doc docId -> resolveInDoc data ref docId
             | _ -> [||]
 
         { resolveToScope = resolveToScope; resolveInScope = resolveInScope }
@@ -344,7 +317,7 @@ module Folder =
                         then
                             let pathUri = LocalPath.ofSystem file.FullName
 
-                            let document = Doc.tryLoad folderId pathUri
+                            let document = Doc.tryLoad configuredExts folderId pathUri
 
                             match document with
                             | Some document -> yield document
@@ -453,13 +426,13 @@ module Folder =
         for id in docsDifference.removed do
             let doc = findDocById id before
 
-            let symsInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
+            let symsInDoc = Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
             removed <- removed + symsInDoc
 
         for id in docsDifference.added do
             let doc = findDocById id after
 
-            let symsInDoc = Conn.Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
+            let symsInDoc = Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
             added <- added + symsInDoc
 
         for id in docsDifference.changed do
@@ -467,10 +440,10 @@ module Folder =
             let afterDoc = findDocById id after
             let docDiff = Doc.symsDifference beforeDoc afterDoc
 
-            let removedSyms = Conn.Sym.allScopedToDoc id docDiff.removed |> Set.ofSeq
+            let removedSyms = Sym.allScopedToDoc id docDiff.removed |> Set.ofSeq
             removed <- removed + removedSyms
 
-            let addedSyms = Conn.Sym.allScopedToDoc id docDiff.added |> Set.ofSeq
+            let addedSyms = Sym.allScopedToDoc id docDiff.added |> Set.ofSeq
             added <- added + addedSyms
 
         let symsDifference = { added = added; removed = removed }
@@ -565,13 +538,12 @@ module Folder =
                 let diff =
                     match existingDoc with
                     | None ->
-                        let newSyms =
-                            Doc.syms newDoc |> Conn.Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
+                        let newSyms = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
 
                         { added = newSyms; removed = Set.empty }
                     | Some existingDoc ->
                         Doc.symsDifference existingDoc newDoc
-                        |> Difference.map (Conn.Sym.scopedToDoc newDoc.Id)
+                        |> Difference.map (Sym.scopedToDoc newDoc.Id)
 
                 Conn.Conn.update (Oracle.oracle data lookup) diff conn
 
@@ -599,8 +571,7 @@ module Folder =
                 let lookup = FolderLookup.withoutDoc doc folder.lookup
 
                 let conn =
-                    let removedSyms =
-                        Doc.syms doc |> Conn.Sym.allScopedToDoc docId |> Set.ofSeq
+                    let removedSyms = Doc.syms doc |> Sym.allScopedToDoc docId |> Set.ofSeq
 
                     let diff = { added = Set.empty; removed = removedSyms }
                     Conn.Conn.update (Oracle.oracle data lookup) diff folder.conn
@@ -614,9 +585,11 @@ module Folder =
                 None
 
     let closeDoc (docId: DocId) (folder: Folder) : option<Folder> =
+        let exts = (configOrDefault folder).CoreMarkdownFileExtensions()
+
         match folder.data with
         | MultiFile { root = root } ->
-            match Doc.tryLoad root (Abs <| RootedRelPath.toAbs docId.Path) with
+            match Doc.tryLoad exts root (Abs <| RootedRelPath.toAbs docId.Path) with
             | Some doc -> withDoc doc folder |> Some
             | _ -> withoutDoc docId folder
         | SingleFile { doc = doc } ->
@@ -649,3 +622,6 @@ module Folder =
     let filterDocsByName (name: InternName) (folder: Folder) : seq<Doc> =
         Oracle.filterDocsByName folder.data folder.lookup name
         |> Seq.map (flip findDocById folder)
+
+    let configuredMarkdownExts folder =
+        (configOrDefault folder).CoreMarkdownFileExtensions() |> Seq.ofArray

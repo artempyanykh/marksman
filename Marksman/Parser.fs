@@ -8,7 +8,7 @@ open Markdig.Syntax
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Text
-open Marksman.MMap
+open Marksman.Structure
 
 module Markdown =
     open Markdig
@@ -469,62 +469,11 @@ module Markdown =
 
         { elements = elements; childMap = childMap }
 
-type Structure =
-    { cst: Cst.Cst
-      ast: Ast.Ast
-      a2c: MMap<Ast.Element, Cst.Element>
-      c2a: Map<Cst.Element, Ast.Element> }
-
-module Structure =
-    let abstractElements { ast = ast } = ast.elements
-    let concreteElements { cst = cst } = cst.elements
-
-    let findMatchingAbstract (cel: Cst.Element) structure : Ast.Element =
-        match Map.tryFind cel structure.c2a with
-        | Some ael -> ael
-        | None -> failwith $"No matching abstract element for: {Cst.Element.fmt cel}"
-
-    let tryFindMatchingConcrete (ael: Ast.Element) structure : Cst.Element[] =
-        structure.a2c
-        |> MMap.tryFind ael
-        |> Option.defaultValue Set.empty
-        |> Set.toArray
-
-    let findMatchingConcrete (ael: Ast.Element) structure : Cst.Element[] =
-        let cels = tryFindMatchingConcrete ael structure
-
-        if Array.isEmpty cels then
-            failwith $"No matching concrete element for: {ael.CompactFormat()}"
-        else
-            cels
-
-    let private ofCst (cst: Cst.Cst) : Structure =
-        let rec go cst =
-            seq {
-                for cel in cst do
-                    match Cst.Element.toAbstract cel with
-                    | Some ael -> yield cel, ael
-                    | None -> ()
-            }
-
-        let abs = ResizeArray<Ast.Element>()
-        let mutable a2c = MMap.empty
-        let mutable c2a = Map.empty
-        // Accumulate AST elements and mapping
-        for cel, ael in go cst.elements do
-            abs.Add(ael)
-            a2c <- MMap.add ael cel a2c
-            c2a <- Map.add cel ael c2a
-
-        let ast: Ast.Ast = { elements = abs.ToArray() }
-
-        { cst = cst; ast = ast; a2c = a2c; c2a = c2a }
-
-    let ofText (text: Text) : Structure =
-        if String.IsNullOrEmpty text.content then
-            let cst: Cst.Cst = { elements = [||]; childMap = Map.empty }
-            ofCst cst
-        else
-            let flatElements = Markdown.scrapeText text
-            let cst = Markdown.buildCst text flatElements
-            ofCst cst
+let parse (exts: seq<string>) (text: Text) : Structure =
+    if String.IsNullOrEmpty text.content then
+        let cst: Cst.Cst = { elements = [||]; childMap = Map.empty }
+        Structure.ofCst exts cst
+    else
+        let flatElements = Markdown.scrapeText text
+        let cst = Markdown.buildCst text flatElements
+        Structure.ofCst exts cst

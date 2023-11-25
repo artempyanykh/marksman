@@ -110,9 +110,14 @@ module Element =
             Syms.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
         // Wiki-links mapping
         | Element.WL { doc = None; heading = None } -> None
-        | Element.WL { doc = doc; heading = heading } ->
-            let section = heading |> Option.map Slug.str
-            Syms.Sym.Ref(Ref.SectionRef(doc, section)) |> Some
+        | Element.WL { doc = Some doc; heading = None } ->
+            Syms.Sym.Ref(Ref.CrossRef(CrossDoc doc)) |> Some
+        | Element.WL { doc = Some doc; heading = Some heading } ->
+            let section = Slug.ofString heading
+            Syms.Sym.Ref(Ref.CrossRef(CrossSection(doc, section))) |> Some
+        | Element.WL { doc = None; heading = Some heading } ->
+            let section = Slug.ofString heading
+            Syms.Sym.Ref(Ref.IntraRef(IntraSection section)) |> Some
         // Markdown links mapping
         | Element.ML { url = url; anchor = anchor } ->
             let urlIsRef =
@@ -120,11 +125,14 @@ module Element =
 
             match urlIsRef, anchor with
             | None, None -> None
-            | None, Some anchor -> Some(Syms.Sym.Ref(Ref.SectionRef(None, Some anchor)))
+            | None, Some anchor ->
+                Some(Syms.Sym.Ref(IntraRef(IntraSection <| Slug.ofString anchor)))
             | Some (_, false), _ -> None
-            | Some (url, true), anchor -> Some(Syms.Sym.Ref(Ref.SectionRef(Some url, anchor)))
+            | Some (url, true), None -> Some(Syms.Sym.Ref(CrossRef(CrossDoc url)))
+            | Some (url, true), Some anchor ->
+                Some(Syms.Sym.Ref(CrossRef(CrossSection(url, Slug.ofString anchor))))
         // The rest
-        | Element.MR mdRef -> Some(Syms.Sym.Ref(Ref.LinkDefRef(mdRef.DestLabel)))
+        | Element.MR mdRef -> Some(Syms.Sym.Ref(IntraRef(IntraLinkDef mdRef.DestLabel)))
         | Element.MLD mdLinkDef -> Some(Syms.Sym.Def(Def.LinkDef(mdLinkDef.Label)))
         | Element.T (Tag tag) -> Some(Syms.Sym.Tag(Syms.Tag tag))
 

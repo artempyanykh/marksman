@@ -2,6 +2,7 @@ module Marksman.Fatality
 
 open Ionide.LanguageServerProtocol.Types
 
+open Marksman.Misc
 open Marksman.State
 open Marksman.Workspace
 
@@ -39,5 +40,6 @@ let abort (stateOpt: Option<State>) (ex: exn) =
     eprintfn $"Arch: {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}"
     Option.iter stateDebugOut stateOpt
     eprintfn "---------------------------------------------------------------------------"
-    eprintfn $"{ex.ToString()}"
+    ex.Message.Lines() |> Array.iter (fun l -> eprintfn $"{l}")
+    eprintfn $"{ex.StackTrace.ToString()}"
     exit 1

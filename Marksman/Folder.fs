@@ -194,21 +194,20 @@ module Oracle =
 
     let private resolveToDoc (data: FolderData) (lookup: FolderLookup) (fromDoc: DocId) (ref: Ref) =
         match ref with
-        | Ref.SectionRef (Some doc, _) ->
-            let internName = InternName.mkUnchecked fromDoc doc
+        | Ref.CrossRef r ->
+            let internName = InternName.mkUnchecked fromDoc r.Doc
 
             filterDocsByName data lookup internName
             |> Seq.map Scope.Doc
             |> Seq.toArray
-        | Ref.SectionRef (None, _)
-        | Ref.LinkDefRef _ -> [| Scope.Doc fromDoc |]
+        | Ref.IntraRef _ -> [| Scope.Doc fromDoc |]
 
     let private resolveInDoc (data: FolderData) (ref: Ref) (inDoc: DocId) : Def[] =
         let destDoc = FolderData.findDocById inDoc data
         let destStruct = Doc.structure destDoc
 
         match ref with
-        | Ref.SectionRef (_, None) ->
+        | Ref.CrossRef (CrossDoc _) ->
             let titles =
                 Structure.symbols destStruct
                 |> Seq.choose Sym.asDef
@@ -216,12 +215,13 @@ module Oracle =
                 |> Seq.toArray
 
             if Array.isEmpty titles then [| Doc |] else titles
-        | Ref.SectionRef (_, Some section) ->
+        | Ref.CrossRef (CrossSection (_, section))
+        | Ref.IntraRef (IntraSection section) ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
-            |> Seq.filter (Def.isHeaderWithId section)
+            |> Seq.filter (Def.isHeaderWithId (Slug.toString section))
             |> Seq.toArray
-        | Ref.LinkDefRef label ->
+        | Ref.IntraRef (IntraLinkDef label) ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
             |> Seq.filter (Def.isLinkDefWithLabel label)

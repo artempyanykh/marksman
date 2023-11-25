@@ -95,13 +95,16 @@ let renameHeadingLink
                 failwith $"Internal error: heading without a symbol: {srcHeading}")
 
         match targetDoc.Structure |> Structure.tryFindSymbolForConcrete targetEl with
-        | Some (Sym.Ref (SectionRef (docName, headingName))) ->
-            match Element.isTitle srcHeading, docName, headingName with
-            | true, Some docName, _ ->
+        | Some (Sym.Ref (CrossRef (CrossDoc docName))) ->
+            let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
+            linkKind = FileLinkKind.Title && srcId = docName
+        | Some (Sym.Ref (CrossRef (CrossSection (docName, sectionName)))) ->
+            if Element.isTitle srcHeading then
                 let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
                 linkKind = FileLinkKind.Title && srcId = docName
-            | false, _, Some headingName -> srcId = headingName
-            | _ -> false
+            else
+                Slug.ofString srcId = sectionName
+        | Some (Sym.Ref (IntraRef (IntraSection sectionName))) -> Slug.ofString srcId = sectionName
         | _ -> false
 
     if shouldRename then

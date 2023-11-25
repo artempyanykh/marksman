@@ -139,3 +139,39 @@ module ConnGraphTests =
 
         let f2 = Folder.withDoc d1Update f1
         checkSnapshot (Folder.conn f2)
+
+    [<Fact>]
+    let fixRef () =
+        let d1 =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "[[#Lnk]]"; "## Link" |])
+
+        let d1Upd =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "[[#Link]]"; "## Link" |])
+
+        let incr = FakeFolder.Mk([ d1 ]) |> Folder.withDoc d1Upd |> Folder.conn
+        let fromScratch = FakeFolder.Mk([ d1Upd ]) |> Folder.conn
+
+        let connDiff = Conn.difference fromScratch incr
+
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact(Skip = "Conn: incremental invalidation needs dependency tracking between refs")>]
+    let breakCrossRef () =
+        let d1 =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1 idx"; "## Sub" |])
+
+        // Update (remove + add a def)
+        let d1Upd =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1 index"; "## Sub" |])
+
+        let d2 =
+            FakeDoc.Mk(path = "d2.md", contentLines = [| "[[Doc1 idx#Sub]]" |])
+
+        let f = FakeFolder.Mk([ d1; d2 ])
+        let f = Folder.withDoc d1Upd f
+        let incr = Folder.conn f
+
+        let fromScratch = FakeFolder.Mk([ d1Upd; d2 ]) |> Folder.conn
+        let connDiff = Conn.difference fromScratch incr
+
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]

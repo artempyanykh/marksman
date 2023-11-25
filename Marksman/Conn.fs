@@ -29,7 +29,7 @@ type Unresolved =
 
     member this.CompactFormat() =
         match this with
-        | Ref (scope, ref) -> $"{ref.CompactFormat()} @ {scope}"
+        | Ref (scope, ref) -> $"{ref} @ {scope}"
         | Scope FullyUnknown -> "FullyUnknown"
         | Scope (InScope scope) -> $"{scope}"
 
@@ -94,12 +94,7 @@ type Conn =
 
                     for (_, sym), dests in edges do
                         for destScope, destSym in dests do
-                            yield
-                                Indented(
-                                    2,
-                                    $"{sym.CompactFormat()} -> {destSym.CompactFormat()} @ {destScope}"
-                                )
-                                    .ToString()
+                            yield Indented(2, $"{sym} -> {destSym} @ {destScope}").ToString()
             }
 
         concatLines lines
@@ -121,11 +116,11 @@ type Conn =
                 if this.refs |> MMap.isEmpty |> not then
                     yield "Refs:"
 
-                    for scope, links in MMap.toSetSeq this.refs do
+                    for scope, refs in MMap.toSetSeq this.refs do
                         yield $"  {scope}:"
 
-                        for link in links do
-                            yield Indented(4, link.CompactFormat()).ToString()
+                        for ref in refs do
+                            yield Indented(4, ref).ToString()
 
                 if this.defs |> MMap.isEmpty |> not then
                     yield "Defs:"
@@ -134,13 +129,13 @@ type Conn =
                         yield $"  {scope}:"
 
                         for def in defs do
-                            yield Indented(4, def.CompactFormat()).ToString()
+                            yield Indented(4, def).ToString()
 
                 if this.tags |> MMap.isEmpty |> not then
                     yield "Tags:"
 
                     for _, tag in MMap.toSeq this.tags do
-                        yield Indented(4, tag.CompactFormat()).ToString()
+                        yield Indented(4, tag).ToString()
 
                 yield "Resolved:"
                 yield Indented(2, this.ResolvedCompactFormat()).ToString()
@@ -149,7 +144,7 @@ type Conn =
                 yield "Last touched:"
 
                 for scope, sym in this.lastTouched do
-                    yield Indented(2, $"{sym.CompactFormat()} @ {scope}").ToString()
+                    yield Indented(2, $"{sym} @ {scope}").ToString()
             }
 
         concatLines lines
@@ -161,8 +156,8 @@ module Conn =
         { refs = MMap.empty
           defs = MMap.empty
           tags = MMap.empty
-          resolved = Graph.empty
-          unresolved = Graph.empty
+          resolved = Graph.empty true
+          unresolved = Graph.empty true
           lastTouched = Set.empty }
 
     let isSameStructure c1 c2 =
@@ -239,6 +234,10 @@ module Conn =
                 | _, Sym.Tag _ -> ()
 
             defs <- MMap.removeValue scope def defs
+            // TODO: we have an [[A#B]] resolved but we remove #A header. This should invalidate
+            // whatever depends on resolution of A.
+            // IDEA: use hierarchical symbols? Make [[A#B]] depend on A (allow links between refs)
+            // Oof! OTOH may help with the overall cleanliness of the design.
             resolved <- Graph.removeVertexWithCallback cb scopedSym resolved
 
             // When the doc is removed we need to remove all unresolved links within this doc's scope

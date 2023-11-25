@@ -2,6 +2,7 @@ module Marksman.Diag
 
 open Ionide.LanguageServerProtocol.Types
 
+open Marksman.Misc
 open Marksman.Names
 open Marksman.Doc
 open Marksman.Folder
@@ -45,32 +46,25 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
             [ NonBreakableWhitespace(whitespaceRange) ])
 
-let isCrossFileLink sym =
-    match sym with
-    | Syms.SectionRef (Some _, _) -> true
-    | Syms.SectionRef _
-    | Syms.LinkDefRef _ -> false
-
-
-let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
+let checkLink (folder: Folder) (doc: Doc) (linkEl: Element) : seq<Entry> =
     let exts = Folder.configuredMarkdownExts folder
 
-    let sym =
+    let ref =
         doc.Structure
-        |> Structure.Structure.tryFindSymbolForConcrete link
+        |> Structure.Structure.tryFindSymbolForConcrete linkEl
         |> Option.bind Syms.Sym.asRef
 
-    match sym with
+    match ref with
     | None -> []
-    | Some sym ->
-        let refs = Dest.tryResolveElement folder doc link |> Array.ofSeq
+    | Some ref ->
+        let refs = Dest.tryResolveElement folder doc linkEl |> Array.ofSeq
 
-        if Folder.isSingleFile folder && isCrossFileLink sym then
+        if Folder.isSingleFile folder && Syms.Ref.isCross ref then
             []
         else if refs.Length = 1 then
             []
         else if refs.Length = 0 then
-            match link with
+            match linkEl with
             // Inline shortcut links often are a part of regular text.
             // Raising diagnostics on them would be noisy.
             | ML { data = MdLink.RS _ } -> []
@@ -80,13 +74,13 @@ let checkLink (folder: Folder) (doc: Doc) (link: Element) : seq<Entry> =
                     // Inline links to docs that don't look like a markdown file should not
                     // produce diagnostics
                     if Misc.isMarkdownFile exts (UrlEncoded.decode url) then
-                        [ BrokenLink(link, sym) ]
+                        [ BrokenLink(linkEl, ref) ]
                     else
                         []
-                | _ -> [ BrokenLink(link, sym) ]
-            | _ -> [ BrokenLink(link, sym) ]
+                | _ -> [ BrokenLink(linkEl, ref) ]
+            | _ -> [ BrokenLink(linkEl, ref) ]
         else
-            [ AmbiguousLink(link, sym, refs) ]
+            [ AmbiguousLink(linkEl, ref, refs) ]
 
 let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
     let links = Doc.index >> Index.links <| doc
@@ -117,13 +111,11 @@ let docToHuman (name: string) : string = $"document '{name}'"
 
 let refToHuman (ref: Syms.Ref) : string =
     match ref with
-    | Syms.SectionRef (None, None) -> failwith $"Internal error: malformed SectionRef: {ref}"
-    | Syms.SectionRef (Some docName, None) -> docToHuman docName
-    | Syms.SectionRef (docName, Some heading) ->
-        match docName with
-        | None -> $"heading '{heading}'"
-        | Some docName -> $"heading '{heading}' in {docToHuman docName}"
-    | Syms.LinkDefRef ld -> $"link definition with the label '{ld}'"
+    | Syms.CrossRef (Syms.CrossDoc docName) -> docToHuman docName
+    | Syms.CrossRef (Syms.CrossSection (docName, sectionName)) ->
+        $"heading '{Slug.toString sectionName}' in {docToHuman docName}"
+    | Syms.IntraRef (Syms.IntraSection heading) -> $"heading '{Slug.toString heading}'"
+    | Syms.IntraRef (Syms.IntraLinkDef ld) -> $"link definition with the label '{ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
     match diag with

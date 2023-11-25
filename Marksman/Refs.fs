@@ -42,16 +42,18 @@ module FileLinkKind =
 
         let linkKindAsPath doc =
             namePath
-            |> Option.map (fun path ->
+            |> Option.bind (fun path ->
                 let relPath = InternPath.toRel path
                 let docPath = Doc.pathFromRoot doc
 
                 if docPath = relPath then
-                    FileLinkKind.FilePath
+                    Some FileLinkKind.FilePath
                 else if (RelPath.filenameStem docPath) = (RelPath.filenameStem relPath) then
-                    FileLinkKind.FileStem
+                    Some FileLinkKind.FileStem
+                else if (RelPath.filename docPath) = (RelPath.filename relPath) then
+                    Some FileLinkKind.FileName
                 else
-                    FileLinkKind.FileName)
+                    None)
 
         fun destDoc ->
             match complStyle, Doc.slug destDoc = nameSlug, linkKindAsPath destDoc with

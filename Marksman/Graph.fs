@@ -1,9 +1,32 @@
 module Marksman.Graph
 
 open Marksman.MMap
+open Marksman.Misc
 
 /// Undirected graph
 type Graph<'V> when 'V: comparison = { vertices: Set<'V>; edges: MMap<'V, 'V> }
+
+type GraphDifference<'V> when 'V: comparison =
+    { vertexDifference: Difference<'V>
+      edgeDifference: Difference<'V * 'V> }
+
+    member this.IsEmpty() =
+        Difference.isEmpty this.vertexDifference
+        && Difference.isEmpty this.edgeDifference
+
+    member this.CompactFormat() =
+        let lines =
+            seq {
+                if not (Difference.isEmpty this.vertexDifference) then
+                    yield "Vertex difference:"
+                    yield Indented(4, this.vertexDifference.CompactFormat()).ToString()
+
+                if not (Difference.isEmpty this.edgeDifference) then
+                    yield "Edge difference:"
+                    yield Indented(4, this.edgeDifference.CompactFormat()).ToString()
+            }
+
+        concatLines lines
 
 module Graph =
     let empty = { vertices = Set.empty; edges = MMap.empty }
@@ -44,3 +67,10 @@ module Graph =
 
     let degree v g = MMap.tryFind v g.edges |> Option.map Set.count
     let isDegree0OrAbsent v g = (degree v g |> Option.defaultValue 0) = 0
+
+    let difference g1 g2 =
+        let edges1 = g1.edges |> MMap.toSeq |> Set.ofSeq
+        let edges2 = g2.edges |> MMap.toSeq |> Set.ofSeq
+
+        { vertexDifference = Difference.mk g1.vertices g2.vertices
+          edgeDifference = Difference.mk edges1 edges2 }

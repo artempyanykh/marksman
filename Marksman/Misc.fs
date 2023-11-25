@@ -275,7 +275,27 @@ type Indented<'A> =
 
     member this.AsString = this.ToString()
 
-type Difference<'A> when 'A: comparison = { added: Set<'A>; removed: Set<'A> }
+type Difference<'A> when 'A: comparison =
+    { added: Set<'A>
+      removed: Set<'A> }
+
+    member this.CompactFormat() =
+        let lines =
+            seq {
+                if not (Set.isEmpty this.added) then
+                    yield "Added:"
+
+                    for x in this.added do
+                        yield Indented(4, x).ToString()
+
+                if not (Set.isEmpty this.removed) then
+                    yield "Removed:"
+
+                    for x in this.removed do
+                        yield Indented(4, x).ToString()
+            }
+
+        concatLines lines
 
 module Difference =
     let empty = { added = Set.empty; removed = Set.empty }

@@ -550,6 +550,19 @@ module Folder =
 
                 Conn.Conn.update (Oracle.oracle data lookup) diff conn
 
+            if ProcessFlags.paranoid then
+                let fromScratchConn =
+                    Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
+
+                let connDiff = Conn.Conn.difference fromScratchConn conn
+
+                if connDiff.IsEmpty() |> not then
+                    failwith
+                        $"""PARANOID MODE ERROR:
+Compared to the one built from scratch, the incremental graph has:
+{connDiff.CompactFormat()}
+"""
+
             { data = data; lookup = lookup; conn = conn }
         | SingleFile ({ doc = existingDoc } as folder) ->
             if newDoc.Id <> existingDoc.Id then

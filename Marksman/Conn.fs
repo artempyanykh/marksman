@@ -33,6 +33,46 @@ type Unresolved =
         | Scope FullyUnknown -> "FullyUnknown"
         | Scope (InScope scope) -> $"{scope}"
 
+type ConnDifference =
+    { refsDifference: MMapDifference<Scope, Ref>
+      defsDifference: MMapDifference<Scope, Def>
+      tagsDifference: MMapDifference<Scope, Tag>
+      resolvedDifference: GraphDifference<ScopedSym>
+      unresolvedDifference: GraphDifference<Unresolved> }
+
+    member this.IsEmpty() =
+        this.refsDifference.IsEmpty()
+        && this.defsDifference.IsEmpty()
+        && this.tagsDifference.IsEmpty()
+        && this.resolvedDifference.IsEmpty()
+        && this.unresolvedDifference.IsEmpty()
+
+    member this.CompactFormat() =
+        let lines =
+            seq {
+                if this.refsDifference.IsEmpty() |> not then
+                    yield "Refs difference:"
+                    yield Indented(2, this.refsDifference.CompactFormat()).ToString()
+
+                if this.defsDifference.IsEmpty() |> not then
+                    yield "Defs difference:"
+                    yield Indented(2, this.defsDifference.CompactFormat()).ToString()
+
+                if this.tagsDifference.IsEmpty() |> not then
+                    yield "Tags difference:"
+                    yield Indented(2, this.tagsDifference.CompactFormat()).ToString()
+
+                if this.resolvedDifference.IsEmpty() |> not then
+                    yield "Resolved difference:"
+                    yield Indented(2, this.resolvedDifference.CompactFormat()).ToString()
+
+                if this.unresolvedDifference.IsEmpty() |> not then
+                    yield "Unresolved difference:"
+                    yield Indented(2, this.unresolvedDifference.CompactFormat()).ToString()
+            }
+
+        concatLines lines
+
 type Conn =
     { refs: MMap<Scope, Ref>
       defs: MMap<Scope, Def>
@@ -124,6 +164,13 @@ module Conn =
           resolved = Graph.empty
           unresolved = Graph.empty
           lastTouched = Set.empty }
+
+    let isSameStructure c1 c2 =
+        c1.refs = c2.refs
+        && c1.defs = c2.defs
+        && c1.tags = c2.tags
+        && c1.resolved = c2.resolved
+        && c1.unresolved = c2.unresolved
 
     let updateAux
         (oracle: Oracle)
@@ -296,6 +343,13 @@ module Conn =
             MMap.fold (fun acc docId sym -> Set.add (Scope.Doc docId, sym) acc) Set.empty symMap
 
         update oracle { added = added; removed = Set.empty } empty
+
+    let difference c1 c2 : ConnDifference =
+        { refsDifference = MMap.difference c1.refs c2.refs
+          defsDifference = MMap.difference c1.defs c2.defs
+          tagsDifference = MMap.difference c1.tags c2.tags
+          resolvedDifference = Graph.difference c1.resolved c2.resolved
+          unresolvedDifference = Graph.difference c1.unresolved c2.unresolved }
 
 module Query =
     let resolve (scopedSym: ScopedSym) (conn: Conn) : Set<ScopedSym> =

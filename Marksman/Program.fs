@@ -35,8 +35,10 @@ let configureLogging (verbosity: int) : unit =
 
     ()
 
-let startLSP (args: int * bool) : int =
-    let verbosity, waitForDebugger = args
+let startLSP (args: int * bool * bool) : int =
+    let verbosity, waitForDebugger, paranoid = args
+
+    ProcessFlags.paranoid <- paranoid
 
     use input = Console.OpenStandardInput()
     use output = Console.OpenStandardOutput()
@@ -80,15 +82,22 @@ let main args =
             "Wait for debugger to attach before running the program"
         )
 
+    let paranoid =
+        Input.Option(
+            [ "--paranoid" ],
+            false,
+            "Run extra consistency checks for debugging. THIS IS SLOW!"
+        )
+
     let lspCommand =
         command "server" {
             description "Start LSP server on stdin/stdout"
-            inputs (verbosity, waitForDebugger)
+            inputs (verbosity, waitForDebugger, paranoid)
             setHandler startLSP
         }
 
     rootCommand args {
         description "Marksman is a language server for Markdown"
-        setHandler (fun () -> startLSP (2, false))
+        setHandler (fun () -> startLSP (2, false, false))
         addCommand lspCommand
     }

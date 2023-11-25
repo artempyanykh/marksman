@@ -4,6 +4,41 @@ open Marksman.Misc
 
 type MMap<'K, 'V> when 'K: comparison and 'V: comparison = MMap of Map<'K, Set<'V>>
 
+type MMapDifference<'K, 'V> when 'K: comparison and 'V: comparison =
+    { removedKeys: Set<'K>
+      addedKeys: Set<'K>
+      changedKeys: array<'K * Difference<'V>> }
+
+    member this.IsEmpty() =
+        Set.isEmpty this.removedKeys
+        && Set.isEmpty this.addedKeys
+        && Array.isEmpty this.changedKeys
+
+    member this.CompactFormat() =
+        let lines =
+            seq {
+                if not (Set.isEmpty this.removedKeys) then
+                    yield "Removed keys:"
+
+                    for key in this.removedKeys do
+                        yield Indented(4, key).ToString()
+
+                if not (Set.isEmpty this.addedKeys) then
+                    yield "Added keys:"
+
+                    for key in this.addedKeys do
+                        yield Indented(4, key).ToString()
+
+                if not (Array.isEmpty this.changedKeys) then
+                    yield "Changed keys:"
+
+                    for key, diff in this.changedKeys do
+                        yield Indented(4, key).ToString()
+                        yield Indented(4, diff.CompactFormat()).ToString()
+            }
+
+        concatLines lines
+
 module MMap =
     let add k v (MMap map) =
         let valueSet =
@@ -61,3 +96,25 @@ module MMap =
         }
 
     let toSetSeq (MMap m) = Map.toSeq m
+
+    let difference (MMap m1) (MMap m2) =
+        let ks1 = Map.keys m1 |> Set.ofSeq
+        let ks2 = Map.keys m2 |> Set.ofSeq
+
+        let same = Set.union ks1 ks2
+        let removed = ks1 - same
+        let added = ks2 - same
+
+        let byKeyDiff =
+            seq {
+                for k in same do
+                    let s1 = Map.find k m1
+                    let s2 = Map.find k m2
+                    let diff = Difference.mk s1 s2
+
+                    if not (Difference.isEmpty diff) then
+                        yield k, diff
+            }
+            |> Array.ofSeq
+
+        { addedKeys = added; removedKeys = removed; changedKeys = byKeyDiff }

@@ -2,6 +2,7 @@ module Marksman.Refs
 
 open Ionide.LanguageServerProtocol.Types
 
+open Marksman.Config
 open Marksman.Doc
 open Marksman.Folder
 open Marksman.Cst
@@ -15,6 +16,9 @@ type FileLinkKind =
     | FileName
     | FileStem
     | Title
+
+module FileLinkKind =
+    val detect: ComplWikiStyle -> DocId -> string -> (Doc -> FileLinkKind)
 
 type FileLink =
     { link: string
@@ -47,4 +51,4 @@ module Dest =
     val location: Dest -> Location
 
     val tryResolveElement: Folder -> Doc -> Element -> seq<Dest>
-    val findElementRefs: bool -> Folder -> Doc -> Element -> seq<Doc * Element * Dest array>
+    val findElementRefs: bool -> Folder -> Doc -> Element -> seq<Doc * Element>

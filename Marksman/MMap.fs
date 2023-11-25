@@ -27,6 +27,12 @@ module MMap =
 
     let empty = MMap(Map.empty)
 
+    let ofSeq seq =
+        Seq.groupBy fst seq
+        |> Seq.map (fun (k, els) -> k, Seq.map snd els |> Set.ofSeq)
+        |> Map.ofSeq
+        |> MMap
+
     let tryFind k (MMap m) = Map.tryFind k m
 
     let find k (MMap m) = Map.find k m

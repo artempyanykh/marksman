@@ -236,6 +236,15 @@ type Element =
     | T of Node<Tag>
     | YML of TextNode
 
+    member this.Range =
+        match this with
+        | H n -> n.range
+        | WL n -> n.range
+        | ML n -> n.range
+        | MLD n -> n.range
+        | T n -> n.range
+        | YML n -> n.range
+
 and Heading = { level: int; title: TextNode; scope: Range }
 
 let rec private fmtElement =
@@ -295,16 +304,9 @@ module Heading =
 module Element =
     let fmt = fmtElement
 
-    let range =
-        function
-        | H n -> n.range
-        | WL n -> n.range
-        | ML n -> n.range
-        | MLD n -> n.range
-        | T n -> n.range
-        | YML n -> n.range
+    let range (el: Element) = el.Range
 
-    let rangeStart el = (range el).Start
+    let rangeStart (el: Element) = el.Range.Start
 
     let text =
         function

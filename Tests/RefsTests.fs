@@ -85,10 +85,9 @@ let requireElementAtPos doc line col =
     Cst.elementAtPos (Position.Mk(line, col)) (Doc.cst doc)
     |> Option.defaultWith (fun _ -> failwith $"No element found at ({line}, {col})")
 
-let stripRefs (refs: seq<Doc * Element * array<Dest>>) =
+let formatRefs (refs: seq<Doc * Element>) =
     refs
-    |> Seq.map (fun (doc, el, _) ->
-        Path.GetFileName(Doc.uri doc), (Element.range el).DebuggerDisplay)
+    |> Seq.map (fun (doc, el) -> Path.GetFileName(Doc.uri doc), el.Range.DebuggerDisplay)
     |> Array.ofSeq
 
 module FileLinkTests =
@@ -262,7 +261,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(21, 1)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
+        let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "(doc1.md, (16,0)-(16,5))" ]
 
@@ -272,12 +271,12 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(21, 1)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
+        let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
             refs
-            [ "(doc2.md, (21,0)-(21,5))"; "(doc1.md, (16,0)-(16,5))" ]
+            [ "(doc1.md, (16,0)-(16,5))"; "(doc2.md, (21,0)-(21,5))" ]
 
     [<Fact>]
     let refToLinkDef_atDef () =
@@ -285,7 +284,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(17, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
+        let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -298,14 +297,14 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(17, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
+        let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
             refs
-            [ "(doc2.md, (17,0)-(17,21))"
-              "(doc2.md, (4,0)-(4,11))"
-              "(doc2.md, (8,0)-(8,11))" ]
+            [ "(doc2.md, (4,0)-(4,11))"
+              "(doc2.md, (8,0)-(8,11))"
+              "(doc2.md, (17,0)-(17,21))" ]
 
     [<Fact>]
     let refToLinkDef_atLink () =
@@ -313,7 +312,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(8, 4)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs false folder doc2 def |> stripRefs
+        let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -326,14 +325,14 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(8, 4)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 def |> stripRefs
+        let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
             refs
-            [ "(doc2.md, (17,0)-(17,21))"
-              "(doc2.md, (4,0)-(4,11))"
-              "(doc2.md, (8,0)-(8,11))" ]
+            [ "(doc2.md, (4,0)-(4,11))"
+              "(doc2.md, (8,0)-(8,11))"
+              "(doc2.md, (17,0)-(17,21))" ]
 
     [<Fact(Skip = "Footnote parsing not implemented")>]
     let refToFootnote_atLink () =
@@ -341,7 +340,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(15, 2)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 fnLink |> stripRefs
+        let refs = Dest.findElementRefs true folder doc2 fnLink |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -354,7 +353,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(0, 2)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs false folder doc1 title |> stripRefs
+        let refs = Dest.findElementRefs false folder doc1 title |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -369,7 +368,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(0, 2)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs true folder doc1 title |> stripRefs
+        let refs = Dest.findElementRefs true folder doc1 title |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -385,7 +384,7 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(4, 4)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs false folder doc1 wl |> stripRefs
+        let refs = Dest.findElementRefs false folder doc1 wl |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -398,14 +397,14 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(4, 4)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs true folder doc1 wl |> stripRefs
+        let refs = Dest.findElementRefs true folder doc1 wl |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
             refs
-            [ "(doc2.md, (10,0)-(10,9))"
-              "(doc1.md, (4,0)-(4,16))"
-              "(doc2.md, (6,0)-(6,11))" ]
+            [ "(doc1.md, (4,0)-(4,16))"
+              "(doc2.md, (6,0)-(6,11))"
+              "(doc2.md, (10,0)-(10,9))" ]
 
 
 module LinkKindRefsTests =
@@ -434,10 +433,10 @@ module LinkKindRefsTests =
     let folder = FakeFolder.Mk([ doc1; doc2; doc3 ])
 
 
-    [<Fact(Skip = "TODO: Dest.findElementRefs logic to resolve a doc reference to all symbols inside a doc")>]
+    [<Fact>]
     let atWiki_VariousFilenames () =
         let link = requireElementAtPos doc1 1 2
-        let refs = Dest.findElementRefs false folder doc1 link |> stripRefs
+        let refs = Dest.findElementRefs false folder doc1 link |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())
@@ -452,7 +451,7 @@ module LinkKindRefsTests =
     [<Fact>]
     let atWiki_Filenames_Subfolder () =
         let link = requireElementAtPos doc2 2 3
-        let refs = Dest.findElementRefs false folder doc2 link |> stripRefs
+        let refs = Dest.findElementRefs false folder doc2 link |> formatRefs
 
         checkInlineSnapshot
             (fun x -> x.ToString())

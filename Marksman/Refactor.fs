@@ -2,12 +2,15 @@ module Marksman.Refactor
 
 open Ionide.LanguageServerProtocol.Types
 
+open Marksman.Config
 open Marksman.Misc
 open Marksman.Cst
 open Marksman.Names
 open Marksman.Doc
 open Marksman.Refs
 open Marksman.Folder
+open Marksman.Structure
+open Marksman.Syms
 
 type RenameResult =
     | Edit of WorkspaceEdit
@@ -75,27 +78,36 @@ let renameMarkdownLabelsInDoc newLabel (doc: Doc, els) =
     { TextDocument = lspDoc; Edits = edits }
 
 let renameHeadingLink
-    (heading: Heading)
+    (complStyle: ComplWikiStyle)
+    (srcDoc: Doc)
+    (srcHeading: Element)
     (newTitle: string)
-    (el: Element, elDest: array<Dest>)
+    (targetDoc: Doc)
+    (targetEl: Element)
     : option<TextEdit> =
-    let doesDestMatchHeading dest =
-        if Heading.isTitle heading then
-            match dest with
-            | Dest.Doc { kind = FileLinkKind.Title }
-            | Dest.Heading (Explicit { kind = FileLinkKind.Title }, _) -> true
-            | _ -> false
-        else
-            match dest with
-            | Dest.Heading (_, { data = destHeading }) when heading = destHeading -> true
-            | _ -> false
+    let shouldRename =
+        let _, srcId =
+            srcDoc.Structure
+            |> Structure.tryFindSymbolForConcrete srcHeading
+            |> Option.bind Sym.asDef
+            |> Option.bind Def.asHeader
+            |> Option.defaultWith (fun () ->
+                failwith $"Internal error: heading without a symbol: {srcHeading}")
 
-    let shouldRename = elDest |> Array.exists doesDestMatchHeading
+        match targetDoc.Structure |> Structure.tryFindSymbolForConcrete targetEl with
+        | Some (Sym.Ref (SectionRef (docName, headingName))) ->
+            match Element.isTitle srcHeading, docName, headingName with
+            | true, Some docName, _ ->
+                let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
+                linkKind = FileLinkKind.Title && srcId = docName
+            | false, _, Some headingName -> srcId = headingName
+            | _ -> false
+        | _ -> false
 
     if shouldRename then
-        match el with
+        match targetEl with
         | WL { data = wl } ->
-            let toEdit = if Heading.isTitle heading then wl.doc else wl.heading
+            let toEdit = if Element.isTitle srcHeading then wl.doc else wl.heading
 
             toEdit
             |> Option.map (fun node ->
@@ -104,7 +116,7 @@ let renameHeadingLink
             let docUrl = url |> Option.map Url.ofUrlNode
 
             let toEdit =
-                if not (Heading.isTitle heading) then
+                if not (Element.isTitle srcHeading) then
                     docUrl |> Option.bind Url.anchor
                 else
                     None
@@ -116,15 +128,21 @@ let renameHeadingLink
         None
 
 let renameHeadingLinksInDoc
-    heading
+    (complStyle: ComplWikiStyle)
+    (srcDoc: Doc)
+    (srcHeading: Element)
     (newTitle: string)
-    (doc: Doc, elsWithDest: seq<Element * array<Dest>>)
+    (targetDoc: Doc)
+    (targetEls: seq<Element>)
     =
     let edits =
-        Seq.collect (renameHeadingLink heading newTitle >> Option.toArray) elsWithDest
+        Seq.collect
+            (renameHeadingLink complStyle srcDoc srcHeading newTitle targetDoc
+             >> Option.toArray)
+            targetEls
         |> Array.ofSeq
 
-    let lspDoc = { Uri = Doc.uri doc; Version = Doc.version doc }
+    let lspDoc = { Uri = Doc.uri targetDoc; Version = Doc.version targetDoc }
     { TextDocument = lspDoc; Edits = edits }
 
 let combineDocumentEdits (e1s: array<TextDocumentEdit>) (e2s: array<TextDocumentEdit>) =
@@ -168,7 +186,7 @@ let rename
                 let refs = Dest.findElementRefs true folder srcDoc el
                 // With reference link labels, there's no ambiguity about the destination, so we
                 // can skip inspecting element's destination for the purposes of renaming.
-                let byDoc = refs |> Seq.map (fun (doc, el, _) -> doc, el) |> groupByFirst
+                let byDoc = refs |> groupByFirst
 
                 let docEdits =
                     byDoc |> Seq.map (renameMarkdownLabelsInDoc newName) |> Array.ofSeq
@@ -183,7 +201,7 @@ let rename
         else if (MdLinkDef.label def).range.ContainsInclusive pos then
             let refs = Dest.findElementRefs true folder srcDoc el
             // Similar to the reference links above
-            let byDoc = refs |> Seq.map (fun (doc, el, _) -> doc, el) |> groupByFirst
+            let byDoc = refs |> groupByFirst
 
             let docEdits =
                 byDoc |> Seq.map (renameMarkdownLabelsInDoc newName) |> Array.ofSeq
@@ -202,11 +220,14 @@ let rename
                 { TextDocument = lspDoc; Edits = [| edit |] }
 
             let refs = Dest.findElementRefs false folder srcDoc el
-            let byDoc = refs |> groupByFirst2
+            let byDoc = refs |> groupByFirst
+
+            let complStyle = (Folder.configOrDefault folder).ComplWikiStyle()
 
             let linkEdits =
                 byDoc
-                |> Seq.map (renameHeadingLinksInDoc heading newName)
+                |> Seq.map (fun (targetDoc, targetEls) ->
+                    renameHeadingLinksInDoc complStyle srcDoc el newName targetDoc targetEls)
                 |> Array.ofSeq
 
             let docEdits = combineDocumentEdits linkEdits [| headingEdit |]

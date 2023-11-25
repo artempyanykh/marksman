@@ -298,7 +298,7 @@ module Conn =
         update oracle { added = added; removed = Set.empty } empty
 
 module Query =
-    let resolve (scopedSym: ScopedSym) (conn: Conn) =
+    let resolve (scopedSym: ScopedSym) (conn: Conn) : Set<ScopedSym> =
         conn.resolved.edges
         |> MMap.tryFind scopedSym
         |> Option.defaultValue Set.empty

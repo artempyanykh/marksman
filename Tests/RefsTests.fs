@@ -190,14 +190,23 @@ module FileLinkTests =
             |> Seq.map FileLink.doc
             |> Array.ofSeq
 
-        Assert.Equal<Doc>(actual, [| doc1 |])
+        Assert.Equal<Doc>([| doc1 |], actual)
 
         let actual =
             FileLink.filterMatchingDocs folder (InternName.mkUnchecked doc3.Id "riding-horses")
             |> Seq.map FileLink.doc
             |> Array.ofSeq
 
-        Assert.Equal<Doc>(actual, [| doc2 |])
+        Assert.Equal<Doc>([| doc2 |], actual)
+
+    [<Fact>]
+    let titleSimilarToName () =
+        let d1 = FakeDoc.Mk(path = "doc1.md", content = "# Doc1 idx\n\n## Sub")
+        let d2 = FakeDoc.Mk(path = "test.md", content = "[[doc1-idx#sub]]")
+
+        let linkKind = FileLinkKind.detect Config.FilePathStem d2.Id "doc1-idx" d1
+
+        Assert.Equal(FileLinkKind.Title, linkKind)
 
 
 

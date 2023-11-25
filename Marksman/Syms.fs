@@ -1,69 +1,93 @@
 module Marksman.Syms
 
-open System
-
 open Marksman.Misc
 open Marksman.Names
 
+
+[<StructuredFormatDisplay("{AsString}")>]
+type IntraRef =
+    | IntraSection of section: Slug
+    | IntraLinkDef of LinkLabel
+
+    override this.ToString() =
+        match this with
+        | IntraSection section -> $"[[#{Slug.toString section}]]"
+        | IntraLinkDef linkLabel -> $"[{linkLabel}]"
+
+    member this.AsString = this.ToString()
+
+[<StructuredFormatDisplay("{AsString}")>]
+type CrossRef =
+    | CrossDoc of doc: string
+    | CrossSection of doc: string * section: Slug
+
+    override this.ToString() =
+        match this with
+        | CrossDoc doc -> $"[[{doc}]]"
+        | CrossSection (doc, section) -> $"[[{doc}#{Slug.toString section}]]"
+
+    member this.AsString = this.ToString()
+
+    member this.Doc =
+        match this with
+        | CrossDoc doc
+        | CrossSection (doc, _) -> doc
+
+[<StructuredFormatDisplay("{AsString}")>]
 type Ref =
-    | SectionRef of doc: option<string> * section: option<string>
-    | LinkDefRef of LinkLabel
+    | IntraRef of IntraRef
+    | CrossRef of CrossRef
 
-    member this.CompactFormat() =
+    override this.ToString() =
         match this with
-        | SectionRef (doc, section) ->
-            let doc = Option.defaultValue String.Empty doc
+        | IntraRef intraRef -> intraRef.ToString()
+        | CrossRef crossRef -> crossRef.ToString()
 
-            let section =
-                section
-                |> Option.map (fun s -> "#" + s)
-                |> Option.defaultValue String.Empty
-
-            $"[[{doc}{section}]]"
-        | LinkDefRef label -> $"[{label}]"
-
-    member this.ToSection() =
-        match this with
-        | SectionRef (d, s) -> (d, s)
-        | LinkDefRef _ -> failwith $"Ref.ToSection: {this} is not a Section"
-
-    member this.ToLinkDef() =
-        match this with
-        | LinkDefRef label -> label
-        | SectionRef _ -> failwith $"Ref.ToLinkDef: {this} is not a LinkDef"
+    member this.AsString = this.ToString()
 
 module Ref =
-    let hasExplicitDoc =
+    let isIntra =
         function
-        | SectionRef (Some _, _) -> true
-        | SectionRef (None, _)
-        | LinkDefRef _ -> false
+        | IntraRef _ -> true
+        | _ -> false
 
-    let asSection =
+    let isCross =
         function
-        | SectionRef (doc, section) -> Some(doc, section)
-        | LinkDefRef _ -> None
+        | CrossRef _ -> true
+        | _ -> false
+
+    let trySection =
+        function
+        | CrossRef (CrossSection (_, section))
+        | IntraRef (IntraSection section) -> Some section
+        | _ -> None
 
 [<Struct>]
+[<StructuredFormatDisplay("{AsString}")>]
 type Tag =
     | Tag of string
 
-    member this.CompactFormat() = $"#{this}"
+    override this.ToString() = $"#{this}"
+
+    member this.AsString = this.ToString()
 
     member this.Name =
         let (Tag name) = this
         name
 
+[<StructuredFormatDisplay("{AsString}")>]
 type Def =
     | Doc
     | Header of level: int * id: string
     | LinkDef of LinkLabel
 
-    member this.CompactFormat() =
+    override this.ToString() =
         match this with
         | Doc -> "Doc"
         | Header (l, h) -> $"H{l} {{{h}}}"
         | LinkDef ld -> $"[{ld}]:"
+
+    member this.AsString = this.ToString()
 
 module Def =
     let isDoc =
@@ -97,22 +121,19 @@ module Def =
         | _ -> None
 
 [<RequireQualifiedAccess>]
+[<StructuredFormatDisplay("{AsString}")>]
 type Sym =
     | Def of Def
     | Ref of Ref
     | Tag of Tag
 
-    member this.CompactFormat() =
+    override this.ToString() =
         match this with
-        | Ref link -> link.CompactFormat()
-        | Def def -> def.CompactFormat()
-        | Tag tag -> tag.CompactFormat()
+        | Ref link -> link.ToString()
+        | Def def -> def.ToString()
+        | Tag tag -> tag.ToString()
 
-    member this.ToRef() =
-        match this with
-        | Ref ref -> ref
-        | Def _
-        | Tag _ -> failwith $"Sym.ToRef: {this} is not a Ref"
+    member this.AsString = this.ToString()
 
 [<RequireQualifiedAccess>]
 [<StructuredFormatDisplay("{CompactFormat}")>]
@@ -152,7 +173,7 @@ module Sym =
 
     let isTitle sym = asDef sym |> Option.exists Def.isTitle
 
-    let isRefWithExplicitDoc sym = asRef sym |> Option.exists Ref.hasExplicitDoc
+    let isRefWithExplicitDoc sym = asRef sym |> Option.exists Ref.isCross
 
     let scoped (scope: Scope) (sym: Sym) = scope, sym
 

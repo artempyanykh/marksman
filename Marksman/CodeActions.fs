@@ -132,7 +132,7 @@ let createMissingFile
 
         let! name =
             match doc.Structure |> Structure.Structure.tryFindSymbolForConcrete atPos with
-            | Some (Syms.Sym.Ref (Syms.SectionRef (Some name, _))) -> Some name
+            | Some (Syms.Sym.Ref (Syms.CrossRef r)) -> Some r.Doc
             | _ -> None
 
         let! internPath = InternName.tryAsPath { name = name; src = doc.Id }

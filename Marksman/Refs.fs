@@ -147,18 +147,18 @@ module Dest =
 
     let detectFileLink complStyle srcDocId srcSym destDoc =
         match srcSym |> Sym.asRef with
-        | Some (SectionRef (Some name, _)) ->
-            let kind = FileLinkKind.detect complStyle srcDocId name destDoc
-            { link = name; kind = kind; doc = destDoc }
+        | Some (CrossRef r) ->
+            let kind = FileLinkKind.detect complStyle srcDocId r.Doc destDoc
+            { link = r.Doc; kind = kind; doc = destDoc }
         | _ -> failwith $"Link kind cannot be determined for {srcSym} symbol"
 
     let detectDocLink complStyle srcDocId srcSym destDoc =
         match srcSym |> Sym.asRef with
-        | Some (SectionRef (Some name, _)) ->
-            let kind = FileLinkKind.detect complStyle srcDocId name destDoc
-            let fileLink = { link = name; kind = kind; doc = destDoc }
+        | Some (CrossRef r) ->
+            let kind = FileLinkKind.detect complStyle srcDocId r.Doc destDoc
+            let fileLink = { link = r.Doc; kind = kind; doc = destDoc }
             Explicit fileLink
-        | Some (SectionRef (None, _)) -> Implicit destDoc
+        | Some (IntraRef (IntraSection _)) -> Implicit destDoc
         | _ -> failwith $"Link kind cannot be determined for {srcSym} symbol"
 
     let private tryResolveSym (folder: Folder) (doc: Doc) (srcSym: Sym) : seq<Dest> =
@@ -263,8 +263,8 @@ module Dest =
                     // # Title
                     // [[#title]]
                     || Sym.asRef sym
-                       |> Option.bind Ref.asSection
-                       |> Option.exists (fun (_, name) -> name = Some id)
+                       |> Option.bind Ref.trySection
+                       |> Option.exists (fun name -> name = Slug.ofString id)
 
                 Seq.append [ Def.Doc ] headers, filter
 

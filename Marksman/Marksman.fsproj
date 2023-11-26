@@ -24,7 +24,7 @@
         <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true"/>
     </Target>
     <ItemGroup>
-        <Compile Include="ProcessFlags.fs" />
+        <Compile Include="ProcessFlags.fs"/>
         <Compile Include="Misc.fs"/>
         <Compile Include="SuffixTree.fs"/>
         <Compile Include="MMap.fs"/>

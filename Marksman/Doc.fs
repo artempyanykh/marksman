@@ -156,7 +156,19 @@ module Doc =
 
     let version (doc: Doc) : option<int> = doc.version
 
-    let syms (doc: Doc) : seq<Sym> = doc.structure.Symbols
+    let syms (doc: Doc) : seq<Sym> =
+        seq {
+            for s in doc.structure.Symbols do
+                // HACK. Generate a CrossDoc sym for every CrossSection sym
+                // so that the difference of symbols is consistent with what
+                // Conn expects in terms of dependencies between symbols.
+                match s with
+                | Syms.Sym.Ref (CrossRef (CrossSection (docName, _))) ->
+                    yield Syms.Sym.Ref(CrossRef(CrossDoc docName))
+                | _ -> ()
+
+                yield s
+        }
 
     let symsDifference (beforeDoc: Doc) (afterDoc: Doc) : Difference<Sym> =
         Difference.mk (syms beforeDoc) (syms afterDoc)

@@ -155,7 +155,7 @@ module ConnGraphTests =
 
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
 
-    [<Fact(Skip = "Conn: incremental invalidation needs dependency tracking between refs")>]
+    [<Fact>]
     let breakCrossRef () =
         let d1 =
             FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1 idx"; "## Sub" |])
@@ -174,4 +174,100 @@ module ConnGraphTests =
         let fromScratch = FakeFolder.Mk([ d1Upd; d2 ]) |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
 
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact>]
+    let addingEmptyHeader () =
+        let d1 =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1"; "## Sub" |])
+
+        let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "[[Doc1#Sub]]" |])
+
+        let d1Upd =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1"; "## Sub"; "# " |])
+
+
+        let f = FakeFolder.Mk([ d1; d2 ])
+        let f = Folder.withDoc d1Upd f
+        let incr = Folder.conn f
+
+        let fromScratch = FakeFolder.Mk([ d1Upd; d2 ]) |> Folder.conn
+        let connDiff = Conn.difference fromScratch incr
+
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    module RenameTests =
+        let d1 =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1 idx"; "## Sub" |])
+
+        // Update (remove + add a def)
+        let d1Upd =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1 index"; "## Sub" |])
+
+        let d2 =
+            FakeDoc.Mk(path = "d2.md", contentLines = [| "[[Doc1 idx#Sub]]" |])
+
+        // Fix the reference
+        let d2Upd =
+            FakeDoc.Mk(path = "d2.md", contentLines = [| "[[Doc1 index#Sub]]" |])
+
+        [<Fact>]
+        let renameCrossRef_D1_then_D2 () =
+            let f = FakeFolder.Mk([ d1; d2 ])
+            let f = Folder.withDoc d1Upd f |> Folder.withDoc d2Upd
+            let incr = Folder.conn f
+
+            let fromScratch = FakeFolder.Mk([ d1Upd; d2Upd ]) |> Folder.conn
+            let connDiff = Conn.difference fromScratch incr
+
+            checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+        [<Fact>]
+        let renameCrossRef_D2_then_D1 () =
+            let f = FakeFolder.Mk([ d1; d2 ])
+            let f = Folder.withDoc d2Upd f |> Folder.withDoc d1Upd
+            let incr = Folder.conn f
+
+            let fromScratch = FakeFolder.Mk([ d1Upd; d2Upd ]) |> Folder.conn
+            let connDiff = Conn.difference fromScratch incr
+
+            checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact>]
+    let addDocThenTitle () =
+        let d1 =
+            FakeDoc.Mk(path = "doc-1.md", contentLines = [| "[[non-existent]]" |])
+
+        let dNA1 = FakeDoc.Mk(path = "non-existent.md", contentLines = [| "" |])
+
+        let dNA2 =
+            FakeDoc.Mk(path = "non-existent.md", contentLines = [| "# D" |])
+
+        let incr =
+            FakeFolder.Mk([ d1 ])
+            |> Folder.withDoc dNA1
+            |> Folder.withDoc dNA2
+            |> Folder.conn
+
+        let fromScratch = FakeFolder.Mk([ d1; dNA2 ]) |> Folder.conn
+        let connDiff = Conn.difference fromScratch incr
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact>]
+    let addSecondTitle () =
+        let d1 = FakeDoc.Mk(path = "doc-1.md", contentLines = [| "[[doc-2]]" |])
+        let d2 = FakeDoc.Mk(path = "doc-2.md", contentLines = [| "" |])
+        let d21 = FakeDoc.Mk(path = "doc-2.md", contentLines = [| "# T1" |])
+
+        let d22 =
+            FakeDoc.Mk(path = "doc-2.md", contentLines = [| "# T1"; "# T2" |])
+
+        let incr =
+            FakeFolder.Mk([ d1; d2 ])
+            |> Folder.withDoc d21
+            |> Folder.withDoc d22
+            |> Folder.conn
+
+        let fromScratch = FakeFolder.Mk([ d1; d22 ]) |> Folder.conn
+        let connDiff = Conn.difference fromScratch incr
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]

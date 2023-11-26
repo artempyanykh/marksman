@@ -51,7 +51,7 @@ type String with
         let mutable sepSeen = false
         let mutable chunkState = 0 // 0 no text chunk, 1 chunk in progress, 2 finished
 
-        for char in this.ToCharArray() do
+        for char in this.Trim().ToCharArray() do
             let isPunct = Char.IsPunctuation(char) || Char.IsSymbol(char)
 
             let isSep = Char.IsWhiteSpace(char) || char = '-'
@@ -192,6 +192,8 @@ module Slug =
 
     let str (s: string) = s.Slug()
 
+    let isEmpty (Slug s) = String.IsNullOrEmpty s
+
     let isSubSequence (sub: Slug) (sup: Slug) =
         let (Slug sub) = sub
         let (Slug sup) = sup
@@ -201,6 +203,8 @@ module Slug =
         let (Slug sub) = sub
         let (Slug sup) = sup
         sub.IsSubStringOf(sup)
+
+    let equalStrings (s1: string) (s2: string) = ofString s1 = ofString s2
 
 let indentFmt (fmtA: 'A -> string) (a: 'A) =
     let reprA = fmtA a

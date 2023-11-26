@@ -150,6 +150,12 @@ type Scope =
 
 type ScopedSym = Scope * Sym
 
+module ScopedSym =
+    let asScopedRef =
+        function
+        | scope, Sym.Ref ref -> Some(scope, ref)
+        | _ -> None
+
 module Sym =
     let asRef =
         function

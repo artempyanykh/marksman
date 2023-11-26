@@ -55,7 +55,7 @@ module Structure =
         }
 
     let findAbstractForSymbol (sym: Sym) structure : Set<Ast.Element> =
-        Mapping.preImage sym structure.a2s
+        Mapping.tryPreImage sym structure.a2s |> Option.defaultValue Set.empty
 
     let findConcreteForSymbol (sym: Sym) structure : Set<Cst.Element> =
         findAbstractForSymbol sym structure

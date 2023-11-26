@@ -104,20 +104,33 @@ module Element =
         | Element.MLD mld -> Some mld
         | _ -> None
 
+    // TODO: instead of checking for 'all whitespace' symbols all the time, create smart constructors
     let toSym (exts: seq<string>) (el: Element) : option<Sym> =
         match el with
         | Element.H { level = level; id = id } ->
-            Syms.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
+            if Slug.isEmpty id then
+                None
+            else
+                Syms.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
         // Wiki-links mapping
         | Element.WL { doc = None; heading = None } -> None
         | Element.WL { doc = Some doc; heading = None } ->
-            Syms.Sym.Ref(Ref.CrossRef(CrossDoc doc)) |> Some
+            if doc.IsWhitespace() then
+                None
+            else
+                Syms.Sym.Ref(Ref.CrossRef(CrossDoc doc)) |> Some
         | Element.WL { doc = Some doc; heading = Some heading } ->
-            let section = Slug.ofString heading
-            Syms.Sym.Ref(Ref.CrossRef(CrossSection(doc, section))) |> Some
+            if heading.IsWhitespace() then
+                None
+            else
+                Syms.Sym.Ref(Ref.CrossRef(CrossSection(doc, Slug.ofString heading)))
+                |> Some
         | Element.WL { doc = None; heading = Some heading } ->
-            let section = Slug.ofString heading
-            Syms.Sym.Ref(Ref.IntraRef(IntraSection section)) |> Some
+            if heading.IsWhitespace() then
+                None
+            else
+                Syms.Sym.Ref(Ref.IntraRef(IntraSection <| Slug.ofString heading))
+                |> Some
         // Markdown links mapping
         | Element.ML { url = url; anchor = anchor } ->
             let urlIsRef =
@@ -126,11 +139,21 @@ module Element =
             match urlIsRef, anchor with
             | None, None -> None
             | None, Some anchor ->
-                Some(Syms.Sym.Ref(IntraRef(IntraSection <| Slug.ofString anchor)))
+                if anchor.IsWhitespace() then
+                    None
+                else
+                    Some(Syms.Sym.Ref(IntraRef(IntraSection <| Slug.ofString anchor)))
             | Some (_, false), _ -> None
-            | Some (url, true), None -> Some(Syms.Sym.Ref(CrossRef(CrossDoc url)))
+            | Some (url, true), None ->
+                if url.IsWhitespace() then
+                    None
+                else
+                    Some(Syms.Sym.Ref(CrossRef(CrossDoc url)))
             | Some (url, true), Some anchor ->
-                Some(Syms.Sym.Ref(CrossRef(CrossSection(url, Slug.ofString anchor))))
+                if url.IsWhitespace() || anchor.IsWhitespace() then
+                    None
+                else
+                    Some(Syms.Sym.Ref(CrossRef(CrossSection(url, Slug.ofString anchor))))
         // The rest
         | Element.MR mdRef -> Some(Syms.Sym.Ref(IntraRef(IntraLinkDef mdRef.DestLabel)))
         | Element.MLD mdLinkDef -> Some(Syms.Sym.Def(Def.LinkDef(mdLinkDef.Label)))

@@ -97,11 +97,11 @@ let renameHeadingLink
         match targetDoc.Structure |> Structure.tryFindSymbolForConcrete targetEl with
         | Some (Sym.Ref (CrossRef (CrossDoc docName))) ->
             let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
-            linkKind = FileLinkKind.Title && srcId = docName
+            linkKind = FileLinkKind.Title && Slug.equalStrings srcId docName
         | Some (Sym.Ref (CrossRef (CrossSection (docName, sectionName)))) ->
             if Element.isTitle srcHeading then
                 let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
-                linkKind = FileLinkKind.Title && srcId = docName
+                linkKind = FileLinkKind.Title && Slug.equalStrings srcId docName
             else
                 Slug.ofString srcId = sectionName
         | Some (Sym.Ref (IntraRef (IntraSection sectionName))) -> Slug.ofString srcId = sectionName

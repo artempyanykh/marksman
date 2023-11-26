@@ -38,7 +38,8 @@ type ConnDifference =
       defsDifference: MMapDifference<Scope, Def>
       tagsDifference: MMapDifference<Scope, Tag>
       resolvedDifference: GraphDifference<ScopedSym>
-      unresolvedDifference: GraphDifference<Unresolved> }
+      unresolvedDifference: GraphDifference<Unresolved>
+      refDepsDifference: GraphDifference<Scope * CrossRef> }
 
     member this.IsEmpty() =
         this.refsDifference.IsEmpty()
@@ -46,6 +47,7 @@ type ConnDifference =
         && this.tagsDifference.IsEmpty()
         && this.resolvedDifference.IsEmpty()
         && this.unresolvedDifference.IsEmpty()
+        && this.refDepsDifference.IsEmpty()
 
     member this.CompactFormat() =
         let lines =
@@ -69,6 +71,10 @@ type ConnDifference =
                 if this.unresolvedDifference.IsEmpty() |> not then
                     yield "Unresolved difference:"
                     yield Indented(2, this.unresolvedDifference.CompactFormat()).ToString()
+
+                if this.refDepsDifference.IsEmpty() |> not then
+                    yield "Unresolved difference:"
+                    yield Indented(2, this.refDepsDifference.CompactFormat()).ToString()
             }
 
         concatLines lines
@@ -79,6 +85,7 @@ type Conn =
       tags: MMap<Scope, Tag>
       resolved: Graph<ScopedSym>
       unresolved: Graph<Unresolved>
+      refDeps: Graph<Scope * CrossRef>
       lastTouched: Set<ScopedSym> }
 
     member private this.ResolvedCompactFormat() =
@@ -110,6 +117,18 @@ type Conn =
 
         concatLines lines
 
+    member private this.RefDepsCompactFormat() =
+        let edges = this.refDeps.edges |> MMap.toSeq
+
+        let lines =
+            seq {
+                for start, end_ in edges do
+                    yield $"{start} -> {end_}".ToString()
+            }
+
+        concatLines lines
+
+
     member this.CompactFormat() =
         let lines =
             seq {
@@ -139,8 +158,14 @@ type Conn =
 
                 yield "Resolved:"
                 yield Indented(2, this.ResolvedCompactFormat()).ToString()
+
                 yield "Unresolved:"
                 yield Indented(2, this.UnresolvedCompactFormat()).ToString()
+
+                if not (Graph.isEmpty this.refDeps) then
+                    yield "Ref deps:"
+                    yield Indented(2, this.RefDepsCompactFormat()).ToString()
+
                 yield "Last touched:"
 
                 for scope, sym in this.lastTouched do
@@ -156,8 +181,9 @@ module Conn =
         { refs = MMap.empty
           defs = MMap.empty
           tags = MMap.empty
-          resolved = Graph.empty true
-          unresolved = Graph.empty true
+          resolved = Graph.empty
+          unresolved = Graph.empty
+          refDeps = Graph.empty
           lastTouched = Set.empty }
 
     let isSameStructure c1 c2 =
@@ -167,6 +193,13 @@ module Conn =
         && c1.resolved = c2.resolved
         && c1.unresolved = c2.unresolved
 
+    /// Incrementally update connection graph based on symbol difference.
+    ///
+    /// NOTE:
+    /// The code below is involved. Tests and running in paranoid mode help
+    /// wrt bugs and regressions but not in reducing complexity.
+    /// The main reason why the logic is so complex is that dependencies between
+    /// symbols are mostly implicit.
     let updateAux
         (oracle: Oracle)
         ({ added = added; removed = removed }: Difference<ScopedSym>)
@@ -182,7 +215,8 @@ module Conn =
                       defs = defs
                       tags = tags
                       resolved = resolved
-                      unresolved = unresolved } =
+                      unresolved = unresolved
+                      refDeps = refDeps } =
             conn
 
         let mutable lastTouched = Set.empty
@@ -193,18 +227,8 @@ module Conn =
             | Unresolved.Ref (scope, ref) -> toResolveSet <- Set.add (scope, ref) toResolveSet
             | Unresolved.Scope _ -> ()
 
-        // First we remove all links to avoid re-resolving links that are no longer part of the graph
-        let removedRefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asRef
-
-        for scope, ref in removedRefs do
-            let scopedSym = (scope, Syms.Sym.Ref ref)
-            // Add removed link to lastTouched because removing a broken link can affect the diagnostic
-            lastTouched <- Set.add scopedSym lastTouched
-
-            refs <- MMap.removeValue scope ref refs
-            resolved <- Graph.removeVertex scopedSym resolved
-            unresolved <- Graph.removeVertex (Unresolved.Ref(scope, ref)) unresolved
-
+        // Start by removing tags as they have little effect on the overall structure
+        // of the graph
         let removedTags = removed |> Set.toSeq |> Seq.choose ScopedSym.asTag
 
         for scope, tag in removedTags do
@@ -214,7 +238,29 @@ module Conn =
             tags <- MMap.removeValue scope tag tags
             resolved <- Graph.removeVertex scopedSym resolved
 
-        // Then we remove all defs. When we remove a def:
+        // Remove all refs
+        let removedRefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asRef
+
+        for scope, ref in removedRefs do
+            let scopedSym = (scope, Syms.Sym.Ref ref)
+            // Add removed ref to lastTouched because removing a broken link can affect the diagnostic
+            lastTouched <- Set.add scopedSym lastTouched
+            refs <- MMap.removeValue scope ref refs
+            resolved <- Graph.removeVertex scopedSym resolved
+            unresolved <- Graph.removeVertex (Unresolved.Ref(scope, ref)) unresolved
+            // Some refs could have been queued for resolution during the previous step. However,
+            // we don't need to resolve removed refs
+            toResolveSet <- Set.remove (scope, ref) toResolveSet
+
+            // Remove reference dependency
+            // TODO: what if we have both [[A]] and [[A#B]] and we remove [[A]]?
+            // It'd be silly to to erase the dependency between [[A#B]] and [[A]]
+            match ref with
+            | CrossRef r -> refDeps <- Graph.removeVertex (scope, r) refDeps
+            | IntraRef _ -> ()
+
+
+        // Remove all defs. When we remove a def:
         // 1. some previously resolved links could become broken; we need to remember them and
         //    re-run the resolution,
         // 2. some links that were previously pointing to 2 defs (=~ ambiguous link diagnostic)
@@ -229,15 +275,23 @@ module Conn =
 
             let cb =
                 function
-                | scope, Sym.Ref link -> toResolveSet <- Set.add (scope, link) toResolveSet
+                | scope, Sym.Ref ref ->
+                    toResolveSet <- Set.add (scope, ref) toResolveSet
+
+                    // In addition to re-resolving the affected reference, we also need to
+                    // invalidate all other references that depend on it
+                    match ref with
+                    | CrossRef cr ->
+                        let deps = Graph.edges (scope, cr) refDeps
+
+                        deps
+                        |> Set.iter (fun (scope, cr) ->
+                            toResolveSet <- Set.add (scope, CrossRef cr) toResolveSet)
+                    | IntraRef _ -> ()
                 | _, Sym.Def _
                 | _, Sym.Tag _ -> ()
 
             defs <- MMap.removeValue scope def defs
-            // TODO: we have an [[A#B]] resolved but we remove #A header. This should invalidate
-            // whatever depends on resolution of A.
-            // IDEA: use hierarchical symbols? Make [[A#B]] depend on A (allow links between refs)
-            // Oof! OTOH may help with the overall cleanliness of the design.
             resolved <- Graph.removeVertexWithCallback cb scopedSym resolved
 
             // When the doc is removed we need to remove all unresolved links within this doc's scope
@@ -246,19 +300,59 @@ module Conn =
                 unresolved <- Graph.removeVertex (Unresolved.Scope(InScope scope)) unresolved
             | _ -> ()
 
-        let mutable docWasAdded = false
+        // Now process added symbols
+        let mutable defWasAdded = false
 
         for scope, sym as scopedSym in added do
             lastTouched <- Set.add scopedSym lastTouched
 
             match sym with
-            | Sym.Ref link -> toResolveSet <- Set.add (scope, link) toResolveSet
+            | Sym.Ref ref ->
+                toResolveSet <- Set.add (scope, ref) toResolveSet
+
+                match ref with
+                | CrossRef (CrossSection (doc, _) as sectionRef) ->
+                    // When we get a cross-section ref we need to synthesize a CrossDoc ref
+                    // and record a dependency. This way composite links like [[A#B]] will be
+                    // properly invalidated when title "A" changes
+                    let docRef = CrossDoc doc
+                    toResolveSet <- Set.add (scope, CrossRef docRef) toResolveSet
+                    refDeps <- Graph.addEdge (scope, docRef) (scope, sectionRef) refDeps
+                | CrossRef (CrossDoc _)
+                | IntraRef _ -> ()
             | Sym.Def def ->
                 defs <- MMap.add scope def defs
-                resolved <- Graph.addVertex scopedSym resolved
 
-                if Def.isDoc def then
-                    docWasAdded <- true
+                match def with
+                | Doc
+                | Header (1, _) ->
+                    // Whenever a new title is added, links that were previously pointing at the Doc
+                    // or the other titles need to be invalidate
+                    let affectedDefs =
+                        defs
+                        |> MMap.tryFind scope
+                        |> Option.defaultValue Set.empty
+                        |> Seq.filter Def.isTitle
+                        |> Seq.append [ Doc ]
+
+                    let affectedRefs =
+                        Seq.fold
+                            (fun acc def -> acc + Graph.edges (scope, Sym.Def def) resolved)
+                            Set.empty
+                            affectedDefs
+                        |> Seq.choose ScopedSym.asRef
+
+                    resolved <-
+                        Seq.fold
+                            (fun g def -> Graph.removeVertex (scope, Sym.Def def) g)
+                            resolved
+                            affectedDefs
+
+                    toResolveSet <- Seq.fold (flip Set.add) toResolveSet affectedRefs
+                | Header _
+                | LinkDef _ -> ()
+
+                defWasAdded <- true
 
                 // When we add a new def, things that were previously unresolved within the scope
                 // could become resolvable
@@ -272,9 +366,11 @@ module Conn =
                 // We can resolve tag right away into the Global scope
                 resolved <- Graph.addEdge scopedSym (Scope.Global, Syms.Sym.Tag tag) resolved
 
-        // Finally, if any new docs were added we need to re-resolve all previously unresolved links
-        // within the global scope
-        if docWasAdded then
+        // Finally, if any new defs were added we need to re-resolve all previously unresolved links
+        // within the FullyUnknown scope
+        //
+        // TODO: Can be more granular here and do this only when Doc and H1 header symbols are added?
+        if defWasAdded then
             unresolved <-
                 Graph.removeVertexWithCallback
                     addUnresolvedRefToQueue
@@ -282,27 +378,28 @@ module Conn =
                     unresolved
 
         // Now we run link resolution while updating both resolved and unresolved graphs
-        for scope, link in toResolveSet do
-            let srcSym = (scope, Syms.Sym.Ref link)
+        for scope, ref in toResolveSet do
+            let srcSym = (scope, Syms.Sym.Ref ref)
             lastTouched <- Set.add srcSym lastTouched
-            refs <- MMap.add scope link refs
+            resolved <- Graph.removeVertex srcSym resolved
+            refs <- MMap.add scope ref refs
 
-            let targetScopes = oracle.resolveToScope scope link
+            let targetScopes = oracle.resolveToScope scope ref
 
             if Array.isEmpty targetScopes then
                 unresolved <-
                     Graph.addEdge
-                        (Unresolved.Ref(scope, link))
+                        (Unresolved.Ref(scope, ref))
                         (Unresolved.Scope(FullyUnknown))
                         unresolved
 
             for targetScope in targetScopes do
-                let targetDefs = oracle.resolveInScope link targetScope
+                let targetDefs = oracle.resolveInScope ref targetScope
 
                 if Array.isEmpty targetDefs then
                     unresolved <-
                         Graph.addEdge
-                            (Unresolved.Ref(scope, link))
+                            (Unresolved.Ref(scope, ref))
                             (Unresolved.Scope(InScope targetScope))
                             unresolved
 
@@ -321,6 +418,7 @@ module Conn =
           tags = tags
           resolved = resolved
           unresolved = unresolved
+          refDeps = refDeps
           lastTouched = lastTouched }
 
     let update oracle diff conn =
@@ -348,7 +446,8 @@ module Conn =
           defsDifference = MMap.difference c1.defs c2.defs
           tagsDifference = MMap.difference c1.tags c2.tags
           resolvedDifference = Graph.difference c1.resolved c2.resolved
-          unresolvedDifference = Graph.difference c1.unresolved c2.unresolved }
+          unresolvedDifference = Graph.difference c1.unresolved c2.unresolved
+          refDepsDifference = Graph.difference c1.refDeps c2.refDeps }
 
 module Query =
     let resolve (scopedSym: ScopedSym) (conn: Conn) : Set<ScopedSym> =

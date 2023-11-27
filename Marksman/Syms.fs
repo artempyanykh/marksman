@@ -2,6 +2,7 @@ module Marksman.Syms
 
 open Marksman.Misc
 open Marksman.Names
+open Marksman.Paths
 
 
 [<StructuredFormatDisplay("{AsString}")>]

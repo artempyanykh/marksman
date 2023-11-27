@@ -32,6 +32,7 @@ type DocId =
     | DocId of UriWith<RootedRelPath>
 
     member Path: RootedRelPath
+    member RelPathForced: RelPath
     member Uri: DocumentUri
     member Raw: UriWith<RootedRelPath>
 

@@ -41,11 +41,13 @@ type DocId =
         let (DocId uri) = this
         uri.data
 
+    member this.RelPathForced = this.Path |> RootedRelPath.relPathForced
+
     member this.Uri =
         let (DocId uri) = this
         uri.uri
 
-    member this.ShortFormat = this.Path |> RootedRelPath.toSystem
+    member this.ShortFormat = this.RelPathForced |> RelPath.toSystem
 
     interface IEquatable<DocId> with
         member this.Equals(that: DocId) =

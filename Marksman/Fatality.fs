@@ -28,7 +28,7 @@ let abort (stateOpt: Option<State>) (ex: exn) =
         eprintfn "Workspace:"
         eprintfn $"  Revision      : {stateRevision}"
         eprintfn $"  Folder count  : {Workspace.folderCount workspace}"
-        eprintfn $"  Document count: {Workspace.folderCount workspace}"
+        eprintfn $"  Document count: {Workspace.docCount workspace}"
         eprintfn $"  User config   : {userConfigString}"
 
     eprintfn "---------------------------------------------------------------------------"

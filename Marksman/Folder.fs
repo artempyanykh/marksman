@@ -513,14 +513,14 @@ module Folder =
 
             None
 
-    let withDoc (newDoc: Doc) { data = data; lookup = lookup; conn = conn } : Folder =
-        match data with
+    let withDoc (newDoc: Doc) { data = prevData; lookup = prevLookup; conn = prevConn } : Folder =
+        match prevData with
         | MultiFile folder ->
             if newDoc.RootPath <> folder.RootPath then
                 failwith
                     $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.RootPath}"
 
-            let config = FolderData.configOrDefault data
+            let config = FolderData.configOrDefault prevData
 
             let canonPath =
                 CanonDocPath.mk (config.CoreMarkdownFileExtensions()) newDoc.RelPath
@@ -532,13 +532,13 @@ module Folder =
 
             let lookup =
                 match existingDoc with
-                | None -> lookup
-                | Some doc -> FolderLookup.withoutDoc doc lookup
+                | None -> prevLookup
+                | Some doc -> FolderLookup.withoutDoc doc prevLookup
 
             let lookup = FolderLookup.withDoc newDoc lookup
 
             let conn =
-                let diff =
+                let symDifference =
                     match existingDoc with
                     | None ->
                         let newSyms = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
@@ -548,16 +548,17 @@ module Folder =
                         Doc.symsDifference existingDoc newDoc
                         |> Difference.map (Sym.scopedToDoc newDoc.Id)
 
-                if Difference.isEmpty diff then
-                    conn
+                if Difference.isEmpty symDifference then
+                    prevConn
                 else if config.CoreIncrementalReferences() then
-                    let incrConn = Conn.Conn.update (Oracle.oracle data lookup) diff conn
+                    let incrConn =
+                        Conn.Conn.update (Oracle.oracle data lookup) symDifference prevConn
 
                     if config.CoreParanoid() then
                         let fromScratchConn =
                             Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
 
-                        let connDiff = Conn.Conn.difference fromScratchConn conn
+                        let connDiff = Conn.Conn.difference fromScratchConn incrConn
 
                         if not (connDiff.IsEmpty()) then
                             failwith

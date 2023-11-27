@@ -307,3 +307,19 @@ module ConnGraphTests =
         let fromScratch = mkFolder [ d1; d22 ] |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact>]
+    let initGraphWithTags () =
+        let d1 = FakeDoc.Mk(path = "d1.md", contentLines = [| "#tag1 #tag2" |])
+        let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "#tag2"; "#tag3" |])
+        let f = mkFolder [ d1; d2 ]
+        let conn = Conn.mk (Folder.oracle f) (Folder.syms f)
+        checkSnapshot conn
+
+    [<Fact>]
+    let removingTag () =
+        let d1 = FakeDoc.Mk(path = "d1.md", contentLines = [| "#tag1 #tag2" |])
+        let d1' = FakeDoc.Mk(path = "d1.md", contentLines = [| "#tag1" |])
+        let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "#tag2"; "#tag3" |])
+        let f' = mkFolder [ d1; d2 ] |> Folder.withDoc d1'
+        checkSnapshot (Folder.conn f')

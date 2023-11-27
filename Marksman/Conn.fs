@@ -153,8 +153,11 @@ type Conn =
                 if this.tags |> MMap.isEmpty |> not then
                     yield "Tags:"
 
-                    for _, tag in MMap.toSeq this.tags do
-                        yield Indented(4, tag).ToString()
+                    for scope, tags in MMap.toSetSeq this.tags do
+                        yield $"  {scope}:"
+
+                        for tag in tags do
+                            yield Indented(4, tag).ToString()
 
                 yield "Resolved:"
                 yield Indented(2, this.ResolvedCompactFormat()).ToString()

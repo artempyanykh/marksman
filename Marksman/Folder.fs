@@ -520,10 +520,10 @@ module Folder =
                 failwith
                     $"Updating a folder with an unrelated doc: folder={folder.root}; doc={newDoc.RootPath}"
 
+            let config = FolderData.configOrDefault data
+
             let canonPath =
-                CanonDocPath.mk
-                    ((FolderData.configOrDefault data).CoreMarkdownFileExtensions())
-                    newDoc.RelPath
+                CanonDocPath.mk (config.CoreMarkdownFileExtensions()) newDoc.RelPath
 
             let existingDoc = Map.tryFind canonPath folder.docs
 
@@ -548,20 +548,27 @@ module Folder =
                         Doc.symsDifference existingDoc newDoc
                         |> Difference.map (Sym.scopedToDoc newDoc.Id)
 
-                Conn.Conn.update (Oracle.oracle data lookup) diff conn
+                if Difference.isEmpty diff then
+                    conn
+                else if config.CoreIncrementalReferences() then
+                    let incrConn = Conn.Conn.update (Oracle.oracle data lookup) diff conn
 
-            if ProcessFlags.paranoid then
-                let fromScratchConn =
+                    if config.CoreParanoid() then
+                        let fromScratchConn =
+                            Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
+
+                        let connDiff = Conn.Conn.difference fromScratchConn conn
+
+                        if not (connDiff.IsEmpty()) then
+                            failwith
+                                $"""PARANOID MODE ERROR:
+        Compared to the one built from scratch, the incremental graph has:
+        {connDiff.CompactFormat()}
+        """
+
+                    incrConn
+                else
                     Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
-
-                let connDiff = Conn.Conn.difference fromScratchConn conn
-
-                if connDiff.IsEmpty() |> not then
-                    failwith
-                        $"""PARANOID MODE ERROR:
-Compared to the one built from scratch, the incremental graph has:
-{connDiff.CompactFormat()}
-"""
 
             { data = data; lookup = lookup; conn = conn }
         | SingleFile ({ doc = existingDoc } as folder) ->

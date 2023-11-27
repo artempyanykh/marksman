@@ -65,6 +65,12 @@ let emptyOracle =
     { resolveToScope = fun _ _ -> [||] //
       resolveInScope = fun _ _ -> [||] }
 
+let mkFolder docs =
+    FakeFolder.Mk(
+        config = { Config.Config.Default with coreIncrementalReferences = Some true },
+        docs = docs
+    )
+
 [<StoreSnapshotsPerClass>]
 module ConnGraphTests =
     [<Fact>]
@@ -74,20 +80,20 @@ module ConnGraphTests =
 
     [<Fact>]
     let initGraph () =
-        let f = FakeFolder.Mk([ d1; d1_dup; d2; d3 ])
+        let f = mkFolder [ d1; d1_dup; d2; d3 ]
         let conn = Conn.mk (Folder.oracle f) (Folder.syms f)
         checkSnapshot conn
 
     [<Fact>]
     let removeDoc () =
-        let f1 = FakeFolder.Mk([ d1; d1_dup; d2; d3 ])
+        let f1 = mkFolder [ d1; d1_dup; d2; d3 ]
         let f2 = Folder.withoutDoc d1_dup.Id f1 |> Option.get
 
         checkSnapshot (Folder.conn f2)
 
     [<Fact>]
     let addDoc () =
-        let f1 = FakeFolder.Mk([ d1; d2; d3 ])
+        let f1 = mkFolder [ d1; d2; d3 ]
 
         let dNA =
             FakeDoc.Mk(
@@ -102,7 +108,7 @@ module ConnGraphTests =
 
     [<Fact>]
     let addLinkDef () =
-        let f1 = FakeFolder.Mk([ d1; d2; d3 ])
+        let f1 = mkFolder [ d1; d2; d3 ]
 
         let d3Update =
             FakeDoc.Mk(
@@ -124,7 +130,7 @@ module ConnGraphTests =
 
     [<Fact>]
     let removeHeading () =
-        let f1 = FakeFolder.Mk([ d1; d2; d3 ])
+        let f1 = mkFolder [ d1; d2; d3 ]
 
         let d1Update =
             FakeDoc.Mk(
@@ -148,8 +154,8 @@ module ConnGraphTests =
         let d1Upd =
             FakeDoc.Mk(path = "d1.md", contentLines = [| "[[#Link]]"; "## Link" |])
 
-        let incr = FakeFolder.Mk([ d1 ]) |> Folder.withDoc d1Upd |> Folder.conn
-        let fromScratch = FakeFolder.Mk([ d1Upd ]) |> Folder.conn
+        let incr = mkFolder [ d1 ] |> Folder.withDoc d1Upd |> Folder.conn
+        let fromScratch = mkFolder [ d1Upd ] |> Folder.conn
 
         let connDiff = Conn.difference fromScratch incr
 
@@ -167,11 +173,11 @@ module ConnGraphTests =
         let d2 =
             FakeDoc.Mk(path = "d2.md", contentLines = [| "[[Doc1 idx#Sub]]" |])
 
-        let f = FakeFolder.Mk([ d1; d2 ])
+        let f = mkFolder [ d1; d2 ]
         let f = Folder.withDoc d1Upd f
         let incr = Folder.conn f
 
-        let fromScratch = FakeFolder.Mk([ d1Upd; d2 ]) |> Folder.conn
+        let fromScratch = mkFolder [ d1Upd; d2 ] |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
 
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
@@ -187,11 +193,11 @@ module ConnGraphTests =
             FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc1"; "## Sub"; "# " |])
 
 
-        let f = FakeFolder.Mk([ d1; d2 ])
+        let f = mkFolder [ d1; d2 ]
         let f = Folder.withDoc d1Upd f
         let incr = Folder.conn f
 
-        let fromScratch = FakeFolder.Mk([ d1Upd; d2 ]) |> Folder.conn
+        let fromScratch = mkFolder [ d1Upd; d2 ] |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
 
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
@@ -213,22 +219,22 @@ module ConnGraphTests =
 
         [<Fact>]
         let renameCrossRef_D1_then_D2 () =
-            let f = FakeFolder.Mk([ d1; d2 ])
+            let f = mkFolder [ d1; d2 ]
             let f = Folder.withDoc d1Upd f |> Folder.withDoc d2Upd
             let incr = Folder.conn f
 
-            let fromScratch = FakeFolder.Mk([ d1Upd; d2Upd ]) |> Folder.conn
+            let fromScratch = mkFolder [ d1Upd; d2Upd ] |> Folder.conn
             let connDiff = Conn.difference fromScratch incr
 
             checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
 
         [<Fact>]
         let renameCrossRef_D2_then_D1 () =
-            let f = FakeFolder.Mk([ d1; d2 ])
+            let f = mkFolder [ d1; d2 ]
             let f = Folder.withDoc d2Upd f |> Folder.withDoc d1Upd
             let incr = Folder.conn f
 
-            let fromScratch = FakeFolder.Mk([ d1Upd; d2Upd ]) |> Folder.conn
+            let fromScratch = mkFolder [ d1Upd; d2Upd ] |> Folder.conn
             let connDiff = Conn.difference fromScratch incr
 
             checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
@@ -244,12 +250,12 @@ module ConnGraphTests =
             FakeDoc.Mk(path = "non-existent.md", contentLines = [| "# D" |])
 
         let incr =
-            FakeFolder.Mk([ d1 ])
+            mkFolder [ d1 ]
             |> Folder.withDoc dNA1
             |> Folder.withDoc dNA2
             |> Folder.conn
 
-        let fromScratch = FakeFolder.Mk([ d1; dNA2 ]) |> Folder.conn
+        let fromScratch = mkFolder [ d1; dNA2 ] |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
 
@@ -263,11 +269,11 @@ module ConnGraphTests =
             FakeDoc.Mk(path = "doc-2.md", contentLines = [| "# T1"; "# T2" |])
 
         let incr =
-            FakeFolder.Mk([ d1; d2 ])
+            mkFolder [ d1; d2 ]
             |> Folder.withDoc d21
             |> Folder.withDoc d22
             |> Folder.conn
 
-        let fromScratch = FakeFolder.Mk([ d1; d22 ]) |> Folder.conn
+        let fromScratch = mkFolder [ d1; d22 ] |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]

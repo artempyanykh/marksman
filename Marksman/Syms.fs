@@ -2,7 +2,6 @@ module Marksman.Syms
 
 open Marksman.Misc
 open Marksman.Names
-open Marksman.Paths
 
 
 [<StructuredFormatDisplay("{AsString}")>]
@@ -68,13 +67,14 @@ module Ref =
 type Tag =
     | Tag of string
 
-    override this.ToString() = $"#{this}"
 
     member this.AsString = this.ToString()
 
     member this.Name =
         let (Tag name) = this
         name
+
+    override this.ToString() = $"#{this.Name}"
 
 [<StructuredFormatDisplay("{AsString}")>]
 type Def =

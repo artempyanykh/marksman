@@ -73,6 +73,34 @@ text_sync = "incremental"
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
+let testParse_5 () =
+    let content =
+        """
+[core]
+incremental_references = true
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with coreIncrementalReferences = Some true }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
+let testParse_6 () =
+    let content =
+        """
+[core]
+paranoid = true
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with coreParanoid = Some true }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
 let testParse_broken_0 () =
     let content =
         """

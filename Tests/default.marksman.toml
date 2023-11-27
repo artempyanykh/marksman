@@ -4,7 +4,25 @@
 
 [core]
 markdown.file_extensions = ["md", "markdown"]
+# Configures text sync protocol between the editor (LSP client)
+# and Marksman (LSP server). 
+# Can be either 'full' or `incremental`:
+# * full: the whole copy of a document is sent by the editor
+#   on every update,
+# * incremental: only the changed parts are sent by
+#   the editor. This will result in less trafic between
+#   the editor and Marksman, but the overall performance
+#   impact is marginal.
+# Defaults to `full` because the editors have bugs in incremental
+# sync which result in slightly correpted state and are really hard
+# to daignose.
 text_sync = "full"
+# Use incremental resolution of project-wide references.
+# This is much more efficient but is currently experimental
+incremental_references = false
+# For debugging only! Enables extra validation checks around
+# incremental state updates. SIGNIFICANTLY IMPACTS PERFORMANCE
+paranoid = false
 
 [code_action]
 # Enable/disable "Table of Contents" code action

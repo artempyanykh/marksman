@@ -101,7 +101,7 @@ module MMap =
         let ks1 = Map.keys m1 |> Set.ofSeq
         let ks2 = Map.keys m2 |> Set.ofSeq
 
-        let same = Set.union ks1 ks2
+        let same = Set.intersect ks1 ks2
         let removed = ks1 - same
         let added = ks2 - same
 

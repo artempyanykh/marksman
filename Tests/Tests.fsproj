@@ -28,6 +28,7 @@
         <Compile Include="PathsTests.fs" />
         <Compile Include="AstTests.fs" />
         <Compile Include="ConnTest.fs" />
+        <Compile Include="MMapTests.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

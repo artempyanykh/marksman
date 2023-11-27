@@ -864,22 +864,28 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
-            let locs =
-                monad' {
-                    let! folder, curDoc = State.tryFindFolderAndDoc docUri state
-                    let! atPos = Cst.elementAtPos par.Position (Doc.cst curDoc)
+            match State.tryFindFolderAndDoc docUri state with
+            | Some (folder, curDoc) ->
+                let locs =
+                    match Cst.elementAtPos par.Position (Doc.cst curDoc) with
+                    | None ->
+                        logger.warn (
+                            Log.setMessage "Could not find an element for 'TextDocumentReferences'"
+                            >> Log.addContext "doc" curDoc.Id
+                            >> Log.addContext "pos" par.Position
+                        )
 
-                    let referencingEls =
-                        Dest.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
+                        None
+                    | Some atPos ->
+                        let referencingEls =
+                            Dest.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
 
-                    let toLoc (doc, el) = { Uri = Doc.uri doc; Range = Element.range el }
+                        let toLoc (doc, el) = { Uri = Doc.uri doc; Range = Element.range el }
 
-                    referencingEls |> Seq.map toLoc |> Array.ofSeq
-                }
+                        referencingEls |> Seq.map toLoc |> Array.ofSeq |> Some
 
-            let locs = Option.map Array.ofSeq locs
-
-            LspResult.success locs
+                LspResult.success locs
+            | None -> LspResult.success None
 
     override this.TextDocumentSemanticTokensFull(par: SemanticTokensParams) =
         withState

@@ -65,11 +65,10 @@ let emptyOracle =
     { resolveToScope = fun _ _ -> [||] //
       resolveInScope = fun _ _ -> [||] }
 
-let mkFolder docs =
-    FakeFolder.Mk(
-        config = { Config.Config.Default with coreIncrementalReferences = Some true },
-        docs = docs
-    )
+let incrConfig =
+    { Config.Config.Default with coreIncrementalReferences = Some true }
+
+let mkFolder docs = FakeFolder.Mk(config = incrConfig, docs = docs)
 
 [<StoreSnapshotsPerClass>]
 module ConnGraphTests =
@@ -145,6 +144,37 @@ module ConnGraphTests =
 
         let f2 = Folder.withDoc d1Update f1
         checkSnapshot (Folder.conn f2)
+
+    [<Fact>]
+    let removeTitle_PARANOID () =
+        let d1 =
+            FakeDoc.Mk(
+                path = "ocaml.md",
+                contentLines = [| "# OCaml"; ""; "## Multicore"; "[[#Multicore]]" |]
+            )
+
+        let d1Upd =
+            FakeDoc.Mk(path = "ocaml.md", contentLines = [| ""; "## Multicore" |])
+
+        let d2 =
+            FakeDoc.Mk(path = "fsharp.md", contentLines = [| "# FSharp"; "[[OCaml#Multicore]]" |])
+
+        let config =
+            { incrConfig with
+                complWikiStyle = Some Config.FilePathStem
+                coreParanoid = Some true }
+
+        let incr =
+            FakeFolder.Mk(docs = [ d1; d2 ], config = config)
+            |> Folder.withDoc d1Upd
+            |> Folder.conn
+
+        let fromScratch =
+            FakeFolder.Mk(docs = [ d1Upd; d2 ], config = config) |> Folder.conn
+
+        let connDiff = Conn.difference fromScratch incr
+
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
 
     [<Fact>]
     let fixRef () =

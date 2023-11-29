@@ -2,6 +2,7 @@
 [![release](https://img.shields.io/github/v/release/artempyanykh/marksman)](https://github.com/artempyanykh/marksman/releases)
 [![homebrew](https://img.shields.io/homebrew/v/marksman)](https://formulae.brew.sh/formula/marksman)
 [![marksman](https://snapcraft.io/marksman/badge.svg)](https://snapcraft.io/marksman)
+[![Downloads](https://img.shields.io/github/downloads/artempyanykh/marksman/total)](https://github.com/artempyanykh/marksman/releases)
 
 # Marksman
 

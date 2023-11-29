@@ -60,6 +60,7 @@
         <Compile Include="Compl.fs"/>
         <Compile Include="Refactor.fs"/>
         <Compile Include="Symbols.fs"/>
+        <Compile Include="Lenses.fs"/>
         <Compile Include="Server.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>

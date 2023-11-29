@@ -190,7 +190,7 @@ module ServerUtil =
                       Full = { Delta = Some false } |> U2.Second |> Some }
             RenameProvider = renameOptions
             CodeLensProvider = Some { ResolveProvider = None }
-            ExecuteCommandProvider = Some { commands = None } }
+            ExecuteCommandProvider = Some { commands = Some [||] } }
 
 type MarksmanStatusParams = { state: string; docCount: int }
 

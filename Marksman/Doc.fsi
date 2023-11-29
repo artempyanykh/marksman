@@ -17,6 +17,7 @@ type Doc =
     member RootPath: RootPath
     member RelPath: RelPath
     member Structure: Structure
+    member Index: Index
 
     interface System.IComparable
     interface System.IComparable<Doc>

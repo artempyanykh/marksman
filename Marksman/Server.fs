@@ -23,6 +23,7 @@ open Marksman.Refs
 open Marksman.Folder
 open Marksman.Workspace
 open Marksman.State
+open Newtonsoft.Json.Linq
 
 module ServerUtil =
     let logger = LogProvider.getLoggerByName "ServerUtil"
@@ -187,7 +188,9 @@ module ServerUtil =
                     { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
                       Range = Some true
                       Full = { Delta = Some false } |> U2.Second |> Some }
-            RenameProvider = renameOptions }
+            RenameProvider = renameOptions
+            CodeLensProvider = Some { ResolveProvider = None }
+            ExecuteCommandProvider = Some { commands = None } }
 
 type MarksmanStatusParams = { state: string; docCount: int }
 
@@ -1004,6 +1007,29 @@ type MarksmanServer(client: MarksmanClient) =
                 }
 
             Mutation.output (renameRange |> Option.map PrepareRenameResult.Range |> Ok)
+
+
+    override this.TextDocumentCodeLens(pars) =
+        withState
+        <| fun state ->
+            let docPath = pars.TextDocument.Uri |> UriWith.mkAbs
+
+            let lenses =
+                monad' {
+                    let! folder, srcDoc = State.tryFindFolderAndDoc docPath state
+                    Lenses.forDoc folder srcDoc
+                }
+
+            LspResult.success lenses
+
+    override this.WorkspaceExecuteCommand(pars) =
+        if pars.Command = Lenses.findReferencesLens then
+            // Code lenses need an associated command. We provide a dummy implementation here
+            // because 'showing references' need to be handled by the client and it's a bit too much
+            // hassle to do this for every client.
+            AsyncLspResult.success (JToken.FromObject(0))
+        else
+            AsyncLspResult.invalidParams $"Command {pars.Command} is unsupported"
 
     override this.Dispose() =
         (statusManager :> IDisposable).Dispose()

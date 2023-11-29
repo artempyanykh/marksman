@@ -31,6 +31,8 @@ type Doc =
 
     member this.Structure = this.structure
 
+    member this.Index = this.index
+
     interface IEquatable<Doc> with
         member this.Equals(other) = this.id = other.id && this.text = other.text
 

@@ -24,17 +24,13 @@ ifeq ($(OS),Windows_NT)
 else
 	UNAME_S := $(shell uname -s)
 	TARGET := $(shell uname -m)
+	
 	ifeq ($(UNAME_S),Linux)
 		OS_ID := linux
 	endif
 
 	ifeq ($(UNAME_S),Darwin)
 		OS_ID := osx
-		ifeq ($(TARGET),arm64)
-			# Non-versioned OSX targets do not support arm64
-			OS_ID := "osx.11.0"
-			ARCH_ID := arm64
-		endif
 	endif
 
 	ifeq ($(TARGET),x86_64)
@@ -138,7 +134,7 @@ install: publish
 else
 install: publish
 	mkdir -p $(PREFIX)/bin
-	install -m755 Marksman/bin/Release/net7.0/$(RID)/publish/marksman $(PREFIX)/bin
+	install -m755 Marksman/bin/Release/net8.0/$(RID)/publish/marksman $(PREFIX)/bin
 endif
 
 .PHONY: uninstall

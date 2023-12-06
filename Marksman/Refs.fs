@@ -244,7 +244,7 @@ module Dest =
             match def with
             | LinkDef _ -> Seq.singleton def, konst true
             | Header (level, _) when level > 1 -> Seq.singleton def, konst true
-            | Doc _ ->
+            | Doc ->
                 let headers =
                     inDoc.Structure.Symbols
                     |> Seq.choose Sym.asDef

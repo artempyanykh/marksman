@@ -570,3 +570,11 @@ module EncodingTests =
 
         let refs = resolveAtPos doc1 14 5
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "doc.3.with.dots" ]
+
+module RegressionTests =
+    [<Fact>]
+    let rootLink_issue275 () =
+        let doc = FakeDoc.Mk(path = "doc.md", contentLines = [| "[](/)" |])
+        let folder = FakeFolder.Mk([ doc ])
+        let el = requireElementAtPos doc 0 4
+        Assert.Empty(Dest.tryResolveElement folder doc el)

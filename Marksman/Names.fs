@@ -110,14 +110,16 @@ module InternName =
         if Uri.IsWellFormedUriString(name, UriKind.Absolute) then
             None
         else if name.StartsWith('/') then
-            let relPath =
-                LocalPath.ofSystem (
+            let relPathOpt =
+                LocalPath.tryOfSystem (
                     UrlEncoded.mkUnchecked (name.TrimStart('/')) |> UrlEncoded.decode
                 )
 
-            let rootPath = RootedRelPath.rootPath src.Path
-            let namePath = RootedRelPath.mk rootPath relPath
-            Some(ExactAbs namePath)
+            relPathOpt
+            |> Option.map (fun relPath ->
+                let rootPath = RootedRelPath.rootPath src.Path
+                let namePath = RootedRelPath.mk rootPath relPath
+                ExactAbs namePath)
         else
             try
                 let rawNamePath =

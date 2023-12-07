@@ -29,9 +29,9 @@ type Unresolved =
 
     member this.CompactFormat() =
         match this with
-        | Ref (scope, ref) -> $"{ref} @ {scope}"
+        | Ref(scope, ref) -> $"{ref} @ {scope}"
         | Scope FullyUnknown -> "FullyUnknown"
-        | Scope (InScope scope) -> $"{scope}"
+        | Scope(InScope scope) -> $"{scope}"
 
 type ConnDifference =
     { refsDifference: MMapDifference<Scope, Ref>
@@ -227,7 +227,7 @@ module Conn =
 
         let addUnresolvedRefToQueue =
             function
-            | Unresolved.Ref (scope, ref) -> toResolveSet <- Set.add (scope, ref) toResolveSet
+            | Unresolved.Ref(scope, ref) -> toResolveSet <- Set.add (scope, ref) toResolveSet
             | Unresolved.Scope _ -> ()
 
         // Start by removing tags as they have little effect on the overall structure
@@ -314,21 +314,21 @@ module Conn =
                 toResolveSet <- Set.add (scope, ref) toResolveSet
 
                 match ref with
-                | CrossRef (CrossSection (doc, _) as sectionRef) ->
+                | CrossRef(CrossSection(doc, _) as sectionRef) ->
                     // When we get a cross-section ref we need to synthesize a CrossDoc ref
                     // and record a dependency. This way composite links like [[A#B]] will be
                     // properly invalidated when title "A" changes
                     let docRef = CrossDoc doc
                     toResolveSet <- Set.add (scope, CrossRef docRef) toResolveSet
                     refDeps <- Graph.addEdge (scope, docRef) (scope, sectionRef) refDeps
-                | CrossRef (CrossDoc _)
+                | CrossRef(CrossDoc _)
                 | IntraRef _ -> ()
             | Sym.Def def ->
                 defs <- MMap.add scope def defs
 
                 match def with
                 | Doc
-                | Header (1, _) ->
+                | Header(1, _) ->
                     // Whenever a new title is added, links that were previously pointing at the Doc
                     // or the other titles need to be invalidate
                     let affectedDefs =

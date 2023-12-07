@@ -27,7 +27,8 @@ module ServerUtilTests =
     [<Fact>]
     let textSync_NoConfigEmptyWS_PreferIncr () =
         let clientDesc =
-            { ClientDescription.empty with opts = { preferredTextSyncKind = Some Incremental } }
+            { ClientDescription.empty with
+                opts = { preferredTextSyncKind = Some Incremental } }
 
         let ws = Workspace.ofFolders None []
         Assert.Equal(("clientOption", Incremental), ServerUtil.calcTextSync None ws clientDesc)
@@ -35,7 +36,8 @@ module ServerUtilTests =
     [<Fact>]
     let textSync_NoConfigNonEmptyWS_PreferIncr () =
         let clientDesc =
-            { ClientDescription.empty with opts = { preferredTextSyncKind = Some Incremental } }
+            { ClientDescription.empty with
+                opts = { preferredTextSyncKind = Some Incremental } }
 
         let folder =
             Folder.multiFile "test" (dummyRootPath [ "test" ] |> mkFolderId) Seq.empty None
@@ -46,7 +48,8 @@ module ServerUtilTests =
     [<Fact>]
     let textSync_NonEmptyWS_PreferIncrButConfigTakesPrecedence () =
         let clientDesc =
-            { ClientDescription.empty with opts = { preferredTextSyncKind = Some Incremental } }
+            { ClientDescription.empty with
+                opts = { preferredTextSyncKind = Some Incremental } }
 
         let folder =
             Folder.multiFile

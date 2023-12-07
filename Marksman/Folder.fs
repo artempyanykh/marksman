@@ -168,7 +168,7 @@ module Oracle =
         : seq<Doc> =
         match path with
         | ExactAbs rooted
-        | ExactRel (_, rooted) ->
+        | ExactRel(_, rooted) ->
             FolderData.tryFindDocByRelPath (RootedRelPath.relPathForced rooted) data
             |> Option.toList
             |> Seq.ofList
@@ -207,7 +207,7 @@ module Oracle =
         let destStruct = Doc.structure destDoc
 
         match ref with
-        | Ref.CrossRef (CrossDoc _) ->
+        | Ref.CrossRef(CrossDoc _) ->
             let titles =
                 Structure.symbols destStruct
                 |> Seq.choose Sym.asDef
@@ -215,13 +215,13 @@ module Oracle =
                 |> Seq.toArray
 
             if Array.isEmpty titles then [| Doc |] else titles
-        | Ref.CrossRef (CrossSection (_, section))
-        | Ref.IntraRef (IntraSection section) ->
+        | Ref.CrossRef(CrossSection(_, section))
+        | Ref.IntraRef(IntraSection section) ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
             |> Seq.filter (Def.isHeaderWithId (Slug.toString section))
             |> Seq.toArray
-        | Ref.IntraRef (IntraLinkDef label) ->
+        | Ref.IntraRef(IntraLinkDef label) ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
             |> Seq.filter (Def.isLinkDefWithLabel label)
@@ -572,7 +572,7 @@ module Folder =
                     Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
 
             { data = data; lookup = lookup; conn = conn }
-        | SingleFile ({ doc = existingDoc } as folder) ->
+        | SingleFile({ doc = existingDoc } as folder) ->
             if newDoc.Id <> existingDoc.Id then
                 failwith
                     $"Updating a singleton folder with an unrelated doc: folder={existingDoc.RootPath}; doc={newDoc.RootPath}"

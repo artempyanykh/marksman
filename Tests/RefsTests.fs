@@ -153,7 +153,8 @@ module FileLinkTests =
         let folder =
             FakeFolder.Mk(
                 [ doc1; subDoc1; subSubDoc1; doc2; subDoc2 ],
-                { Config.Config.Default with complWikiStyle = Some Config.FilePathStem }
+                { Config.Config.Default with
+                    complWikiStyle = Some Config.FilePathStem }
             )
 
         let actual =
@@ -505,7 +506,8 @@ module EncodingTests =
     let folder =
         FakeFolder.Mk(
             [ doc1; doc2; doc3 ],
-            { Config.Config.Default with complWikiStyle = Some Config.FilePathStem }
+            { Config.Config.Default with
+                complWikiStyle = Some Config.FilePathStem }
         )
 
     let exts = (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
@@ -513,14 +515,14 @@ module EncodingTests =
     let simplifyDest (dest: Dest) : string =
         match dest with
         | Dest.Doc fileLink -> fileLink.doc |> Doc.name
-        | Dest.Heading (docLink, node) ->
+        | Dest.Heading(docLink, node) ->
             let doc = DocLink.doc docLink |> Doc.name
             let head = node.text
             $"{doc} / {head}"
-        | Dest.LinkDef (doc, node) ->
+        | Dest.LinkDef(doc, node) ->
             let defName = MdLinkDef.label node.data
             $"{Doc.name doc} / {defName}"
-        | Dest.Tag (doc, node) ->
+        | Dest.Tag(doc, node) ->
             let tag = node.text
             $"{Doc.name doc} / {tag}"
 

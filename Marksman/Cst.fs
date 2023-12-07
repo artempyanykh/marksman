@@ -160,12 +160,12 @@ module Url =
 module MdLink =
     let fmt (ml: MdLink) : string =
         match ml with
-        | MdLink.IL (label, url, title) ->
+        | MdLink.IL(label, url, title) ->
             let fmtLabel = Node.fmtText label
             let fmtUrl = Option.map Node.fmtUrl url |> Option.defaultValue "∅"
             let fmtTitle = Option.map Node.fmtText title |> Option.defaultValue "∅"
             $"IL: label={fmtLabel}; url={fmtUrl}; title={fmtTitle}"
-        | MdLink.RF (text, label) ->
+        | MdLink.RF(text, label) ->
             let fmtText = Node.fmtText text
             let fmtLabel = Node.fmtText label
             $"RF: text={fmtText}; label={fmtLabel}"
@@ -178,7 +178,7 @@ module MdLink =
 
     let referenceLabel =
         function
-        | MdLink.RF (_, label)
+        | MdLink.RF(_, label)
         | MdLink.RC label
         | MdLink.RS label -> Some label
         | MdLink.IL _ -> None
@@ -369,7 +369,7 @@ module Element =
             Ast.Element.WL { doc = doc; heading = heading } |> Some
         | ML { data = mdLink } ->
             match mdLink with
-            | MdLink.IL (text, url, _) ->
+            | MdLink.IL(text, url, _) ->
                 let urlNode = url |>> Url.ofUrlNode
 
                 let url =
@@ -381,7 +381,7 @@ module Element =
 
                 Ast.Element.ML { text = text.text; url = url; anchor = anchor }
                 |> Some
-            | MdLink.RF (text, label) -> Ast.Element.MR(Ast.Full(text.text, label.text)) |> Some
+            | MdLink.RF(text, label) -> Ast.Element.MR(Ast.Full(text.text, label.text)) |> Some
             | MdLink.RC label -> Ast.Element.MR(Ast.Collapsed(label.text)) |> Some
             | MdLink.RS label -> Ast.Element.MR(Ast.Shortcut(label.text)) |> Some
         | MLD { data = mdDef } -> MdLinkDef.toAbstract mdDef |> Ast.Element.MLD |> Some

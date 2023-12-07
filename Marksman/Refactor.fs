@@ -36,7 +36,7 @@ let groupByFirst pairs =
     Seq.groupBy fst pairs
     |> Seq.map (fun (key, value) -> key, Set.ofSeq (Seq.map snd value) |> Set.toSeq)
 
-let groupByFirst2 (triples: seq<'a * 'b * 'c>) : seq<'a * seq<'b * 'c>> =
+let groupByFirst2 (triples: seq<'A * 'B * 'C>) : seq<'A * seq<'B * 'C>> =
     let grouped = Seq.groupBy (fun (k, _, _) -> k) triples
     let takeUnique23 triples = triples |> Seq.map (fun (_, b, c) -> b, c) |> Seq.distinct
 
@@ -95,16 +95,16 @@ let renameHeadingLink
                 failwith $"Internal error: heading without a symbol: {srcHeading}")
 
         match targetDoc.Structure |> Structure.tryFindSymbolForConcrete targetEl with
-        | Some (Sym.Ref (CrossRef (CrossDoc docName))) ->
+        | Some(Sym.Ref(CrossRef(CrossDoc docName))) ->
             let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
             linkKind = FileLinkKind.Title && Slug.equalStrings srcId docName
-        | Some (Sym.Ref (CrossRef (CrossSection (docName, sectionName)))) ->
+        | Some(Sym.Ref(CrossRef(CrossSection(docName, sectionName)))) ->
             if Element.isTitle srcHeading then
                 let linkKind = FileLinkKind.detect complStyle targetDoc.Id docName srcDoc
                 linkKind = FileLinkKind.Title && Slug.equalStrings srcId docName
             else
                 Slug.ofString srcId = sectionName
-        | Some (Sym.Ref (IntraRef (IntraSection sectionName))) -> Slug.ofString srcId = sectionName
+        | Some(Sym.Ref(IntraRef(IntraSection sectionName))) -> Slug.ofString srcId = sectionName
         | _ -> false
 
     if shouldRename then
@@ -115,7 +115,7 @@ let renameHeadingLink
             toEdit
             |> Option.map (fun node ->
                 { Range = node.range; NewText = WikiEncoded.encodeAsString newTitle })
-        | ML { data = MdLink.IL (_, url, _) } ->
+        | ML { data = MdLink.IL(_, url, _) } ->
             let docUrl = url |> Option.map Url.ofUrlNode
 
             let toEdit =
@@ -159,7 +159,7 @@ let combineDocumentEdits (e1s: array<TextDocumentEdit>) (e2s: array<TextDocument
 
     let mutable larger = larger
 
-    for KeyValue (doc, additionalEdits) in smaller do
+    for KeyValue(doc, additionalEdits) in smaller do
         let existing = larger |> Map.tryFind doc |> Option.defaultValue [||]
         let combined = Array.append existing additionalEdits
         larger <- Map.add doc combined larger
@@ -178,7 +178,7 @@ let rename
     : RenameResult =
     match Cst.elementAtPos pos (Doc.cst srcDoc) with
     | None -> Skip
-    | Some (ML link as el) ->
+    | Some(ML link as el) ->
         // Reference Links
         match MdLink.referenceLabel link.data with
         | None -> Skip
@@ -198,7 +198,7 @@ let rename
                 Edit workspaceEdit
             else
                 Skip
-    | Some (MLD { data = def } as el) ->
+    | Some(MLD { data = def } as el) ->
         if not (isValidLabel newName) then
             Error $"Not a valid label name: {newName}"
         else if (MdLinkDef.label def).range.ContainsInclusive pos then
@@ -213,7 +213,7 @@ let rename
             Edit workspaceEdit
         else
             Skip
-    | Some (H { data = heading } as el) ->
+    | Some(H { data = heading } as el) ->
         if not (isValidLabel newName) then
             Error $"Not a valid title: {newName}"
         else if heading.title.range.ContainsInclusive pos then
@@ -245,16 +245,16 @@ let rename
 let renameRange (srcDoc: Doc) (pos: Position) : option<Range> =
     match Cst.elementAtPos pos (Doc.cst srcDoc) with
     | None -> None
-    | Some (ML link) ->
+    | Some(ML link) ->
         match MdLink.referenceLabel link.data with
         | None -> None
         | Some label -> if label.range.ContainsInclusive pos then Some label.range else None
-    | Some (MLD { data = def }) ->
+    | Some(MLD { data = def }) ->
         if (MdLinkDef.label def).range.ContainsInclusive pos then
             Some (MdLinkDef.label def).range
         else
             None
-    | Some (H { data = heading }) ->
+    | Some(H { data = heading }) ->
         if heading.title.range.ContainsInclusive pos then
             Some heading.title.range
         else

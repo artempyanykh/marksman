@@ -147,7 +147,7 @@ module State =
     let tryFindDoc (uri: UriWith<AbsPath>) (state: State) : option<Doc> =
         match tryFindFolderAndDoc uri state with
         | None -> None
-        | Some (_, doc) -> Some doc
+        | Some(_, doc) -> Some doc
 
     let updateFoldersFromLsp
         (added: WorkspaceFolder[])

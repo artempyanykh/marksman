@@ -7,7 +7,7 @@ open Marksman.State
 open Marksman.Workspace
 
 let abort (stateOpt: Option<State>) (ex: exn) =
-    let marksmanAssembly = typeof<State>.Assembly.GetName ()
+    let marksmanAssembly = typeof<State>.Assembly.GetName()
 
     let clientDebugOut ({ Name = name; Version = versionOpt }: ClientInfo) =
         eprintf $"Client: {name}"

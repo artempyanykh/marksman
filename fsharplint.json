@@ -23,7 +23,7 @@
   "patternMatchClauseIndentation": { "enabled": false },
   "patternMatchExpressionIndentation": { "enabled": false },
   "recursiveAsyncFunction": { "enabled": false },
-  "redundantNewKeyword": { "enabled": true },
+  "redundantNewKeyword": { "enabled": false },
   "nestedStatements": {
     "enabled": false,
     "config": {

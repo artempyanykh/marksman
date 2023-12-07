@@ -36,7 +36,7 @@ module Index =
                 if not (headingsBySlug.ContainsKey(slug)) then
                     headingsBySlug[slug] <- ResizeArray()
 
-                headingsBySlug[ slug ].Add(hn)
+                headingsBySlug[slug].Add(hn)
 
                 if Heading.isTitle hn.data then
                     titles.Add(hn)
@@ -50,7 +50,7 @@ module Index =
 
         let headingsBySlug =
             seq {
-                for KeyValue (slug, headings) in headingsBySlug do
+                for KeyValue(slug, headings) in headingsBySlug do
                     yield slug, headings |> List.ofSeq
             }
             |> Map.ofSeq

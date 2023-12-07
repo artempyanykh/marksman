@@ -90,7 +90,7 @@ module MMap =
 
     let toSeq (MMap m) =
         seq {
-            for KeyValue (k, vs) in m do
+            for KeyValue(k, vs) in m do
                 for v in vs do
                     yield (k, v)
         }

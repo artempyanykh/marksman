@@ -442,7 +442,7 @@ module Markdown =
         |> Array.fold processEl []
         |> List.iter (fun (idx, _) -> scopeMap.Add(idx, text.EndRange().Start))
         // Update header scopes
-        for KeyValue (headerIdx, scopeEnd) in scopeMap do
+        for KeyValue(headerIdx, scopeEnd) in scopeMap do
             match outputElements[headerIdx] with
             | H header ->
                 let newScope = { Start = header.data.scope.Start; End = scopeEnd }
@@ -453,7 +453,7 @@ module Markdown =
 
         let childMap =
             seq {
-                for KeyValue (parentId, childIds) in childMap do
+                for KeyValue(parentId, childIds) in childMap do
                     let children =
                         childIds.ToArray() |> Array.map (fun i -> outputElements[i])
 

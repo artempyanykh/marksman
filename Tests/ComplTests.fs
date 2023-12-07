@@ -281,7 +281,13 @@ module Candidates =
         let fmtItem (ci: CompletionItem) =
             let filterText = ci.FilterText |> Option.defaultValue "<no-filter>"
 
+            let asTextEdit =
+                function
+                | First te -> te
+                | Second _ -> failwith "Expected a TextEdit"
+
             ci.TextEdit
+            |> Option.map asTextEdit
             |> Option.map (fun te -> $"{te.Range.DebuggerDisplay}: {te.NewText} / {filterText}")
             |> Option.defaultValue "<no-edit>"
 

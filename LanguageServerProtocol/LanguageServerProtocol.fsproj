@@ -28,7 +28,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <!-- Explicitly pinning our FSharp.Core to 6.0.0 so that consumers can use _any_ 6.x version. -->
-    <PackageReference Update="FSharp.Core" Version="6.0.0" />
-    <PackageReference Include="StreamJsonRpc" Version="2.10.44" />
+    <!--    <PackageReference Update="FSharp.Core" Version="6.0.0" />-->
+    <PackageReference Include="StreamJsonRpc" Version="2.16.36" />
   </ItemGroup>
 </Project>

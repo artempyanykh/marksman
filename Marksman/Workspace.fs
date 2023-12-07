@@ -1,16 +1,10 @@
 module Marksman.Workspace
 
-
-open FSharpPlus.Operators
-
 open Marksman.Config
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
 open Marksman.Folder
-
-open Microsoft.FSharp.Core
-
 
 type Workspace = { config: option<Config>; folders: Map<FolderId, Folder> }
 

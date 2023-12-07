@@ -96,7 +96,7 @@ module Doc =
 
         // Sanity checking
         match newVersion, doc.version with
-        | Some newVersion, Some curVersion when curVersion > 0 ->
+        | newVersion, Some curVersion when curVersion > 0 ->
             let expectedVersion = curVersion + change.ContentChanges.Length
 
             if expectedVersion <> newVersion then
@@ -110,7 +110,7 @@ module Doc =
 
         let newText = applyTextChange change.ContentChanges doc.text
 
-        { withText exts newText doc with version = newVersion }
+        { withText exts newText doc with version = Some newVersion }
 
     let fromLsp exts (folderId: FolderId) (item: TextDocumentItem) : Doc =
         let path = LocalPath.ofUri item.Uri

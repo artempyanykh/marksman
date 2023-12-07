@@ -82,6 +82,9 @@ type ILspServer =
   abstract member TextDocumentPrepareRename: PrepareRenameParams -> AsyncLspResult<PrepareRenameResult option>
 
 
+  /// The go to declaration request is sent from the client to the server to resolve the declaration location
+  /// of a symbol at a given text document position
+  abstract member TextDocumentDeclaration: TextDocumentPositionParams -> AsyncLspResult<GotoResult option>
 
   /// The goto definition request is sent from the client to the server to resolve the definition location of
   /// a symbol at a given text document position.
@@ -90,7 +93,7 @@ type ILspServer =
 
   /// The references request is sent from the client to the server to resolve project-wide references for
   /// the symbol denoted by the given text document position.
-  abstract member TextDocumentReferences: ReferenceParams -> AsyncLspResult<Location [] option>
+  abstract member TextDocumentReferences: ReferenceParams -> AsyncLspResult<Location[] option>
 
 
   /// The document highlight request is sent from the client to the server to resolve a document highlights
@@ -101,12 +104,12 @@ type ILspServer =
   /// the first one is allowed to be more fuzzy. Symbol matches usually have a DocumentHighlightKind of Read
   /// or Write whereas fuzzy or textual matches use Text as the kind.
   abstract member TextDocumentDocumentHighlight:
-    TextDocumentPositionParams -> AsyncLspResult<DocumentHighlight [] option>
+    TextDocumentPositionParams -> AsyncLspResult<DocumentHighlight[] option>
 
 
   /// The document links request is sent from the client to the server to request the location of links
   /// in a document.
-  abstract member TextDocumentDocumentLink: DocumentLinkParams -> AsyncLspResult<DocumentLink [] option>
+  abstract member TextDocumentDocumentLink: DocumentLinkParams -> AsyncLspResult<DocumentLink[] option>
 
 
   /// The goto type definition request is sent from the client to the server to resolve the type definition
@@ -137,7 +140,7 @@ type ILspServer =
 
   /// The code lens request is sent from the client to the server to compute code lenses for a given
   /// text document.
-  abstract member TextDocumentCodeLens: CodeLensParams -> AsyncLspResult<CodeLens [] option>
+  abstract member TextDocumentCodeLens: CodeLensParams -> AsyncLspResult<CodeLens[] option>
 
 
   /// The code lens resolve request is sent from the client to the server to resolve the command for
@@ -157,31 +160,47 @@ type ILspServer =
 
   /// The document color request is sent from the client to the server to list all color references
   /// found in a given text document. Along with the range, a color value in RGB is returned.
-  abstract member TextDocumentDocumentColor: DocumentColorParams -> AsyncLspResult<ColorInformation []>
+  abstract member TextDocumentDocumentColor: DocumentColorParams -> AsyncLspResult<ColorInformation[]>
 
   /// The color presentation request is sent from the client to the server to obtain a list of
   /// presentations for a color value at a given location. Clients can use the result to
-  abstract member TextDocumentColorPresentation: ColorPresentationParams -> AsyncLspResult<ColorPresentation []>
+  abstract member TextDocumentColorPresentation: ColorPresentationParams -> AsyncLspResult<ColorPresentation[]>
 
 
   /// The document formatting request is sent from the client to the server to format a whole document.
-  abstract member TextDocumentFormatting: DocumentFormattingParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentFormatting: DocumentFormattingParams -> AsyncLspResult<TextEdit[] option>
 
   /// The document range formatting request is sent from the client to the server to format a given
   /// range in a document.
-  abstract member TextDocumentRangeFormatting: DocumentRangeFormattingParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentRangeFormatting: DocumentRangeFormattingParams -> AsyncLspResult<TextEdit[] option>
 
 
   /// The document on type formatting request is sent from the client to the server to format parts
   /// of the document during typing.
-  abstract member TextDocumentOnTypeFormatting: DocumentOnTypeFormattingParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentOnTypeFormatting: DocumentOnTypeFormattingParams -> AsyncLspResult<TextEdit[] option>
 
 
   /// The document symbol request is sent from the client to the server to return a flat list of all symbols
   /// found in a given text document. Neither the symbol’s location range nor the symbol’s container name
   /// should be used to infer a hierarchy.
   abstract member TextDocumentDocumentSymbol:
-    DocumentSymbolParams -> AsyncLspResult<U2<SymbolInformation [], DocumentSymbol []> option>
+    DocumentSymbolParams -> AsyncLspResult<U2<SymbolInformation[], DocumentSymbol[]> option>
+
+
+  /// The textDocument/moniker request is sent from the client to the server to get the symbol monikers for a
+  /// given text document position. An array of Moniker types is returned as response to indicate possible
+  /// monikers at the given location. If no monikers can be calculated, an empty array or null should be
+  /// returned.
+  abstract member TextDocumentMoniker: TextDocumentPositionParams -> AsyncLspResult<Moniker[] option>
+
+
+  /// The linked editing request is sent from the client to the server to return for a given position in a document the
+  /// range of the symbol at the position and all ranges that have the same content. Optionally a word pattern can be
+  /// returned to describe valid contents. A rename to one of the ranges can be applied to all other ranges if the new
+  /// content is valid. If no result-specific word pattern is provided, the word pattern from the client’s language
+  /// configuration is used.
+  abstract member TextDocumentLinkedEditingRange:
+    TextDocumentPositionParams -> AsyncLspResult<LinkedEditingRanges option>
 
 
   /// The watched files notification is sent from the client to the server when the client detects changes
@@ -193,7 +212,7 @@ type ILspServer =
 
   /// The `workspace/didChangeWorkspaceFolders` notification is sent from the client to the server to inform
   /// the server about workspace folder configuration changes. The notification is sent by default if both
-  /// *ServerCapabilities/workspace/workspaceFolders* and *ClientCapabilities/workapce/workspaceFolders* are
+  /// *ServerCapabilities/workspace/workspaceFolders* and *ClientCapabilities/workspace/workspaceFolders* are
   /// true; or if the server has registered to receive this notification it first.
   abstract member WorkspaceDidChangeWorkspaceFolders: DidChangeWorkspaceFoldersParams -> Async<unit>
 
@@ -236,8 +255,12 @@ type ILspServer =
 
   /// The workspace symbol request is sent from the client to the server to list project-wide symbols matching
   /// the query string.
-  abstract member WorkspaceSymbol: WorkspaceSymbolParams -> AsyncLspResult<SymbolInformation [] option>
+  abstract member WorkspaceSymbol:
+    WorkspaceSymbolParams -> AsyncLspResult<U2<SymbolInformation[], WorkspaceSymbol[]> option>
 
+
+  /// The request is sent from the client to the server to resolve additional information for a given workspace symbol.
+  abstract member WorkspaceSymbolResolve: WorkspaceSymbol -> AsyncLspResult<WorkspaceSymbol>
 
 
   /// The `workspace/executeCommand` request is sent from the client to the server to trigger command execution
@@ -255,7 +278,7 @@ type ILspServer =
   /// The request can return an array of TextEdits which will be applied to the text document before it is saved.
   /// Please note that clients might drop results if computing the text edits took too long or if a server
   /// constantly fails on this request. This is done to keep the save fast and reliable.
-  abstract member TextDocumentWillSaveWaitUntil: WillSaveTextDocumentParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentWillSaveWaitUntil: WillSaveTextDocumentParams -> AsyncLspResult<TextEdit[] option>
 
 
   /// The document save notification is sent from the client to the server when the document was saved
@@ -287,7 +310,7 @@ type ILspServer =
 
   /// The inlay hints request is sent from the client to the server to compute inlay hints for a given [text document, range] tuple
   ///  that may be rendered in the editor in place with other text.
-  abstract member TextDocumentInlayHint: InlayHintParams -> AsyncLspResult<InlayHint [] option>
+  abstract member TextDocumentInlayHint: InlayHintParams -> AsyncLspResult<InlayHint[] option>
 
   /// The request is sent from the client to the server to resolve additional information for a given inlay hint.
   /// This is usually used to compute the `tooltip`, `location` or `command` properties of a inlay hint’s label part
@@ -299,6 +322,69 @@ type ILspServer =
   /// ```
   /// then an inlay hint with a label part without a location needs to be resolved using the `inlayHint/resolve` request before it can be used.
   abstract member InlayHintResolve: InlayHint -> AsyncLspResult<InlayHint>
+
+  /// The `window/workDoneProgress/cancel` notification is sent from the client to the server to cancel a
+  /// progress initiated on the server side using the `window/workDoneProgress/create`. The progress need
+  /// not be marked as cancellable to be cancelled and a client may cancel a progress for any number of
+  /// reasons: in case of error, reloading a workspace etc.
+  abstract member WorkDoneProgressCancel: WorkDoneProgressCancelParams -> Async<unit>
+
+  /// The inline value request is sent from the client to the server to compute inline values for a given text document
+  /// that may be rendered in the editor at the end of lines.
+  abstract member TextDocumentInlineValue: InlineValueParams -> AsyncLspResult<InlineValue[] option>
+
+  /// The call hierarchy request is sent from the client to the server to return a call hierarchy for the
+  /// language element of given text document positions. The call hierarchy requests are executed in two
+  /// steps:
+  /// 1. first a call hierarchy item is resolved for the given text document position
+  /// 2. for a call hierarchy item the incoming or outgoing call hierarchy items are resolved.
+  abstract member TextDocumentPrepareCallHierarchy:
+    CallHierarchyPrepareParams -> AsyncLspResult<CallHierarchyItem[] option>
+
+  /// The request is sent from the client to the server to resolve incoming calls for a given call hierarchy
+  /// item. The request doesn't define its own client and server capabilities. It is only issued if a server
+  /// registers for the `textDocument/prepareCallHierarchy` request.
+  abstract member CallHierarchyIncomingCalls:
+    CallHierarchyIncomingCallsParams -> AsyncLspResult<CallHierarchyIncomingCall[] option>
+
+  /// The request is sent from the client to the server to resolve outgoing calls for a given call hierarchy
+  /// item. The request doesn't define its own  client and server capabilities. It is only issued if a server
+  /// registers for the `textDocument/prepareCallHierarchy` request.
+  abstract member CallHierarchyOutgoingCalls:
+    CallHierarchyOutgoingCallsParams -> AsyncLspResult<CallHierarchyOutgoingCall[] option>
+
+  /// The type hierarchy request is sent from the client to the server to return a type hierarchy for the
+  /// language element of given text document positions. Will return `null` if the server couldn't infer a
+  /// valid type from the position. The type hierarchy requests are executed in two steps:
+  /// 1. first a type hierarchy item is prepared for the given text document position.
+  /// 2. for a type hierarchy item the supertype or subtype type hierarchy items are resolved.
+  abstract member TextDocumentPrepareTypeHierarchy:
+    TypeHierarchyPrepareParams -> AsyncLspResult<TypeHierarchyItem[] option>
+
+  /// The request is sent from the client to the server to resolve the supertype for a given type hierarchy
+  /// item. Will return `null` is the serve couldn't infer a valid type from `item` in the params. The request
+  /// doesn't defines its own client and server capabilities. It is only issued if a server registers for the
+  /// `textDocument/prepareTypeHierarchy` request.
+  abstract member TypeHierarchySupertypes: TypeHierarchySupertypesParams -> AsyncLspResult<TypeHierarchyItem[] option>
+
+  /// The request is sent from the client to the server to resolve the supertype for a given type hierarchy
+  /// item. Will return `null` is the serve couldn't infer a valid type from `item` in the params. The request
+  /// doesn't defines its own client and server capabilities. It is only issued if a server registers for the
+  /// `textDocument/prepareTypeHierarchy` request.
+  abstract member TypeHierarchySubtypes: TypeHierarchySubtypesParams -> AsyncLspResult<TypeHierarchyItem[] option>
+
+  /// The text document diagnostic request is sent from the client to the server to ask the server to compute
+  /// the diagnostics for a given document. As with other pull requests the server is asked to compute the
+  /// diagnostics for the currently synced version of the document.
+  abstract member TextDocumentDiagnostic: DocumentDiagnosticParams -> AsyncLspResult<DocumentDiagnosticReport>
+
+  /// The workspace diagnostic request is sent from the client to the server to ask the server to compute
+  /// workspace wide diagnostics which previously where pushed from the server to the client. In contrast to
+  /// the document diagnostic request the workspace request can be long running and is not bound to a specific
+  /// workspace or document state. If the client supports streaming for the workspace diagnostic pull it is
+  /// legal to provide a document diagnostic report multiple times for the same document URI. The last one
+  /// reported will win over previous reports.
+  abstract member WorkspaceDiagnostic: WorkspaceDiagnosticParams -> AsyncLspResult<WorkspaceDiagnosticReport>
 
 [<AbstractClass>]
 type LspServer() =
@@ -385,6 +471,12 @@ type LspServer() =
   default __.TextDocumentPrepareRename(_) =
     AsyncLspResult.success (Some(PrepareRenameResult.Default { DefaultBehavior = true }))
 
+  /// The go to declaration request is sent from the client to the server to resolve the declaration location
+  /// of a symbol at a given text document position.
+  abstract member TextDocumentDeclaration: TextDocumentPositionParams -> AsyncLspResult<GotoResult option>
+
+  default __.TextDocumentDeclaration(_) = notImplemented
+
   /// The goto definition request is sent from the client to the server to resolve the definition location of
   /// a symbol at a given text document position.
   abstract member TextDocumentDefinition: TextDocumentPositionParams -> AsyncLspResult<GotoResult option>
@@ -393,7 +485,7 @@ type LspServer() =
 
   /// The references request is sent from the client to the server to resolve project-wide references for
   /// the symbol denoted by the given text document position.
-  abstract member TextDocumentReferences: ReferenceParams -> AsyncLspResult<Location [] option>
+  abstract member TextDocumentReferences: ReferenceParams -> AsyncLspResult<Location[] option>
 
   default __.TextDocumentReferences(_) = notImplemented
 
@@ -405,13 +497,13 @@ type LspServer() =
   /// the first one is allowed to be more fuzzy. Symbol matches usually have a DocumentHighlightKind of Read
   /// or Write whereas fuzzy or textual matches use Text as the kind.
   abstract member TextDocumentDocumentHighlight:
-    TextDocumentPositionParams -> AsyncLspResult<DocumentHighlight [] option>
+    TextDocumentPositionParams -> AsyncLspResult<DocumentHighlight[] option>
 
   default __.TextDocumentDocumentHighlight(_) = notImplemented
 
   /// The document links request is sent from the client to the server to request the location of links
   /// in a document.
-  abstract member TextDocumentDocumentLink: DocumentLinkParams -> AsyncLspResult<DocumentLink [] option>
+  abstract member TextDocumentDocumentLink: DocumentLinkParams -> AsyncLspResult<DocumentLink[] option>
 
   default __.TextDocumentDocumentLink(_) = notImplemented
 
@@ -447,7 +539,7 @@ type LspServer() =
 
   /// The code lens request is sent from the client to the server to compute code lenses for a given
   /// text document.
-  abstract member TextDocumentCodeLens: CodeLensParams -> AsyncLspResult<CodeLens [] option>
+  abstract member TextDocumentCodeLens: CodeLensParams -> AsyncLspResult<CodeLens[] option>
 
   default __.TextDocumentCodeLens(_) = notImplemented
 
@@ -471,29 +563,29 @@ type LspServer() =
 
   /// The document color request is sent from the client to the server to list all color references
   /// found in a given text document. Along with the range, a color value in RGB is returned.
-  abstract member TextDocumentDocumentColor: DocumentColorParams -> AsyncLspResult<ColorInformation []>
+  abstract member TextDocumentDocumentColor: DocumentColorParams -> AsyncLspResult<ColorInformation[]>
 
   default __.TextDocumentDocumentColor(_) = notImplemented
 
   /// The color presentation request is sent from the client to the server to obtain a list of
   /// presentations for a color value at a given location. Clients can use the result to
-  abstract member TextDocumentColorPresentation: ColorPresentationParams -> AsyncLspResult<ColorPresentation []>
+  abstract member TextDocumentColorPresentation: ColorPresentationParams -> AsyncLspResult<ColorPresentation[]>
 
   default __.TextDocumentColorPresentation(_) = notImplemented
 
   /// The document formatting request is sent from the client to the server to format a whole document.
-  abstract member TextDocumentFormatting: DocumentFormattingParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentFormatting: DocumentFormattingParams -> AsyncLspResult<TextEdit[] option>
   default __.TextDocumentFormatting(_) = notImplemented
 
   /// The document range formatting request is sent from the client to the server to format a given
   /// range in a document.
-  abstract member TextDocumentRangeFormatting: DocumentRangeFormattingParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentRangeFormatting: DocumentRangeFormattingParams -> AsyncLspResult<TextEdit[] option>
 
   default __.TextDocumentRangeFormatting(_) = notImplemented
 
   /// The document on type formatting request is sent from the client to the server to format parts
   /// of the document during typing.
-  abstract member TextDocumentOnTypeFormatting: DocumentOnTypeFormattingParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentOnTypeFormatting: DocumentOnTypeFormattingParams -> AsyncLspResult<TextEdit[] option>
 
   default __.TextDocumentOnTypeFormatting(_) = notImplemented
 
@@ -501,9 +593,27 @@ type LspServer() =
   /// found in a given text document. Neither the symbol’s location range nor the symbol’s container name
   /// should be used to infer a hierarchy.
   abstract member TextDocumentDocumentSymbol:
-    DocumentSymbolParams -> AsyncLspResult<U2<SymbolInformation [], DocumentSymbol []> option>
+    DocumentSymbolParams -> AsyncLspResult<U2<SymbolInformation[], DocumentSymbol[]> option>
 
   default __.TextDocumentDocumentSymbol(_) = notImplemented
+
+  /// The textDocument/moniker request is sent from the client to the server to get the symbol monikers for a
+  /// given text document position. An array of Moniker types is returned as response to indicate possible
+  /// monikers at the given location. If no monikers can be calculated, an empty array or null should be
+  /// returned.
+  abstract member TextDocumentMoniker: TextDocumentPositionParams -> AsyncLspResult<Moniker[] option>
+
+  default __.TextDocumentMoniker(_) = notImplemented
+
+  /// The linked editing request is sent from the client to the server to return for a given position in a document the
+  /// range of the symbol at the position and all ranges that have the same content. Optionally a word pattern can be
+  /// returned to describe valid contents. A rename to one of the ranges can be applied to all other ranges if the new
+  /// content is valid. If no result-specific word pattern is provided, the word pattern from the client’s language
+  /// configuration is used.
+  abstract member TextDocumentLinkedEditingRange:
+    TextDocumentPositionParams -> AsyncLspResult<LinkedEditingRanges option>
+
+  default __.TextDocumentLinkedEditingRange(_) = notImplemented
 
   /// The watched files notification is sent from the client to the server when the client detects changes
   /// to files watched by the language client. It is recommended that servers register for these file
@@ -515,7 +625,7 @@ type LspServer() =
 
   /// The `workspace/didChangeWorkspaceFolders` notification is sent from the client to the server to inform
   /// the server about workspace folder configuration changes. The notification is sent by default if both
-  /// *ServerCapabilities/workspace/workspaceFolders* and *ClientCapabilities/workapce/workspaceFolders* are
+  /// *ServerCapabilities/workspace/workspaceFolders* and *ClientCapabilities/workspace/workspaceFolders* are
   /// true; or if the server has registered to receive this notification it first.
   abstract member WorkspaceDidChangeWorkspaceFolders: DidChangeWorkspaceFoldersParams -> Async<unit>
 
@@ -566,9 +676,15 @@ type LspServer() =
 
   /// The workspace symbol request is sent from the client to the server to list project-wide symbols matching
   /// the query string.
-  abstract member WorkspaceSymbol: WorkspaceSymbolParams -> AsyncLspResult<SymbolInformation [] option>
+  abstract member WorkspaceSymbol:
+    WorkspaceSymbolParams -> AsyncLspResult<U2<SymbolInformation[], WorkspaceSymbol[]> option>
 
   default __.WorkspaceSymbol(_) = notImplemented
+
+  /// The request is sent from the client to the server to resolve additional information for a given workspace symbol.
+  abstract member WorkspaceSymbolResolve: WorkspaceSymbol -> AsyncLspResult<WorkspaceSymbol>
+
+  default __.WorkspaceSymbolResolve _ = notImplemented
 
   /// The `workspace/executeCommand` request is sent from the client to the server to trigger command execution
   /// on the server. In most cases the server creates a `WorkspaceEdit` structure and applies the changes to the
@@ -587,7 +703,7 @@ type LspServer() =
   /// The request can return an array of TextEdits which will be applied to the text document before it is saved.
   /// Please note that clients might drop results if computing the text edits took too long or if a server
   /// constantly fails on this request. This is done to keep the save fast and reliable.
-  abstract member TextDocumentWillSaveWaitUntil: WillSaveTextDocumentParams -> AsyncLspResult<TextEdit [] option>
+  abstract member TextDocumentWillSaveWaitUntil: WillSaveTextDocumentParams -> AsyncLspResult<TextEdit[] option>
 
   default __.TextDocumentWillSaveWaitUntil(_) = notImplemented
 
@@ -629,7 +745,7 @@ type LspServer() =
 
   /// The inlay hints request is sent from the client to the server to compute inlay hints for a given [text document, range] tuple
   ///  that may be rendered in the editor in place with other text.
-  abstract member TextDocumentInlayHint: InlayHintParams -> AsyncLspResult<InlayHint [] option>
+  abstract member TextDocumentInlayHint: InlayHintParams -> AsyncLspResult<InlayHint[] option>
 
   default __.TextDocumentInlayHint(_) = notImplemented
 
@@ -646,6 +762,89 @@ type LspServer() =
 
   default __.InlayHintResolve(_) = notImplemented
 
+  /// The `window/workDoneProgress/cancel` notification is sent from the client to the server to cancel a
+  /// progress initiated on the server side using the `window/workDoneProgress/create`. The progress need
+  /// not be marked as cancellable to be cancelled and a client may cancel a progress for any number of
+  /// reasons: in case of error, reloading a workspace etc.
+  abstract member WorkDoneProgressCancel: WorkDoneProgressCancelParams -> Async<unit>
+
+  default __.WorkDoneProgressCancel(_) = ignoreNotification
+
+  /// The inline value request is sent from the client to the server to compute inline values for a given text document
+  /// that may be rendered in the editor at the end of lines.
+  abstract member TextDocumentInlineValue: InlineValueParams -> AsyncLspResult<InlineValue[] option>
+
+  default __.TextDocumentInlineValue(_) = notImplemented
+
+  /// The call hierarchy request is sent from the client to the server to return a call hierarchy for the
+  /// language element of given text document positions. The call hierarchy requests are executed in two
+  /// steps:
+  /// 1. first a call hierarchy item is resolved for the given text document position
+  /// 2. for a call hierarchy item the incoming or outgoing call hierarchy items are resolved.
+  abstract member TextDocumentPrepareCallHierarchy:
+    CallHierarchyPrepareParams -> AsyncLspResult<CallHierarchyItem[] option>
+
+  default __.TextDocumentPrepareCallHierarchy(_) = notImplemented
+
+  /// The request is sent from the client to the server to resolve incoming calls for a given call hierarchy
+  /// item. The request doesn't define its own client and server capabilities. It is only issued if a server
+  /// registers for the `textDocument/prepareCallHierarchy` request.
+  abstract member CallHierarchyIncomingCalls:
+    CallHierarchyIncomingCallsParams -> AsyncLspResult<CallHierarchyIncomingCall[] option>
+
+  default __.CallHierarchyIncomingCalls(_) = notImplemented
+
+  /// The request is sent from the client to the server to resolve outgoing calls for a given call hierarchy
+  /// item. The request doesn't define its own  client and server capabilities. It is only issued if a server
+  /// registers for the `textDocument/prepareCallHierarchy` request.
+  abstract member CallHierarchyOutgoingCalls:
+    CallHierarchyOutgoingCallsParams -> AsyncLspResult<CallHierarchyOutgoingCall[] option>
+
+  default __.CallHierarchyOutgoingCalls(_) = notImplemented
+
+  /// The type hierarchy request is sent from the client to the server to return a type hierarchy for the
+  /// language element of given text document positions. Will return `null` if the server couldn't infer a
+  /// valid type from the position. The type hierarchy requests are executed in two steps:
+  /// 1. first a type hierarchy item is prepared for the given text document position.
+  /// 2. for a type hierarchy item the supertype or subtype type hierarchy items are resolved.
+  abstract member TextDocumentPrepareTypeHierarchy:
+    TypeHierarchyPrepareParams -> AsyncLspResult<TypeHierarchyItem[] option>
+
+  default __.TextDocumentPrepareTypeHierarchy(_) = notImplemented
+
+  /// The request is sent from the client to the server to resolve the supertype for a given type hierarchy
+  /// item. Will return `null` is the serve couldn't infer a valid type from `item` in the params. The request
+  /// doesn't defines its own client and server capabilities. It is only issued if a server registers for the
+  /// `textDocument/prepareTypeHierarchy` request.
+  abstract member TypeHierarchySupertypes: TypeHierarchySupertypesParams -> AsyncLspResult<TypeHierarchyItem[] option>
+
+  default __.TypeHierarchySupertypes(_) = notImplemented
+
+  /// The request is sent from the client to the server to resolve the supertype for a given type hierarchy
+  /// item. Will return `null` is the serve couldn't infer a valid type from `item` in the params. The request
+  /// doesn't defines its own client and server capabilities. It is only issued if a server registers for the
+  /// `textDocument/prepareTypeHierarchy` request.
+  abstract member TypeHierarchySubtypes: TypeHierarchySubtypesParams -> AsyncLspResult<TypeHierarchyItem[] option>
+
+  default __.TypeHierarchySubtypes(_) = notImplemented
+
+  /// The text document diagnostic request is sent from the client to the server to ask the server to compute
+  /// the diagnostics for a given document. As with other pull requests the server is asked to compute the
+  /// diagnostics for the currently synced version of the document.
+  abstract member TextDocumentDiagnostic: DocumentDiagnosticParams -> AsyncLspResult<DocumentDiagnosticReport>
+
+  default __.TextDocumentDiagnostic(_) = notImplemented
+
+  /// The workspace diagnostic request is sent from the client to the server to ask the server to compute
+  /// workspace wide diagnostics which previously where pushed from the server to the client. In contrast to
+  /// the document diagnostic request the workspace request can be long running and is not bound to a specific
+  /// workspace or document state. If the client supports streaming for the workspace diagnostic pull it is
+  /// legal to provide a document diagnostic report multiple times for the same document URI. The last one
+  /// reported will win over previous reports.
+  abstract member WorkspaceDiagnostic: WorkspaceDiagnosticParams -> AsyncLspResult<WorkspaceDiagnosticReport>
+
+  default __.WorkspaceDiagnostic(_) = notImplemented
+
   interface ILspServer with
     member this.Dispose() = this.Dispose()
     member this.Initialize(p: InitializeParams) = this.Initialize(p)
@@ -659,6 +858,7 @@ type LspServer() =
     member this.CompletionItemResolve(p: CompletionItem) = this.CompletionItemResolve(p)
     member this.TextDocumentRename(p: RenameParams) = this.TextDocumentRename(p)
     member this.TextDocumentPrepareRename(p: PrepareRenameParams) = this.TextDocumentPrepareRename(p)
+    member this.TextDocumentDeclaration(p: TextDocumentPositionParams) = this.TextDocumentDeclaration(p)
     member this.TextDocumentDefinition(p: TextDocumentPositionParams) = this.TextDocumentDefinition(p)
     member this.TextDocumentReferences(p: ReferenceParams) = this.TextDocumentReferences(p)
     member this.TextDocumentDocumentHighlight(p: TextDocumentPositionParams) = this.TextDocumentDocumentHighlight(p)
@@ -677,6 +877,8 @@ type LspServer() =
     member this.TextDocumentRangeFormatting(p: DocumentRangeFormattingParams) = this.TextDocumentRangeFormatting(p)
     member this.TextDocumentOnTypeFormatting(p: DocumentOnTypeFormattingParams) = this.TextDocumentOnTypeFormatting(p)
     member this.TextDocumentDocumentSymbol(p: DocumentSymbolParams) = this.TextDocumentDocumentSymbol(p)
+    member this.TextDocumentMoniker(p: TextDocumentPositionParams) = this.TextDocumentMoniker(p)
+    member this.TextDocumentLinkedEditingRange(p: TextDocumentPositionParams) = this.TextDocumentLinkedEditingRange(p)
     member this.WorkspaceDidChangeWatchedFiles(p: DidChangeWatchedFilesParams) = this.WorkspaceDidChangeWatchedFiles(p)
 
     member this.WorkspaceDidChangeWorkspaceFolders(p: DidChangeWorkspaceFoldersParams) =
@@ -692,6 +894,7 @@ type LspServer() =
     member this.WorkspaceWillDeleteFiles(p: DeleteFilesParams) = this.WorkspaceWillDeleteFiles(p)
     member this.WorkspaceDidDeleteFiles(p: DeleteFilesParams) = this.WorkspaceDidDeleteFiles(p)
     member this.WorkspaceSymbol(p: WorkspaceSymbolParams) = this.WorkspaceSymbol(p)
+    member this.WorkspaceSymbolResolve(p: WorkspaceSymbol) = this.WorkspaceSymbolResolve(p)
     member this.WorkspaceExecuteCommand(p: ExecuteCommandParams) = this.WorkspaceExecuteCommand(p)
     member this.TextDocumentWillSave(p: WillSaveTextDocumentParams) = this.TextDocumentWillSave(p)
     member this.TextDocumentWillSaveWaitUntil(p: WillSaveTextDocumentParams) = this.TextDocumentWillSaveWaitUntil(p)
@@ -707,3 +910,19 @@ type LspServer() =
     member this.TextDocumentSemanticTokensRange(p: SemanticTokensRangeParams) = this.TextDocumentSemanticTokensRange(p)
     member this.TextDocumentInlayHint(p: InlayHintParams) = this.TextDocumentInlayHint(p)
     member this.InlayHintResolve(p: InlayHint) = this.InlayHintResolve(p)
+    member this.WorkDoneProgressCancel(p: WorkDoneProgressCancelParams) = this.WorkDoneProgressCancel(p)
+    member this.TextDocumentInlineValue(p: InlineValueParams) = this.TextDocumentInlineValue(p)
+
+    member this.TextDocumentPrepareCallHierarchy(p: CallHierarchyPrepareParams) =
+      this.TextDocumentPrepareCallHierarchy(p)
+
+    member this.CallHierarchyIncomingCalls(p: CallHierarchyIncomingCallsParams) = this.CallHierarchyIncomingCalls(p)
+    member this.CallHierarchyOutgoingCalls(p: CallHierarchyOutgoingCallsParams) = this.CallHierarchyOutgoingCalls(p)
+
+    member this.TextDocumentPrepareTypeHierarchy(p: TypeHierarchyPrepareParams) =
+      this.TextDocumentPrepareTypeHierarchy(p)
+
+    member this.TypeHierarchySupertypes(p: TypeHierarchySupertypesParams) = this.TypeHierarchySupertypes(p)
+    member this.TypeHierarchySubtypes(p: TypeHierarchySubtypesParams) = this.TypeHierarchySubtypes(p)
+    member this.TextDocumentDiagnostic(p: DocumentDiagnosticParams) = this.TextDocumentDiagnostic(p)
+    member this.WorkspaceDiagnostic(p: WorkspaceDiagnosticParams) = this.WorkspaceDiagnostic(p)

@@ -73,7 +73,7 @@ module DocTest =
             Doc.mk defaultMarkdownExtensions dummyPath None (Text.mkText "")
 
         let insertChange =
-            { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.Path; Version = Some 1 }
+            { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.Path; Version = 1 }
               ContentChanges =
                 [| { Range = Some(Range.Mk(0, 0, 0, 0))
                      RangeLength = Some 0

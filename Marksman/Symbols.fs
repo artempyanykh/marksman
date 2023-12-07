@@ -23,7 +23,9 @@ let tagToSymbolInfo (docUri: DocId) (t: Node<Tag>) : SymbolInformation =
         { Name = name
           Kind = kind
           Location = location
-          ContainerName = None }
+          ContainerName = None
+          Tags = None
+          Deprecated = None }
 
     sym
 
@@ -36,7 +38,9 @@ let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
         { Name = name
           Kind = kind
           Location = location
-          ContainerName = None }
+          ContainerName = None
+          Tags = None
+          Deprecated = None }
 
     sym
 
@@ -50,7 +54,9 @@ let rec tagToDocumentSymbol (t: Node<Tag>) : DocumentSymbol =
       Kind = kind
       Range = range
       SelectionRange = range
-      Children = None }
+      Children = None
+      Tags = None
+      Deprecated = None }
 
 let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : DocumentSymbol =
     let name = Heading.name h.data
@@ -81,7 +87,9 @@ let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : 
                   Kind = kind
                   Range = selectionRange
                   SelectionRange = selectionRange
-                  Children = None }
+                  Children = None
+                  Tags = None
+                  Deprecated = None }
 
             Some(Array.append [| thisHeading |] children)
         else
@@ -92,7 +100,9 @@ let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : 
       Kind = kind
       Range = range
       SelectionRange = selectionRange
-      Children = children }
+      Children = children
+      Tags = None
+      Deprecated = None }
 
 let docSymbols
     (hierarchy: bool)

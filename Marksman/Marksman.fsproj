@@ -65,7 +65,6 @@
         <Compile Include="Program.fs"/>
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.5"/>
         <PackageReference Include="FSharp.SystemCommandLine" Version="0.13.0-beta4"/>
         <PackageReference Include="FSharpPlus" Version="1.2.4"/>
         <PackageReference Include="Glob" Version="1.1.9"/>

@@ -8,7 +8,7 @@ open System.Text.RegularExpressions
 
 open Ionide.LanguageServerProtocol.Types
 
-let flip (f: 'a -> 'b -> 'c) : 'b -> 'a -> 'c = fun b a -> f a b
+let flip (f: 'A -> 'B -> 'C) : 'B -> 'A -> 'C = fun b a -> f a b
 
 let lineEndings = [| "\r\n"; "\n" |]
 
@@ -267,7 +267,7 @@ type Indented<'A> =
     | Indented of int * 'A
 
     override this.ToString() =
-        let (Indented (indent, inner)) = this
+        let (Indented(indent, inner)) = this
 
         let lines =
             seq {

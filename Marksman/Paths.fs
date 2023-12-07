@@ -109,8 +109,8 @@ and LocalPath =
 
     member this.Raw: string =
         match this with
-        | Abs (AbsPath str)
-        | Rel (RelPath str) -> str
+        | Abs(AbsPath str)
+        | Rel(RelPath str) -> str
 
 module AbsPath =
     let isRawWinAbsPath str = String.length str >= 2 && Char.IsLetter(str[0]) && str[1] = ':'

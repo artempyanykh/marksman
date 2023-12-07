@@ -33,12 +33,11 @@ type PartialElement =
 
     override this.ToString() =
         match this with
-        | PartialElement.WikiLink (dest, heading, range) ->
+        | PartialElement.WikiLink(dest, heading, range) ->
             $"WL {range}: dest={Node.fmtOptWiki dest}; heading={Node.fmtOptWiki heading}"
-        | PartialElement.InlineLink (text, path, anchor, range) ->
+        | PartialElement.InlineLink(text, path, anchor, range) ->
             $"IL {range}: text={Node.fmtOptText text}; path={Node.fmtOptUrl path}; anchor={Node.fmtOptUrl anchor}"
-        | PartialElement.ReferenceLink (label, range) ->
-            $"RL {range}: label={Node.fmtOptText label}"
+        | PartialElement.ReferenceLink(label, range) -> $"RL {range}: label={Node.fmtOptText label}"
         | TagOpening pos -> $"TO: cursorPos={pos}"
 
 module PartialElement =
@@ -46,9 +45,9 @@ module PartialElement =
 
     let range =
         function
-        | PartialElement.WikiLink (_, _, range)
-        | PartialElement.InlineLink (_, _, _, range)
-        | PartialElement.ReferenceLink (_, range) -> range
+        | PartialElement.WikiLink(_, _, range)
+        | PartialElement.InlineLink(_, _, _, range)
+        | PartialElement.ReferenceLink(_, range) -> range
         | PartialElement.TagOpening cursorPos -> { Start = cursorPos; End = cursorPos } // empty range
 
     let linkInLine (line: Line) (pos: Position) : option<PartialElement> =
@@ -287,26 +286,25 @@ module Prompt =
         else
             match compl with
             // No completion
-            | E (H _)
-            | E (MLD _)
-            | E (YML _) -> None
+            | E(H _)
+            | E(MLD _)
+            | E(YML _) -> None
             // Wiki link
-            | E (WL { data = { doc = doc; heading = None } }) ->
+            | E(WL { data = { doc = doc; heading = None } }) ->
                 Some(WikiDoc(Node.textOpt doc String.Empty))
-            | E (WL { data = { doc = None; heading = Some heading } }) ->
+            | E(WL { data = { doc = None; heading = Some heading } }) ->
                 Some(WikiHeadingInSrcDoc heading.text)
-            | E (WL { data = { doc = Some doc; heading = Some heading } }) ->
+            | E(WL { data = { doc = Some doc; heading = Some heading } }) ->
                 if doc.range.ContainsInclusive(pos) then
                     Some(WikiDoc doc.text)
                 else
                     Some(WikiHeadingInOtherDoc(doc.text, heading.text))
             // Markdown link
-            | E (ML { data = MdLink.RF (_, label) })
-            | E (ML { data = MdLink.RC label })
-            | E (ML { data = MdLink.RS label }) -> Some(Reference label.text)
-            | E (ML { data = MdLink.IL (_, None, _); range = _range }) ->
-                Some(InlineDoc String.Empty)
-            | E (ML { data = MdLink.IL (_, Some url, _) }) ->
+            | E(ML { data = MdLink.RF(_, label) })
+            | E(ML { data = MdLink.RC label })
+            | E(ML { data = MdLink.RS label }) -> Some(Reference label.text)
+            | E(ML { data = MdLink.IL(_, None, _); range = _range }) -> Some(InlineDoc String.Empty)
+            | E(ML { data = MdLink.IL(_, Some url, _) }) ->
                 match Url.ofUrlNode url with
                 | { url = path; anchor = None } -> Some(InlineDoc(Node.textOpt path String.Empty))
                 | { url = None; anchor = Some anchor } -> Some(InlineAnchorInSrcDoc anchor.text)
@@ -316,24 +314,24 @@ module Prompt =
                     else
                         Some(InlineAnchorInOtherDoc(path.text, anchor.text))
             // Partial wiki link
-            | PE (PartialElement.WikiLink (doc, None, _)) ->
+            | PE(PartialElement.WikiLink(doc, None, _)) ->
                 Some(WikiDoc(Node.textOpt doc String.Empty))
-            | PE (PartialElement.WikiLink (None, heading, _)) ->
+            | PE(PartialElement.WikiLink(None, heading, _)) ->
                 Some(WikiHeadingInSrcDoc(Node.textOpt heading String.Empty))
-            | PE (PartialElement.WikiLink (Some dest, Some heading, _)) ->
+            | PE(PartialElement.WikiLink(Some dest, Some heading, _)) ->
                 Some(WikiHeadingInOtherDoc(dest.text, heading.text))
             // Partial markdown link
-            | PE (PartialElement.InlineLink (_, path, None, _)) ->
+            | PE(PartialElement.InlineLink(_, path, None, _)) ->
                 Some(InlineDoc(Node.textOpt path String.Empty))
-            | PE (PartialElement.InlineLink (_, None, anchor, _)) ->
+            | PE(PartialElement.InlineLink(_, None, anchor, _)) ->
                 Some(InlineAnchorInSrcDoc(Node.textOpt anchor String.Empty))
-            | PE (PartialElement.InlineLink (_, Some path, Some anchor, _)) ->
+            | PE(PartialElement.InlineLink(_, Some path, Some anchor, _)) ->
                 Some(InlineAnchorInOtherDoc(path.text, anchor.text))
-            | PE (PartialElement.ReferenceLink (label, _)) ->
+            | PE(PartialElement.ReferenceLink(label, _)) ->
                 Some(Reference(Node.textOpt label String.Empty))
             // Tags
-            | E (T { data = { name = name } }) -> Some(Tag name.text)
-            | PE (PartialElement.TagOpening _) -> Some(Tag String.Empty)
+            | E(T { data = { name = name } }) -> Some(Tag name.text)
+            | PE(PartialElement.TagOpening _) -> Some(Tag String.Empty)
 
 module CompletionHelpers =
     let wikiTargetLink (config: Config) (doc: Doc) : WikiDest =
@@ -362,8 +360,8 @@ module Completions =
         let targetLink = CompletionHelpers.wikiTargetLink config doc
 
         match compl with
-        | E (WL { data = { doc = input; heading = heading }; range = range })
-        | PE (PartialElement.WikiLink (input, heading, range)) ->
+        | E(WL { data = { doc = input; heading = heading }; range = range })
+        | PE(PartialElement.WikiLink(input, heading, range)) ->
             let inputRange =
                 input
                 |> Option.map Node.range
@@ -412,8 +410,8 @@ module Completions =
         (completionHeading: string)
         : option<CompletionItem> =
         match compl with
-        | E (WL { data = { doc = None; heading = Some input }; range = range })
-        | PE (PartialElement.WikiLink (None, Some input, range)) ->
+        | E(WL { data = { doc = None; heading = Some input }; range = range })
+        | PE(PartialElement.WikiLink(None, Some input, range)) ->
             let newText =
                 WikiLink.render
                     None
@@ -438,9 +436,9 @@ module Completions =
         let label = $"{Doc.name doc} / {heading}"
 
         match compl with
-        | E (WL { data = { doc = Some destPart; heading = Some headingPart }
-                  range = range })
-        | PE (PartialElement.WikiLink (Some destPart, Some headingPart, range)) ->
+        | E(WL { data = { doc = Some destPart; heading = Some headingPart }
+                 range = range })
+        | PE(PartialElement.WikiLink(Some destPart, Some headingPart, range)) ->
             let targetLink = CompletionHelpers.wikiTargetLink config doc
 
             let newText =
@@ -474,15 +472,15 @@ module Completions =
     let reference (pos: Position) (compl: Completable) (def: MdLinkDef) : option<CompletionItem> =
         let data =
             match compl with
-            | E (ML { data = MdLink.RF (_, label); range = range })
-            | E (ML { data = MdLink.RC label; range = range })
-            | E (ML { data = MdLink.RS label; range = range }) -> Some(Some label, range)
-            | PE (PartialElement.ReferenceLink (label, range)) -> Some(label, range)
+            | E(ML { data = MdLink.RF(_, label); range = range })
+            | E(ML { data = MdLink.RC label; range = range })
+            | E(ML { data = MdLink.RS label; range = range }) -> Some(Some label, range)
+            | PE(PartialElement.ReferenceLink(label, range)) -> Some(label, range)
             | _ -> None
 
         match data with
         | None -> None
-        | Some (label, range) ->
+        | Some(label, range) ->
             let labelRange =
                 label
                 |> Option.map Node.range
@@ -514,13 +512,13 @@ module Completions =
             Some(Doc.name doc) |> Option.filter (fun x -> x <> targetPath)
 
         match compl with
-        | E (ML { data = MdLink.IL (_, None, _) }) ->
+        | E(ML { data = MdLink.IL(_, None, _) }) ->
             Some
                 { CompletionItem.Create(targetPath) with
                     Detail = detail
                     TextEdit =
                         Some(First { Range = Range.Mk(pos, pos); NewText = targetPathEncoded }) }
-        | E (ML { data = MdLink.IL (_, Some url, _) }) ->
+        | E(ML { data = MdLink.IL(_, Some url, _) }) ->
             match Url.ofUrlNode url with
             | { url = Some url } ->
                 Some
@@ -528,7 +526,7 @@ module Completions =
                         Detail = detail
                         TextEdit = Some(First { Range = url.range; NewText = targetPathEncoded }) }
             | _ -> None
-        | PE (PartialElement.InlineLink (Some _text, path, Some _anchor, _range)) ->
+        | PE(PartialElement.InlineLink(Some _text, path, Some _anchor, _range)) ->
             let range =
                 path
                 |> Option.map Node.range
@@ -538,7 +536,7 @@ module Completions =
                 { CompletionItem.Create(targetPath) with
                     Detail = detail
                     TextEdit = Some(First { Range = range; NewText = targetPathEncoded }) }
-        | PE (PartialElement.InlineLink (Some text, _path, None, range)) ->
+        | PE(PartialElement.InlineLink(Some text, _path, None, range)) ->
             let newText =
                 MdLink.renderInline (Node.text text |> Some) (Some targetPathEncoded) None
 
@@ -557,7 +555,7 @@ module Completions =
         let headingSlug = Slug.str completionHeading
 
         match compl with
-        | E (ML { data = MdLink.IL (_, Some url, _) }) ->
+        | E(ML { data = MdLink.IL(_, Some url, _) }) ->
             let url = Url.ofUrlNode url
 
             match url with
@@ -569,7 +567,7 @@ module Completions =
                         TextEdit = Some(First { Range = anchor.range; NewText = newText })
                         FilterText = Some newText }
             | _ -> None
-        | PE (PartialElement.InlineLink (Some text, None, Some _anchor, range)) ->
+        | PE(PartialElement.InlineLink(Some text, None, Some _anchor, range)) ->
             let newText = $"[{text.text}](#{headingSlug})"
 
             Some
@@ -591,7 +589,7 @@ module Completions =
             Some(Doc.name targetDoc) |> Option.filter (fun x -> x <> targetPath)
 
         match compl with
-        | E (ML { data = MdLink.IL (_, Some url, _) }) ->
+        | E(ML { data = MdLink.IL(_, Some url, _) }) ->
             let url = Url.ofUrlNode url
 
             match url.url, url.anchor with
@@ -606,7 +604,7 @@ module Completions =
                         TextEdit = Some(First { Range = newRange; NewText = newText })
                         FilterText = Some filterText }
             | _, _ -> None
-        | PE (PartialElement.InlineLink (Some text, Some _path, Some _anchor, range)) ->
+        | PE(PartialElement.InlineLink(Some text, Some _path, Some _anchor, range)) ->
             let newText =
                 $"[{text.text}]({targetPathEncoded}#{Slug.str targetHeading})"
 
@@ -627,8 +625,8 @@ module Completions =
         : option<CompletionItem> =
         let range =
             match compl with
-            | E (T { data = { name = name } }) -> Some(Node.range name)
-            | PE (PartialElement.TagOpening _ as peTag) -> Some(PartialElement.range peTag)
+            | E(T { data = { name = name } }) -> Some(Node.range name)
+            | PE(PartialElement.TagOpening _ as peTag) -> Some(PartialElement.range peTag)
             | _ -> None
 
         match range with
@@ -718,7 +716,8 @@ let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
         Doc.index doc
         |> Index.tags
         // Inclusive because we want to cover cases when the cursor is right after the tag's end
-        |> Array.tryFind (fun { data = { name = name } } -> (Node.range name).ContainsInclusive(pos))
+        |> Array.tryFind (fun { data = { name = name } } ->
+            (Node.range name).ContainsInclusive(pos))
         |> Option.map (T >> E)
 
     let partialElement () = PartialElement.inText (Doc.text doc) pos |> Option.map PE
@@ -731,8 +730,7 @@ let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
     | Some _ as link -> link
     | _ ->
         match partialElement () with
-        | Some (PE (PartialElement.TagOpening _)) as tagOpening ->
-            tag () |> Option.orElse tagOpening
+        | Some(PE(PartialElement.TagOpening _)) as tagOpening -> tag () |> Option.orElse tagOpening
         | Some _ as partialElement -> partialElement
         | None -> tag ()
 
@@ -747,18 +745,18 @@ let findCandidatesForCompl
 
     match Prompt.ofCompletable pos compl with
     | None -> [||]
-    | Some (WikiDoc input) ->
+    | Some(WikiDoc input) ->
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
 
         cand |> Seq.choose (Completions.wikiDoc config pos compl)
-    | Some (WikiHeadingInSrcDoc input) ->
+    | Some(WikiHeadingInSrcDoc input) ->
         let cand = Candidates.findHeadingCandidates folder srcDoc None input
 
         cand
         |> Seq.map snd
         |> Seq.choose (Completions.wikiHeadingInSrcDoc (config.ComplWikiStyle()) pos compl)
-    | Some (WikiHeadingInOtherDoc (destPart, headingPart)) ->
+    | Some(WikiHeadingInOtherDoc(destPart, headingPart)) ->
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) destPart)
 
         let cand =
@@ -766,10 +764,10 @@ let findCandidatesForCompl
 
         cand
         |> Seq.choose (Completions.wikiHeadingInOtherDoc config pos compl)
-    | Some (Reference input) ->
+    | Some(Reference input) ->
         let cand = Candidates.findLinkDefCandidates folder srcDoc input
         cand |> Seq.choose (Completions.reference pos compl)
-    | Some (InlineDoc input) ->
+    | Some(InlineDoc input) ->
         let cand =
             match
                 InternName.mkChecked (config.CoreMarkdownFileExtensions()) (Doc.id srcDoc) input
@@ -779,13 +777,13 @@ let findCandidatesForCompl
             | Some destPart -> Candidates.findDocCandidates folder srcDoc (Some destPart)
 
         cand |> Seq.choose (Completions.inlineDoc pos compl)
-    | Some (InlineAnchorInSrcDoc input) ->
+    | Some(InlineAnchorInSrcDoc input) ->
         let cand = Candidates.findHeadingCandidates folder srcDoc None input
 
         cand
         |> Seq.map snd
         |> Seq.choose (Completions.inlineAnchorInSrcDoc pos compl)
-    | Some (InlineAnchorInOtherDoc (pathPart, anchorPart)) ->
+    | Some(InlineAnchorInOtherDoc(pathPart, anchorPart)) ->
         let cand =
             match
                 InternName.mkChecked (config.CoreMarkdownFileExtensions()) (Doc.id srcDoc) pathPart
@@ -795,7 +793,7 @@ let findCandidatesForCompl
                 Candidates.findHeadingCandidates folder srcDoc (Some destPart) anchorPart
 
         cand |> Seq.choose (Completions.inlineAnchorInOtherDoc pos compl)
-    | Some (Tag input) ->
+    | Some(Tag input) ->
         let cand = Candidates.findTagCandidates folder srcDoc input
         cand |> Seq.choose (Completions.tag pos compl input)
 

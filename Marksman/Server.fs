@@ -84,7 +84,7 @@ module ServerUtil =
 
     let readWorkspace (userConfig: option<Config>) (roots: Map<string, FolderId>) : list<Folder> =
         seq {
-            for KeyValue (name, root) in roots do
+            for KeyValue(name, root) in roots do
                 match Folder.tryLoad userConfig name root with
                 | Some folder -> yield folder
                 | _ -> ()
@@ -624,7 +624,7 @@ type MarksmanServer(client: MarksmanClient) =
 
             let newState =
                 match State.tryFindFolderAndDoc docPath state with
-                | Some (folder, doc) ->
+                | Some(folder, doc) ->
                     let newDoc =
                         Doc.applyLspChange (Folder.configuredMarkdownExts folder) par doc
 
@@ -649,7 +649,7 @@ type MarksmanServer(client: MarksmanClient) =
 
             match State.tryFindFolderAndDoc path state with
             | None -> Mutation.empty
-            | Some (folder, doc) ->
+            | Some(folder, doc) ->
                 let newState =
                     match Folder.closeDoc (Doc.id doc) folder with
                     | Some folder -> State.updateFolder folder state
@@ -753,7 +753,7 @@ type MarksmanServer(client: MarksmanClient) =
 
                 match State.tryFindFolderAndDoc uri state with
                 | None -> ()
-                | Some (folder, doc) ->
+                | Some(folder, doc) ->
                     match Folder.withoutDoc (Doc.id doc) folder with
                     | None -> newState <- State.removeFolder (Folder.id folder) newState
                     | Some newFolder -> newState <- State.updateFolder newFolder newState
@@ -873,7 +873,7 @@ type MarksmanServer(client: MarksmanClient) =
             let docUri = par.TextDocument.Uri |> UriWith.mkAbs
 
             match State.tryFindFolderAndDoc docUri state with
-            | Some (folder, curDoc) ->
+            | Some(folder, curDoc) ->
                 let locs =
                     match Cst.elementAtPos par.Position (Doc.cst curDoc) with
                     | None ->
@@ -941,7 +941,7 @@ type MarksmanServer(client: MarksmanClient) =
 
             match State.tryFindFolderAndDoc docPath state with
             | None -> Mutation.output (LspResult.success None)
-            | Some (folder, doc) ->
+            | Some(folder, doc) ->
                 let config = Folder.configOrDefault folder
 
                 let tocAction =

@@ -68,7 +68,7 @@ let checkLink (folder: Folder) (doc: Doc) (linkEl: Element) : seq<Entry> =
             // Inline shortcut links often are a part of regular text.
             // Raising diagnostics on them would be noisy.
             | ML { data = MdLink.RS _ } -> []
-            | ML { data = MdLink.IL (_, url, _) } ->
+            | ML { data = MdLink.IL(_, url, _) } ->
                 match url with
                 | Some { data = url } ->
                     // Inline links to docs that don't look like a markdown file should not
@@ -102,24 +102,24 @@ let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
 let destToHuman (ref: Dest) : string =
     match ref with
     | Dest.Doc { doc = doc } -> $"document {Doc.name doc}"
-    | Dest.Heading (docLink, { data = heading }) ->
+    | Dest.Heading(docLink, { data = heading }) ->
         $"heading {Heading.name heading} in the document {Doc.name (DocLink.doc docLink)}"
-    | Dest.LinkDef (_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
-    | Dest.Tag (doc, { data = tag }) -> $"tag {tag.name} in the document {Doc.name doc}"
+    | Dest.LinkDef(_, { data = ld }) -> $"link definition {MdLinkDef.name ld}"
+    | Dest.Tag(doc, { data = tag }) -> $"tag {tag.name} in the document {Doc.name doc}"
 
 let docToHuman (name: string) : string = $"document '{name}'"
 
 let refToHuman (ref: Syms.Ref) : string =
     match ref with
-    | Syms.CrossRef (Syms.CrossDoc docName) -> docToHuman docName
-    | Syms.CrossRef (Syms.CrossSection (docName, sectionName)) ->
+    | Syms.CrossRef(Syms.CrossDoc docName) -> docToHuman docName
+    | Syms.CrossRef(Syms.CrossSection(docName, sectionName)) ->
         $"heading '{Slug.toString sectionName}' in {docToHuman docName}"
-    | Syms.IntraRef (Syms.IntraSection heading) -> $"heading '{Slug.toString heading}'"
-    | Syms.IntraRef (Syms.IntraLinkDef ld) -> $"link definition with the label '{ld}'"
+    | Syms.IntraRef(Syms.IntraSection heading) -> $"heading '{Slug.toString heading}'"
+    | Syms.IntraRef(Syms.IntraLinkDef ld) -> $"link definition with the label '{ld}'"
 
 let diagToLsp (diag: Entry) : Lsp.Diagnostic =
     match diag with
-    | AmbiguousLink (el, ref, dests) ->
+    | AmbiguousLink(el, ref, dests) ->
         let severity =
             match el with
             | WL _ -> Lsp.DiagnosticSeverity.Error
@@ -145,7 +145,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
           RelatedInformation = Some related
           Tags = None
           Data = None }
-    | BrokenLink (el, ref) ->
+    | BrokenLink(el, ref) ->
         let severity =
             match el with
             | WL _ -> Lsp.DiagnosticSeverity.Error

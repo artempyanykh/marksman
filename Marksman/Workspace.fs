@@ -22,7 +22,7 @@ module Workspace =
 
     let folders (workspace: Workspace) : seq<Folder> =
         seq {
-            for KeyValue (_, f) in workspace.folders do
+            for KeyValue(_, f) in workspace.folders do
                 yield f
         }
 

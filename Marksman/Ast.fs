@@ -53,13 +53,13 @@ type MdRef =
 
     member this.CompactFormat() =
         match this with
-        | Full (text, dest) -> $"[{text}][{dest}]"
+        | Full(text, dest) -> $"[{text}][{dest}]"
         | Collapsed dest -> $"[{dest}][]"
         | Shortcut dest -> $"[{dest}]"
 
     member this.Dest =
         match this with
-        | Full (_, dest)
+        | Full(_, dest)
         | Collapsed dest
         | Shortcut dest -> dest
 
@@ -91,7 +91,7 @@ type Element =
         | Element.ML mdLink -> mdLink.CompactFormat()
         | Element.MR mdRef -> mdRef.CompactFormat()
         | Element.MLD mdLinkDef -> mdLinkDef.CompactFormat()
-        | Element.T (Tag tag) -> $"#{tag}"
+        | Element.T(Tag tag) -> $"#{tag}"
 
 module Element =
     let asHeading =
@@ -143,13 +143,13 @@ module Element =
                     None
                 else
                     Some(Syms.Sym.Ref(IntraRef(IntraSection <| Slug.ofString anchor)))
-            | Some (_, false), _ -> None
-            | Some (url, true), None ->
+            | Some(_, false), _ -> None
+            | Some(url, true), None ->
                 if url.IsWhitespace() then
                     None
                 else
                     Some(Syms.Sym.Ref(CrossRef(CrossDoc url)))
-            | Some (url, true), Some anchor ->
+            | Some(url, true), Some anchor ->
                 if url.IsWhitespace() || anchor.IsWhitespace() then
                     None
                 else
@@ -157,6 +157,6 @@ module Element =
         // The rest
         | Element.MR mdRef -> Some(Syms.Sym.Ref(IntraRef(IntraLinkDef mdRef.DestLabel)))
         | Element.MLD mdLinkDef -> Some(Syms.Sym.Def(Def.LinkDef(mdLinkDef.Label)))
-        | Element.T (Tag tag) -> Some(Syms.Sym.Tag(Syms.Tag tag))
+        | Element.T(Tag tag) -> Some(Syms.Sym.Tag(Syms.Tag tag))
 
 type Ast = { elements: Element[] }

@@ -165,7 +165,7 @@ module Doc =
                 // so that the difference of symbols is consistent with what
                 // Conn expects in terms of dependencies between symbols.
                 match s with
-                | Syms.Sym.Ref (CrossRef (CrossSection (docName, _))) ->
+                | Syms.Sym.Ref(CrossRef(CrossSection(docName, _))) ->
                     yield Syms.Sym.Ref(CrossRef(CrossDoc docName))
                 | _ -> ()
 

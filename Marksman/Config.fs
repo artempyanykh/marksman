@@ -76,7 +76,7 @@ let private getFromTable<'R>
 let private lookupAsOpt =
     function
     | Ok found -> Ok(Some found)
-    | Error (NotFound _) -> Ok None
+    | Error(NotFound _) -> Ok None
     | Error err -> Error err
 
 let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, LookupError> =

@@ -64,7 +64,7 @@ module GlobMatcher =
 
         match matcher.patterns |> Seq.map checkGlob |> Seq.tryFind Option.isSome with
         | None -> false
-        | Some (Some r) -> r
+        | Some(Some r) -> r
         | Some None -> failwith "Unreachable: GlobMatcher.ignores"
 
     let ignoresAny (matchers: seq<GlobMatcher>) (path: string) : bool =

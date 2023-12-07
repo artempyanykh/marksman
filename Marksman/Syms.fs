@@ -24,14 +24,14 @@ type CrossRef =
     override this.ToString() =
         match this with
         | CrossDoc doc -> $"[[{doc}]]"
-        | CrossSection (doc, section) -> $"[[{doc}#{Slug.toString section}]]"
+        | CrossSection(doc, section) -> $"[[{doc}#{Slug.toString section}]]"
 
     member this.AsString = this.ToString()
 
     member this.Doc =
         match this with
         | CrossDoc doc
-        | CrossSection (doc, _) -> doc
+        | CrossSection(doc, _) -> doc
 
 [<StructuredFormatDisplay("{AsString}")>]
 type Ref =
@@ -58,8 +58,8 @@ module Ref =
 
     let trySection =
         function
-        | CrossRef (CrossSection (_, section))
-        | IntraRef (IntraSection section) -> Some section
+        | CrossRef(CrossSection(_, section))
+        | IntraRef(IntraSection section) -> Some section
         | _ -> None
 
 [<Struct>]
@@ -85,7 +85,7 @@ type Def =
     override this.ToString() =
         match this with
         | Doc -> "Doc"
-        | Header (l, h) -> $"H{l} {{{h}}}"
+        | Header(l, h) -> $"H{l} {{{h}}}"
         | LinkDef ld -> $"[{ld}]:"
 
     member this.AsString = this.ToString()
@@ -98,7 +98,7 @@ module Def =
 
     let isTitle =
         function
-        | Def.Header (level, _) when level <= 1 -> true
+        | Def.Header(level, _) when level <= 1 -> true
         | _ -> false
 
     let isHeader =
@@ -108,7 +108,7 @@ module Def =
 
     let isHeaderWithId id =
         function
-        | Def.Header (_, id') when id = id' -> true
+        | Def.Header(_, id') when id = id' -> true
         | _ -> false
 
     let isLinkDefWithLabel label =
@@ -118,7 +118,7 @@ module Def =
 
     let asHeader =
         function
-        | Header (level, id) -> Some(level, id)
+        | Header(level, id) -> Some(level, id)
         | _ -> None
 
 [<RequireQualifiedAccess>]

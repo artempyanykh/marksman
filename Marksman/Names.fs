@@ -88,7 +88,7 @@ module InternPath =
     let toRel =
         function
         | ExactAbs rooted
-        | ExactRel (_, rooted) -> RootedRelPath.relPathForced rooted
+        | ExactRel(_, rooted) -> RootedRelPath.relPathForced rooted
         | Approx path -> path
 
 module InternName =

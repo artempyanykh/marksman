@@ -23,8 +23,7 @@ let configureLogging (verbosity: int) : unit =
         | _ -> loggerConfig.MinimumLevel.Verbose()
 
     Log.Logger <-
-        loggerConfig
-            .WriteTo
+        loggerConfig.WriteTo
             .Console(
                 outputTemplate =
                     "[{Timestamp:HH:mm:ss} {Level:u3}] <{SourceContext}> {Message:lj}: {Properties:lj}{NewLine}{Exception}",

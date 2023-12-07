@@ -119,14 +119,14 @@ module ServerUtil =
         (par: InitializeParams)
         : ServerCapabilities =
         let workspaceFoldersCaps =
-            { Supported = Some true; ChangeNotifications = Some true }
+            { Supported = Some true; ChangeNotifications = Some(Second true) }
 
         let glob = mkWatchGlob markdownExts
 
         let markdownFilePattern =
             { Glob = glob
               Matches = Some FileOperationPatternKind.File
-              Options = Some { FileOperationPatternOptions.Default with IgnoreCase = Some true } }
+              Options = Some { IgnoreCase = Some true } }
 
         let markdownFileRegistration =
             { Filters = [| { Scheme = None; Pattern = markdownFilePattern } |] }
@@ -143,9 +143,8 @@ module ServerUtil =
                 DidRename = None }
 
         let workspaceCaps =
-            { WorkspaceServerCapabilities.Default with
-                WorkspaceFolders = Some workspaceFoldersCaps
-                FileOperations = Some workspaceFileCaps }
+            { WorkspaceFolders = Some workspaceFoldersCaps
+              FileOperations = Some workspaceFileCaps }
 
         let syncKind =
             match textSyncKind with
@@ -171,18 +170,19 @@ module ServerUtil =
 
         { ServerCapabilities.Default with
             Workspace = Some workspaceCaps
-            WorkspaceSymbolProvider = Some(not clientDesc.IsVSCode)
+            WorkspaceSymbolProvider = Some(First <| not clientDesc.IsVSCode)
             TextDocumentSync = Some textSyncCaps
-            DocumentSymbolProvider = Some(not clientDesc.IsVSCode)
+            DocumentSymbolProvider = Some(First <| not clientDesc.IsVSCode)
             CompletionProvider =
                 Some
                     { TriggerCharacters = Some [| '['; '#'; '(' |]
                       ResolveProvider = None
-                      AllCommitCharacters = None }
+                      AllCommitCharacters = None
+                      CompletionItem = None }
             DefinitionProvider = Some true
             HoverProvider = Some true
             ReferencesProvider = Some true
-            CodeActionProvider = Some codeActionOptions
+            CodeActionProvider = Some(Second codeActionOptions)
             SemanticTokensProvider =
                 Some
                     { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
@@ -269,7 +269,9 @@ let calcDiagnosticsUpdate
                         >> Log.addContext "doc" docUri
                     )
 
-                    let publishParams = { Uri = docUri.Uri; Diagnostics = newDocDiag }
+                    // TODO: check how the behavior changes when we supply the document version here
+                    let publishParams =
+                        { Uri = docUri.Uri; Diagnostics = newDocDiag; Version = None }
 
                     yield publishParams
     }
@@ -764,7 +766,7 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let ws = State.workspace state
             let symbols = Symbols.workspaceSymbols pars.Query ws
-            LspResult.success (Some symbols)
+            LspResult.success (Some <| First symbols)
 
     override this.TextDocumentDocumentSymbol(par: DocumentSymbolParams) =
         withState
@@ -801,7 +803,10 @@ type MarksmanServer(client: MarksmanClient) =
                     | [||] -> return! None
                     | candidates ->
                         let isIncomplete = Array.length candidates >= maxCompletions
-                        { IsIncomplete = isIncomplete; Items = candidates }
+
+                        { IsIncomplete = isIncomplete
+                          Items = candidates
+                          ItemDefaults = None }
                 }
 
             LspResult.success candidates

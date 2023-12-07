@@ -389,7 +389,7 @@ module Completions =
                 Some
                     { CompletionItem.Create(targetName) with
                         Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
-                        TextEdit = Some textEdit
+                        TextEdit = Some(First textEdit)
                         FilterText = Some filterText }
             | Some _ ->
                 let newText = targetLink
@@ -401,7 +401,7 @@ module Completions =
                 Some
                     { CompletionItem.Create(targetName) with
                         Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
-                        TextEdit = Some textEdit
+                        TextEdit = Some(First textEdit)
                         FilterText = Some targetName }
         | _ -> None
 
@@ -425,7 +425,7 @@ module Completions =
 
             Some
                 { CompletionItem.Create(completionHeading) with
-                    TextEdit = Some textEdit
+                    TextEdit = Some(First textEdit)
                     FilterText = Some newText }
         | _ -> None
 
@@ -467,7 +467,7 @@ module Completions =
             Some
                 { CompletionItem.Create(label) with
                     Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
-                    TextEdit = Some textEdit
+                    TextEdit = Some(First textEdit)
                     FilterText = Some filterText }
         | _ -> None
 
@@ -503,7 +503,7 @@ module Completions =
                 { CompletionItem.Create(linkDefLabel) with
                     Detail = MdLinkDef.titleContent def
                     Documentation = MdLinkDef.urlContent def |> Documentation.String |> Some
-                    TextEdit = Some textEdit
+                    TextEdit = Some(First textEdit)
                     FilterText = Some newText }
 
     let inlineDoc (pos: Position) (compl: Completable) (doc: Doc) : option<CompletionItem> =
@@ -518,14 +518,15 @@ module Completions =
             Some
                 { CompletionItem.Create(targetPath) with
                     Detail = detail
-                    TextEdit = Some { Range = Range.Mk(pos, pos); NewText = targetPathEncoded } }
+                    TextEdit =
+                        Some(First { Range = Range.Mk(pos, pos); NewText = targetPathEncoded }) }
         | E (ML { data = MdLink.IL (_, Some url, _) }) ->
             match Url.ofUrlNode url with
             | { url = Some url } ->
                 Some
                     { CompletionItem.Create(targetPath) with
                         Detail = detail
-                        TextEdit = Some { Range = url.range; NewText = targetPathEncoded } }
+                        TextEdit = Some(First { Range = url.range; NewText = targetPathEncoded }) }
             | _ -> None
         | PE (PartialElement.InlineLink (Some _text, path, Some _anchor, _range)) ->
             let range =
@@ -536,7 +537,7 @@ module Completions =
             Some
                 { CompletionItem.Create(targetPath) with
                     Detail = detail
-                    TextEdit = Some { Range = range; NewText = targetPathEncoded } }
+                    TextEdit = Some(First { Range = range; NewText = targetPathEncoded }) }
         | PE (PartialElement.InlineLink (Some text, _path, None, range)) ->
             let newText =
                 MdLink.renderInline (Node.text text |> Some) (Some targetPathEncoded) None
@@ -544,7 +545,7 @@ module Completions =
             Some
                 { CompletionItem.Create(targetPath) with
                     Detail = detail
-                    TextEdit = Some { Range = range; NewText = newText }
+                    TextEdit = Some(First { Range = range; NewText = newText })
                     FilterText = Some newText }
         | _ -> None
 
@@ -565,7 +566,7 @@ module Completions =
 
                 Some
                     { CompletionItem.Create(completionHeading) with
-                        TextEdit = Some { Range = anchor.range; NewText = newText }
+                        TextEdit = Some(First { Range = anchor.range; NewText = newText })
                         FilterText = Some newText }
             | _ -> None
         | PE (PartialElement.InlineLink (Some text, None, Some _anchor, range)) ->
@@ -573,7 +574,7 @@ module Completions =
 
             Some
                 { CompletionItem.Create(completionHeading) with
-                    TextEdit = Some { Range = range; NewText = newText }
+                    TextEdit = Some(First { Range = range; NewText = newText })
                     FilterText = Some newText }
         | _ -> None
 
@@ -602,7 +603,7 @@ module Completions =
                 Some
                     { CompletionItem.Create(label) with
                         Detail = detail
-                        TextEdit = Some { Range = newRange; NewText = newText }
+                        TextEdit = Some(First { Range = newRange; NewText = newText })
                         FilterText = Some filterText }
             | _, _ -> None
         | PE (PartialElement.InlineLink (Some text, Some _path, Some _anchor, range)) ->
@@ -614,14 +615,14 @@ module Completions =
             Some
                 { CompletionItem.Create(label) with
                     Detail = detail
-                    TextEdit = Some { Range = range; NewText = newText }
+                    TextEdit = Some(First { Range = range; NewText = newText })
                     FilterText = Some filterText }
         | _ -> None
 
     let tag
         (_pos: Position)
         (compl: Completable)
-        (input: string)
+        (_input: string)
         (tagName: string, numUsages: int)
         : option<CompletionItem> =
         let range =
@@ -640,7 +641,7 @@ module Completions =
             Some
                 { CompletionItem.Create(label) with
                     Detail = Some detail
-                    TextEdit = Some { Range = range; NewText = label } }
+                    TextEdit = Some(First { Range = range; NewText = label }) }
 
 module Candidates =
     let findDocCandidates (folder: Folder) (srcDoc: Doc) (destPart: option<InternName>) : seq<Doc> =

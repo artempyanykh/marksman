@@ -29,6 +29,7 @@ type Request =
     Id: int
     Method: string
     Params: JToken option }
+
   static member Create(id: int, method': string, rpcParams: JToken option) =
     { Version = "2.0"; Id = id; Method = method'; Params = rpcParams }
 
@@ -37,6 +38,7 @@ type Notification =
     Version: string
     Method: string
     Params: JToken option }
+
   static member Create(method': string, rpcParams: JToken option) =
     { Version = "2.0"; Method = method'; Params = rpcParams }
 
@@ -54,6 +56,7 @@ type Error =
   { Code: int
     Message: string
     Data: JToken option }
+
   static member Create(code: int, message: string) = { Code = code; Message = message; Data = None }
   static member ParseError = Error.Create(ErrorCodes.parseError, "Parse error")
   static member InvalidRequest = Error.Create(ErrorCodes.invalidRequest, "Invalid Request")
@@ -71,6 +74,7 @@ type Response =
     Error: Error option
     [<JsonProperty(NullValueHandling = NullValueHandling.Include)>]
     Result: JToken option }
+
   /// Json.NET conditional property serialization, controlled by naming convention
   member x.ShouldSerializeResult() = x.Error.IsNone
 

@@ -32,6 +32,7 @@ module Types =
       Exception: exn option
       Parameters: obj list
       AdditionalNamedParameters: ((string * obj * bool) list) }
+
     static member StartLogLevel(logLevel: LogLevel) =
       { LogLevel = logLevel
         Message = None
@@ -323,7 +324,8 @@ module Types =
     /// **Exceptions**
     ///
     let addContext (key: string) (value: obj) (log: Log) =
-      { log with AdditionalNamedParameters = List.append log.AdditionalNamedParameters [ key, (box value), false ] }
+      { log with
+          AdditionalNamedParameters = List.append log.AdditionalNamedParameters [ key, (box value), false ] }
 
 
     /// **Description**
@@ -345,7 +347,8 @@ module Types =
     /// **Exceptions**
     ///
     let addContextDestructured (key: string) (value: obj) (log: Log) =
-      { log with AdditionalNamedParameters = List.append log.AdditionalNamedParameters [ key, (box value), true ] }
+      { log with
+          AdditionalNamedParameters = List.append log.AdditionalNamedParameters [ key, (box value), true ] }
 
 
     /// **Description**
@@ -439,7 +442,7 @@ module Providers =
       let propertyNameParam = Expression.Parameter(typedefof<string>, "propertyName")
       let valueParam = Expression.Parameter(typedefof<obj>, "value")
       let destructureObjectsParam = Expression.Parameter(typedefof<bool>, "destructureObjects")
-      let exrs: Expression [] = [| propertyNameParam; valueParam; destructureObjectsParam |]
+      let exrs: Expression[] = [| propertyNameParam; valueParam; destructureObjectsParam |]
       let methodCall = Expression.Call(null, method, exrs)
 
       let func =
@@ -450,10 +453,11 @@ module Providers =
       fun name -> func.Invoke("SourceContext", name, false)
 
     type SerilogGateway =
-      { Write: obj -> obj -> string -> obj [] -> unit
-        WriteException: obj -> obj -> exn -> string -> obj [] -> unit
+      { Write: obj -> obj -> string -> obj[] -> unit
+        WriteException: obj -> obj -> exn -> string -> obj[] -> unit
         IsEnabled: obj -> obj -> bool
         TranslateLevel: LogLevel -> obj }
+
       static member Create() =
         let logEventLevelType = Type.GetType("Serilog.Events.LogEventLevel, Serilog")
 
@@ -493,16 +497,16 @@ module Providers =
           Expression.Lambda<Func<obj, obj, bool>>(isEnabledMethodCall, instanceParam, levelParam).Compile()
 
         let writeMethodInfo =
-          loggerType.GetMethod("Write", [| logEventLevelType; typedefof<string>; typedefof<obj []> |])
+          loggerType.GetMethod("Write", [| logEventLevelType; typedefof<string>; typedefof<obj[]> |])
 
         let messageParam = Expression.Parameter(typedefof<string>)
-        let propertyValuesParam = Expression.Parameter(typedefof<obj []>)
+        let propertyValuesParam = Expression.Parameter(typedefof<obj[]>)
 
         let writeMethodExp =
           Expression.Call(instanceCast, writeMethodInfo, levelCast, messageParam, propertyValuesParam)
 
         let expression =
-          Expression.Lambda<Action<obj, obj, string, obj []>>(
+          Expression.Lambda<Action<obj, obj, string, obj[]>>(
             writeMethodExp,
             instanceParam,
             levelParam,
@@ -513,7 +517,7 @@ module Providers =
         let write = expression.Compile()
 
         let writeExceptionMethodInfo =
-          loggerType.GetMethod("Write", [| logEventLevelType; typedefof<exn>; typedefof<string>; typedefof<obj []> |])
+          loggerType.GetMethod("Write", [| logEventLevelType; typedefof<exn>; typedefof<string>; typedefof<obj[]> |])
 
         let exceptionParam = Expression.Parameter(typedefof<exn>)
 
@@ -529,7 +533,7 @@ module Providers =
 
         let writeException =
           Expression
-            .Lambda<Action<obj, obj, exn, string, obj []>>(
+            .Lambda<Action<obj, obj, exn, string, obj[]>>(
               writeMethodExp,
               instanceParam,
               levelParam,
@@ -707,7 +711,7 @@ module LogProvider =
 
   let rec getModuleType =
     function
-    | PropertyGet (_, propertyInfo, _) -> propertyInfo.DeclaringType
+    | PropertyGet(_, propertyInfo, _) -> propertyInfo.DeclaringType
     // | Call (_, methInfo, _) -> sprintf "%s.%s" methInfo.DeclaringType.FullName methInfo.Name
     // | Lambda(_, expr) -> getModuleType expr
     // | ValueWithName(_,_,instance) -> instance

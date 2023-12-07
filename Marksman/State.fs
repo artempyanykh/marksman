@@ -84,10 +84,18 @@ type ClientDescription =
         this.opts.preferredTextSyncKind
 
 module ClientDescription =
+    let empty =
+        { info = None
+          caps =
+            { Workspace = None
+              TextDocument = None
+              General = None
+              Experimental = None
+              Window = None }
+          opts = InitOptions.empty }
+
     let ofParams (par: InitializeParams) : ClientDescription =
-        let caps =
-            par.Capabilities
-            |> Option.defaultValue { Workspace = None; TextDocument = None; Experimental = None }
+        let caps = par.Capabilities |> Option.defaultValue empty.caps
 
         let opts =
             par.InitializationOptions
@@ -95,11 +103,6 @@ module ClientDescription =
             |> Option.defaultValue InitOptions.empty
 
         { info = par.ClientInfo; caps = caps; opts = opts }
-
-    let empty =
-        { info = None
-          caps = { Workspace = None; TextDocument = None; Experimental = None }
-          opts = InitOptions.empty }
 
 type State =
     private

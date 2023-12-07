@@ -9,6 +9,14 @@ open Marksman.Helpers
 open Marksman.Workspace
 
 module WorkspaceSymbol =
+    let mkSymbolInfo name kind loc =
+        { Name = name
+          Kind = kind
+          Location = loc
+          Tags = None
+          Deprecated = None
+          ContainerName = None }
+
     let doc1 =
         FakeDoc.Mk(path = "doc1.md", contentLines = [| "# A"; "#tag1" |])
 
@@ -23,26 +31,26 @@ module WorkspaceSymbol =
         let symbols = Symbols.workspaceSymbols "" workspace
 
         Assert.Equal(
-            [ { Name = "H1: A"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc1.Id.Uri; Range = Range.Mk(0, 0, 0, 3) } }
-              { Name = "Tag: tag1"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
-              { Name = "H1: B"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(0, 0, 0, 3) } }
-              { Name = "Tag: tag1"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
-              { Name = "Tag: tag2"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } } ],
+            [ mkSymbolInfo
+                  "H1: A"
+                  SymbolKind.String
+                  { Uri = doc1.Id.Uri; Range = Range.Mk(0, 0, 0, 3) }
+              mkSymbolInfo
+                  "Tag: tag1"
+                  SymbolKind.String
+                  { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
+              mkSymbolInfo
+                  "H1: B"
+                  SymbolKind.String
+                  { Uri = doc2.Id.Uri; Range = Range.Mk(0, 0, 0, 3) }
+              mkSymbolInfo
+                  "Tag: tag1"
+                  SymbolKind.String
+                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
+              mkSymbolInfo
+                  "Tag: tag2"
+                  SymbolKind.String
+                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } ],
             symbols
         )
 
@@ -51,18 +59,18 @@ module WorkspaceSymbol =
         let symbols = Symbols.workspaceSymbols "Tag:" workspace
 
         Assert.Equal(
-            [ { Name = "Tag: tag1"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
-              { Name = "Tag: tag1"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) } }
-              { Name = "Tag: tag2"
-                Kind = SymbolKind.String
-                ContainerName = None
-                Location = { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } } ],
+            [ mkSymbolInfo
+                  "Tag: tag1"
+                  SymbolKind.String
+                  { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
+              mkSymbolInfo
+                  "Tag: tag1"
+                  SymbolKind.String
+                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
+              mkSymbolInfo
+                  "Tag: tag2"
+                  SymbolKind.String
+                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } ],
             symbols
         )
 

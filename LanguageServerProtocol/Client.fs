@@ -27,6 +27,10 @@ type ILspClient =
   ///a particular message.
   abstract member WindowLogMessage: LogMessageParams -> Async<unit>
 
+  /// The show document request is sent from a server to a client to ask the client to display a particular
+  /// resource referenced by a URI in the user interface.
+  abstract member WindowShowDocument: ShowDocumentParams -> AsyncLspResult<ShowDocumentResult>
+
   /// The telemetry notification is sent from the server to the client to ask the client to log
   /// a telemetry event.
   abstract member TelemetryEvent: Newtonsoft.Json.Linq.JToken -> Async<unit>
@@ -53,7 +57,7 @@ type ILspClient =
   /// The workspace/workspaceFolders request is sent from the server to the client to fetch the current open
   /// list of workspace folders. Returns null in the response if only a single file is open in the tool.
   /// Returns an empty array if a workspace is open but no folders are configured.
-  abstract member WorkspaceWorkspaceFolders: unit -> AsyncLspResult<WorkspaceFolder [] option>
+  abstract member WorkspaceWorkspaceFolders: unit -> AsyncLspResult<WorkspaceFolder[] option>
 
   /// The workspace/configuration request is sent from the server to the client to fetch configuration
   /// settings from the client.
@@ -61,7 +65,7 @@ type ILspClient =
   /// The request can fetch n configuration settings in one roundtrip. The order of the returned configuration
   /// settings correspond to the order of the passed ConfigurationItems (e.g. the first item in the response
   /// is the result for the first configuration item in the params).
-  abstract member WorkspaceConfiguration: ConfigurationParams -> AsyncLspResult<Newtonsoft.Json.Linq.JToken []>
+  abstract member WorkspaceConfiguration: ConfigurationParams -> AsyncLspResult<Newtonsoft.Json.Linq.JToken[]>
 
 
   abstract member WorkspaceApplyEdit: ApplyWorkspaceEditParams -> AsyncLspResult<ApplyWorkspaceEditResponse>
@@ -84,6 +88,24 @@ type ILspClient =
   abstract member WorkspaceInlayHintRefresh: unit -> Async<unit>
 
 
+  /// The workspace/codeLens/refresh request is sent from the server to the client. Servers can use it to ask
+  /// clients to refresh the code lenses currently shown in editors. As a result the client should ask the
+  /// server to recompute the code lenses for these editors. This is useful if a server detects a
+  /// configuration change which requires a re-calculation of all code lenses. Note that the client still has
+  /// the freedom to delay the re-calculation of the code lenses if for example an editor is currently not
+  /// visible.
+  abstract member WorkspaceCodeLensRefresh: unit -> Async<unit>
+
+
+  /// The workspace/inlineValue/refresh request is sent from the server to the client. Servers can use it to
+  /// ask clients to refresh the inline values currently shown in editors. As a result the client should ask
+  /// the server to recompute the inline values for these editors. This is useful if a server detects a
+  /// configuration change which requires a re-calculation of all inline values. Note that the client still
+  /// has the freedom to delay the re-calculation of the inline values if for example an editor is currently
+  /// not visible.
+  abstract member WorkspaceInlineValueRefresh: unit -> Async<unit>
+
+
   /// Diagnostics notification are sent from the server to the client to signal results of validation runs.
   ///
   /// Diagnostics are “owned” by the server so it is the server’s responsibility to clear them if necessary.
@@ -99,6 +121,20 @@ type ILspClient =
   /// Newly pushed diagnostics always replace previously pushed diagnostics. There is no merging that happens
   /// on the client side.
   abstract member TextDocumentPublishDiagnostics: PublishDiagnosticsParams -> Async<unit>
+
+  /// The workspace/diagnostic/refresh request is sent from the server to the client. Servers can use it to
+  /// ask clients to refresh all needed document and workspace diagnostics. This is useful if a server detects
+  /// a project wide configuration change which requires a re-calculation of all diagnostics.
+  abstract member WorkspaceDiagnosticRefresh: unit -> Async<unit>
+
+  /// The window/workDoneProgress/create request is sent from the server to the client to ask the client to create a work done progress.
+  abstract member WorkDoneProgressCreate: ProgressToken -> AsyncLspResult<unit>
+
+  /// The base protocol offers also support to report progress in a generic fashion.
+  /// This mechanism can be used to report any kind of progress including work done progress
+  /// (usually used to report progress in the user interface using a progress bar) and
+  /// partial result progress to support streaming of results.
+  abstract member Progress: ProgressToken * 'Progress -> Async<unit>
 
 [<AbstractClass>]
 type LspClient() =
@@ -121,6 +157,12 @@ type LspClient() =
   abstract member WindowLogMessage: LogMessageParams -> Async<unit>
 
   default __.WindowLogMessage(_) = ignoreNotification
+
+  /// The show document request is sent from a server to a client to ask the client to display a particular
+  /// resource referenced by a URI in the user interface.
+  abstract member WindowShowDocument: ShowDocumentParams -> AsyncLspResult<ShowDocumentResult>
+
+  default __.WindowShowDocument(_) = notImplemented
 
   /// The telemetry notification is sent from the server to the client to ask the client to log
   /// a telemetry event.
@@ -153,7 +195,7 @@ type LspClient() =
   /// The workspace/workspaceFolders request is sent from the server to the client to fetch the current open
   /// list of workspace folders. Returns null in the response if only a single file is open in the tool.
   /// Returns an empty array if a workspace is open but no folders are configured.
-  abstract member WorkspaceWorkspaceFolders: unit -> AsyncLspResult<WorkspaceFolder [] option>
+  abstract member WorkspaceWorkspaceFolders: unit -> AsyncLspResult<WorkspaceFolder[] option>
 
   default __.WorkspaceWorkspaceFolders() = notImplemented
 
@@ -163,7 +205,7 @@ type LspClient() =
   /// The request can fetch n configuration settings in one roundtrip. The order of the returned configuration
   /// settings correspond to the order of the passed ConfigurationItems (e.g. the first item in the response
   /// is the result for the first configuration item in the params).
-  abstract member WorkspaceConfiguration: ConfigurationParams -> AsyncLspResult<Newtonsoft.Json.Linq.JToken []>
+  abstract member WorkspaceConfiguration: ConfigurationParams -> AsyncLspResult<Newtonsoft.Json.Linq.JToken[]>
 
   default __.WorkspaceConfiguration(_) = notImplemented
 
@@ -190,6 +232,26 @@ type LspClient() =
 
   default __.WorkspaceInlayHintRefresh() = ignoreNotification
 
+  /// The workspace/codeLens/refresh request is sent from the server to the client. Servers can use it to ask
+  /// clients to refresh the code lenses currently shown in editors. As a result the client should ask the
+  /// server to recompute the code lenses for these editors. This is useful if a server detects a
+  /// configuration change which requires a re-calculation of all code lenses. Note that the client still has
+  /// the freedom to delay the re-calculation of the code lenses if for example an editor is currently not
+  /// visible.
+  abstract member WorkspaceCodeLensRefresh: unit -> Async<unit>
+
+  default __.WorkspaceCodeLensRefresh() = ignoreNotification
+
+  /// The workspace/inlineValue/refresh request is sent from the server to the client. Servers can use it to
+  /// ask clients to refresh the inline values currently shown in editors. As a result the client should ask
+  /// the server to recompute the inline values for these editors. This is useful if a server detects a
+  /// configuration change which requires a re-calculation of all inline values. Note that the client still
+  /// has the freedom to delay the re-calculation of the inline values if for example an editor is currently
+  /// not visible.
+  abstract member WorkspaceInlineValueRefresh: unit -> Async<unit>
+
+  default __.WorkspaceInlineValueRefresh() = ignoreNotification
+
   /// Diagnostics notification are sent from the server to the client to signal results of validation runs.
   ///
   /// Diagnostics are “owned” by the server so it is the server’s responsibility to clear them if necessary.
@@ -208,10 +270,26 @@ type LspClient() =
 
   default __.TextDocumentPublishDiagnostics(_) = ignoreNotification
 
+  /// The workspace/diagnostic/refresh request is sent from the server to the client. Servers can use it to
+  /// ask clients to refresh all needed document and workspace diagnostics. This is useful if a server detects
+  /// a project wide configuration change which requires a re-calculation of all diagnostics.
+  abstract member WorkspaceDiagnosticRefresh: unit -> Async<unit>
+
+  default __.WorkspaceDiagnosticRefresh() = ignoreNotification
+
+  abstract member Progress: ProgressToken * 'Progress -> Async<unit>
+
+  default __.Progress(_, _) = ignoreNotification
+
+  /// The window/workDoneProgress/create request is sent from the server to the client to ask the client to create a work done progress.
+  abstract member WorkDoneProgressCreate: ProgressToken -> AsyncLspResult<unit>
+  default __.WorkDoneProgressCreate(_) = notImplemented
+
   interface ILspClient with
     member this.WindowShowMessage(p: ShowMessageParams) = this.WindowShowMessage(p)
     member this.WindowShowMessageRequest(p: ShowMessageRequestParams) = this.WindowShowMessageRequest(p)
     member this.WindowLogMessage(p: LogMessageParams) = this.WindowLogMessage(p)
+    member this.WindowShowDocument(p: ShowDocumentParams) = this.WindowShowDocument(p)
     member this.TelemetryEvent(p: Newtonsoft.Json.Linq.JToken) = this.TelemetryEvent(p)
     member this.ClientRegisterCapability(p: RegistrationParams) = this.ClientRegisterCapability(p)
     member this.ClientUnregisterCapability(p: UnregistrationParams) = this.ClientUnregisterCapability(p)
@@ -220,4 +298,9 @@ type LspClient() =
     member this.WorkspaceApplyEdit(p: ApplyWorkspaceEditParams) = this.WorkspaceApplyEdit(p)
     member this.WorkspaceSemanticTokensRefresh() = this.WorkspaceSemanticTokensRefresh()
     member this.WorkspaceInlayHintRefresh() = this.WorkspaceInlayHintRefresh()
+    member this.WorkspaceCodeLensRefresh() = this.WorkspaceCodeLensRefresh()
+    member this.WorkspaceInlineValueRefresh() = this.WorkspaceInlineValueRefresh()
     member this.TextDocumentPublishDiagnostics(p: PublishDiagnosticsParams) = this.TextDocumentPublishDiagnostics(p)
+    member this.WorkspaceDiagnosticRefresh() = this.WorkspaceDiagnosticRefresh()
+    member this.WorkDoneProgressCreate(token: ProgressToken) = this.WorkDoneProgressCreate(token)
+    member this.Progress(token, data) = this.Progress(token, data)

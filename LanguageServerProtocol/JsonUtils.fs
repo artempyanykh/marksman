@@ -19,8 +19,8 @@ module Type =
        |]
 
   let numericHashes = numerics |> Array.map (fun t -> t.GetHashCode())
-  let stringHash = typeof<string>.GetHashCode ()
-  let boolHash = typeof<bool>.GetHashCode ()
+  let stringHash = typeof<string>.GetHashCode()
+  let boolHash = typeof<bool>.GetHashCode()
 
   let inline isOption (t: Type) =
     t.IsGenericType
@@ -104,13 +104,14 @@ let inline private memoriseByHash (f: 'a -> 'b) : 'a -> 'b =
 
 type private CaseInfo =
   { Info: UnionCaseInfo
-    Fields: PropertyInfo []
-    GetFieldValues: obj -> obj []
-    Create: obj [] -> obj }
+    Fields: PropertyInfo[]
+    GetFieldValues: obj -> obj[]
+    Create: obj[] -> obj }
 
 type private UnionInfo =
-  { Cases: CaseInfo []
+  { Cases: CaseInfo[]
     GetTag: obj -> int }
+
   member u.GetCaseOf(value: obj) =
     let tag = u.GetTag value
     u.Cases |> Array.find (fun case -> case.Info.Tag = tag)
@@ -232,8 +233,8 @@ type ErasedUnionConverter() =
       else
         try
           json.ToObject(targetType, serializer) |> Some
-        with
-        | _ -> None
+        with _ ->
+          None
 
     let union = UnionInfo.get t
     let json = JToken.ReadFrom reader
@@ -296,7 +297,7 @@ type OptionConverter() =
       let innerType = t.GetGenericArguments()[0]
 
       if innerType.IsValueType then
-        typedefof<Nullable<_>>.MakeGenericType ([| innerType |])
+        typedefof<Nullable<_>>.MakeGenericType([| innerType |])
       else
         innerType)
 
@@ -327,4 +328,4 @@ type OptionConverter() =
         null
       else
         let union = UnionInfo.get t
-        union.Cases[ 1 ].Create [| value |]
+        union.Cases[1].Create [| value |]

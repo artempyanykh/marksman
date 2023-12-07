@@ -13,20 +13,26 @@ module Server =
   open Ionide.LanguageServerProtocol.JsonUtils
   open Newtonsoft.Json.Linq
   open StreamJsonRpc
+  open StreamJsonRpc.Protocol
+  open JsonRpc
 
   let logger = LogProvider.getLoggerByName "LSP Server"
 
-  let jsonRpcFormatter = new JsonMessageFormatter()
-  jsonRpcFormatter.JsonSerializer.NullValueHandling <- NullValueHandling.Ignore
-  jsonRpcFormatter.JsonSerializer.ConstructorHandling <- ConstructorHandling.AllowNonPublicDefaultConstructor
-  jsonRpcFormatter.JsonSerializer.MissingMemberHandling <- MissingMemberHandling.Ignore
-  jsonRpcFormatter.JsonSerializer.Converters.Add(StrictNumberConverter())
-  jsonRpcFormatter.JsonSerializer.Converters.Add(StrictStringConverter())
-  jsonRpcFormatter.JsonSerializer.Converters.Add(StrictBoolConverter())
-  jsonRpcFormatter.JsonSerializer.Converters.Add(SingleCaseUnionConverter())
-  jsonRpcFormatter.JsonSerializer.Converters.Add(OptionConverter())
-  jsonRpcFormatter.JsonSerializer.Converters.Add(ErasedUnionConverter())
-  jsonRpcFormatter.JsonSerializer.ContractResolver <- OptionAndCamelCasePropertyNamesContractResolver()
+  let defaultJsonRpcFormatter () =
+    let jsonRpcFormatter = new JsonMessageFormatter()
+    jsonRpcFormatter.JsonSerializer.NullValueHandling <- NullValueHandling.Ignore
+    jsonRpcFormatter.JsonSerializer.ConstructorHandling <- ConstructorHandling.AllowNonPublicDefaultConstructor
+    jsonRpcFormatter.JsonSerializer.MissingMemberHandling <- MissingMemberHandling.Ignore
+    jsonRpcFormatter.JsonSerializer.Converters.Add(StrictNumberConverter())
+    jsonRpcFormatter.JsonSerializer.Converters.Add(StrictStringConverter())
+    jsonRpcFormatter.JsonSerializer.Converters.Add(StrictBoolConverter())
+    jsonRpcFormatter.JsonSerializer.Converters.Add(SingleCaseUnionConverter())
+    jsonRpcFormatter.JsonSerializer.Converters.Add(OptionConverter())
+    jsonRpcFormatter.JsonSerializer.Converters.Add(ErasedUnionConverter())
+    jsonRpcFormatter.JsonSerializer.ContractResolver <- OptionAndCamelCasePropertyNamesContractResolver()
+    jsonRpcFormatter
+
+  let jsonRpcFormatter = defaultJsonRpcFormatter ()
 
   let deserialize<'t> (token: JToken) = token.ToObject<'t>(jsonRpcFormatter.JsonSerializer)
   let serialize<'t> (o: 't) = JToken.FromObject(o, jsonRpcFormatter.JsonSerializer)
@@ -78,14 +84,34 @@ module Server =
     | ErrorExitWithoutShutdown = 1
     | ErrorStreamClosed = 2
 
+  let (|Flatten|) (ex: Exception) : Exception =
+    match ex with
+    | :? AggregateException as aex ->
+      let aex = aex.Flatten()
+
+      if aex.InnerExceptions.Count = 1 then
+        aex.InnerException
+      else
+        aex
+    | _ -> ex
+
 
   /// The default RPC logic shipped with this library. All this does is mark LocalRpcExceptions as non-fatal
   let defaultRpc (handler: IJsonRpcMessageHandler) =
     { new JsonRpc(handler) with
         member this.IsFatalException(ex: Exception) =
           match ex with
-          | :? LocalRpcException -> false
-          | _ -> true }
+          | Flatten(:? LocalRpcException | :? JsonSerializationException) -> false
+          | _ -> true
+
+        member this.CreateErrorDetails(request: JsonRpcRequest, ex: Exception) =
+          let isSerializable = this.ExceptionStrategy = ExceptionProcessing.ISerializable
+
+          match ex with
+          | Flatten(:? JsonSerializationException as ex) ->
+            let data: obj = if isSerializable then ex else CommonErrorData(ex)
+            JsonRpcError.ErrorDetail(Code = JsonRpcErrorCode.ParseError, Message = ex.Message, Data = data)
+          | _ -> ``base``.CreateErrorDetails(request, ex) }
 
   let startWithSetup<'client when 'client :> Ionide.LanguageServerProtocol.ILspClient>
     (setupRequestHandlings: 'client -> Map<string, Delegate>)
@@ -95,7 +121,7 @@ module Server =
     (customizeRpc: IJsonRpcMessageHandler -> JsonRpc)
     =
 
-    use jsonRpcHandler = new HeaderDelimitedMessageHandler(output, input, jsonRpcFormatter)
+    use jsonRpcHandler = new HeaderDelimitedMessageHandler(output, input, defaultJsonRpcFormatter ())
     // Without overriding isFatalException, JsonRpc serializes exceptions and sends them to the client.
     // This is particularly bad for notifications such as textDocument/didChange which don't require a response,
     // and thus any exception that happens during e.g. text sync gets swallowed.
@@ -203,6 +229,7 @@ module Server =
       "completionItem/resolve", requestHandling (fun s p -> s.CompletionItemResolve(p))
       "textDocument/rename", requestHandling (fun s p -> s.TextDocumentRename(p))
       "textDocument/prepareRename", requestHandling (fun s p -> s.TextDocumentPrepareRename(p))
+      "textDocument/declaration", requestHandling (fun s p -> s.TextDocumentDeclaration(p))
       "textDocument/definition", requestHandling (fun s p -> s.TextDocumentDefinition(p))
       "textDocument/typeDefinition", requestHandling (fun s p -> s.TextDocumentTypeDefinition(p))
       "textDocument/implementation", requestHandling (fun s p -> s.TextDocumentImplementation(p))
@@ -225,13 +252,23 @@ module Server =
       "textDocument/didSave", requestHandling (fun s p -> s.TextDocumentDidSave(p) |> notificationSuccess)
       "textDocument/didClose", requestHandling (fun s p -> s.TextDocumentDidClose(p) |> notificationSuccess)
       "textDocument/documentSymbol", requestHandling (fun s p -> s.TextDocumentDocumentSymbol(p))
+      "textDocument/moniker", requestHandling (fun s p -> s.TextDocumentMoniker(p))
+      "textDocument/linkedEditingRange", requestHandling (fun s p -> s.TextDocumentLinkedEditingRange(p))
       "textDocument/foldingRange", requestHandling (fun s p -> s.TextDocumentFoldingRange(p))
       "textDocument/selectionRange", requestHandling (fun s p -> s.TextDocumentSelectionRange(p))
+      "textDocument/prepareCallHierarchy", requestHandling (fun s p -> s.TextDocumentPrepareCallHierarchy(p))
+      "callHierarchy/incomingCalls", requestHandling (fun s p -> s.CallHierarchyIncomingCalls(p))
+      "callHierarchy/outgoingCalls", requestHandling (fun s p -> s.CallHierarchyOutgoingCalls(p))
+      "textDocument/prepareTypeHierarchy", requestHandling (fun s p -> s.TextDocumentPrepareTypeHierarchy(p))
+      "typeHierarchy/supertypes", requestHandling (fun s p -> s.TypeHierarchySupertypes(p))
+      "typeHierarchy/subtypes", requestHandling (fun s p -> s.TypeHierarchySubtypes(p))
       "textDocument/semanticTokens/full", requestHandling (fun s p -> s.TextDocumentSemanticTokensFull(p))
       "textDocument/semanticTokens/full/delta", requestHandling (fun s p -> s.TextDocumentSemanticTokensFullDelta(p))
       "textDocument/semanticTokens/range", requestHandling (fun s p -> s.TextDocumentSemanticTokensRange(p))
       "textDocument/inlayHint", requestHandling (fun s p -> s.TextDocumentInlayHint(p))
       "inlayHint/resolve", requestHandling (fun s p -> s.InlayHintResolve(p))
+      "textDocument/inlineValue", requestHandling (fun s p -> s.TextDocumentInlineValue(p))
+      "textDocument/diagnostic", requestHandling (fun s p -> s.TextDocumentDiagnostic(p))
       "workspace/didChangeWatchedFiles",
       requestHandling (fun s p -> s.WorkspaceDidChangeWatchedFiles(p) |> notificationSuccess)
       "workspace/didChangeWorkspaceFolders",
@@ -247,12 +284,16 @@ module Server =
       "workspace/willDeleteFiles", requestHandling (fun s p -> s.WorkspaceWillDeleteFiles(p))
       "workspace/didDeleteFiles", requestHandling (fun s p -> s.WorkspaceDidDeleteFiles(p) |> notificationSuccess)
       "workspace/symbol", requestHandling (fun s p -> s.WorkspaceSymbol(p))
+      "workspaceSymbol/resolve", requestHandling (fun s p -> s.WorkspaceSymbolResolve(p))
       "workspace/executeCommand", requestHandling (fun s p -> s.WorkspaceExecuteCommand(p))
+      "window/workDoneProgress/cancel", requestHandling (fun s p -> s.WorkDoneProgressCancel(p) |> notificationSuccess)
+      "workspace/diagnostic", requestHandling (fun s p -> s.WorkspaceDiagnostic(p))
       "shutdown", requestHandling (fun s () -> s.Shutdown() |> notificationSuccess)
       "exit", requestHandling (fun s () -> s.Exit() |> notificationSuccess) ]
     |> Map.ofList
 
-  let start<'client, 'server when 'client :> Ionide.LanguageServerProtocol.ILspClient and 'server :> Ionide.LanguageServerProtocol.ILspServer>
+  let start<'client, 'server
+    when 'client :> Ionide.LanguageServerProtocol.ILspClient and 'server :> Ionide.LanguageServerProtocol.ILspServer>
     (requestHandlings: Map<string, ServerRequestHandling<'server>>)
     (input: Stream)
     (output: Stream)
@@ -307,8 +348,8 @@ module Client =
           return
             res
             |> Option.map (fun n -> JToken.FromObject(n, jsonSerializer))
-        with
-        | _ -> return None
+        with _ ->
+          return None
       }
 
     { Run = run }
@@ -406,22 +447,21 @@ module Client =
     let mutable inputStream: StreamWriter option = None
 
     let sender =
-      MailboxProcessor<string>.Start
-        (fun inbox ->
-          let rec loop () =
-            async {
-              let! str = inbox.Receive()
+      MailboxProcessor<string>.Start(fun inbox ->
+        let rec loop () =
+          async {
+            let! str = inbox.Receive()
 
-              inputStream
-              |> Option.iter (fun input ->
-                // fprintfn stderr "[CLIENT] Writing: %s" str
-                LowLevel.write input.BaseStream str
-                input.BaseStream.Flush())
-              // do! Async.Sleep 1000
-              return! loop ()
-            }
+            inputStream
+            |> Option.iter (fun input ->
+              // fprintfn stderr "[CLIENT] Writing: %s" str
+              LowLevel.write input.BaseStream str
+              input.BaseStream.Flush())
+            // do! Async.Sleep 1000
+            return! loop ()
+          }
 
-          loop ())
+        loop ())
 
     let handleRequest (request: JsonRpc.Request) =
       async {
@@ -435,8 +475,8 @@ module Client =
             | Some prms ->
               let! result = handling.Run prms
               methodCallResult <- result
-          with
-          | ex -> methodCallResult <- None
+          with ex ->
+            methodCallResult <- None
         | None -> ()
 
         match methodCallResult with
@@ -454,8 +494,8 @@ module Client =
             | Some prms ->
               let! result = handling.Run prms
               return Result.Ok()
-          with
-          | ex -> return Result.Error(JsonRpc.Error.Create(JsonRpc.ErrorCodes.internalError, ex.ToString()))
+          with ex ->
+            return Result.Error(JsonRpc.Error.Create(JsonRpc.ErrorCodes.internalError, ex.ToString()))
         | None -> return Result.Error(JsonRpc.Error.MethodNotFound)
       }
 
@@ -539,8 +579,7 @@ module Client =
         let proc =
           try
             Process.Start(si)
-          with
-          | ex ->
+          with ex ->
             let newEx = System.Exception(sprintf "%s on %s" ex.Message exec, ex)
             raise newEx
 

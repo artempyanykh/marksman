@@ -94,20 +94,6 @@ module Doc =
             >> Log.addContext "newVersion" newVersion
         )
 
-        // Sanity checking
-        match newVersion, doc.version with
-        | newVersion, Some curVersion when curVersion > 0 ->
-            let expectedVersion = curVersion + change.ContentChanges.Length
-
-            if expectedVersion <> newVersion then
-                logger.warn (
-                    Log.setMessage "Unexpected document version"
-                    >> Log.addContext "uri" doc.id.Uri
-                    >> Log.addContext "currentVersion" curVersion
-                    >> Log.addContext "newVersion" newVersion
-                )
-        | _ -> ()
-
         let newText = applyTextChange change.ContentChanges doc.text
 
         { withText exts newText doc with version = Some newVersion }

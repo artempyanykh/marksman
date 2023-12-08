@@ -33,8 +33,9 @@ let systemPathToUriString (filePath: string) : string =
         else if c = '\\' then
             uri.Append('/') |> ignore
         else
-            uri.Append('%') |> ignore
-            uri.Append((int c).ToString("X2")) |> ignore
+            // It's important to have UTF8 encoding here as otherwise paths with accented characters
+            // won't work. Url-encoding uses UTF8 by default.
+            uri.Append(Uri.EscapeDataString(c.ToString())) |> ignore
 
     if uri.Length >= 2 && uri[0] = '/' && uri[1] = '/' then // UNC path
         "file:" + uri.ToString()

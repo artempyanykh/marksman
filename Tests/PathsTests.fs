@@ -98,3 +98,9 @@ module PathUriTests =
             (fun x -> x.ToString())
             (id.data.ToString().Lines())
             [ "{ root = RootPath (AbsPath \"/a/b/doc.md\")"; "  path = None }" ]
+
+    [<Fact>]
+    let testAccented_issue274 () =
+        let path = "/activité.md"
+        let encoded = systemPathToUriString path
+        Assert.Equal("file:///activit%C3%A9.md", encoded)

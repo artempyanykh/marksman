@@ -64,6 +64,11 @@ type ClientDescription =
         | None -> false
         | Some exp -> exp.Value<bool>("statusNotification")
 
+    member this.SupportsLensFindReferences: bool =
+        match this.caps.Experimental with
+        | None -> false
+        | Some exp -> exp.Value<bool>("codeLensFindReferences")
+
     member this.SupportsHierarchy: bool =
         monad' {
             let! textDoc = this.caps.TextDocument

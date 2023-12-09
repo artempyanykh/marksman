@@ -1022,7 +1022,7 @@ type MarksmanServer(client: MarksmanClient) =
             let lenses =
                 monad' {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docPath state
-                    Lenses.forDoc folder srcDoc
+                    Lenses.forDoc (State.client state) folder srcDoc
                 }
 
             LspResult.success lenses

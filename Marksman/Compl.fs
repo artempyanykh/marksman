@@ -418,7 +418,13 @@ module Completions =
                     (completionHeading |> WikiEncoded.encode |> Some)
                     (Completable.isPartial compl)
 
-            let range = if Completable.isPartial compl then range else input.range
+            let range =
+                if Completable.isPartial compl then
+                    range
+                else
+                    // We need to include the `#` char that precedes the input
+                    { input.range with Start = input.range.Start.PrevChar(1) }
+
             let textEdit = { Range = range; NewText = newText }
 
             Some

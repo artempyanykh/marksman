@@ -306,7 +306,8 @@ module Candidates =
                    "## H2" // 3
                    "#B"
                    "## H2"
-                   "[](/doc%202.md#)" |] // 6
+                   "[](/doc%202.md#)"
+                   "[[#]]" |] // 7
         //  012345678901234567890
         )
 
@@ -318,6 +319,10 @@ module Candidates =
     [<Fact>]
     let noDupsOnAchor_intraFile () =
         checkSnapshot (findCandidatesInDoc globalFolder globalDoc1 (Position.Mk(1, 3)))
+
+    [<Fact>]
+    let noExtraHash_wikiHeading_intraFile_issue174 () =
+        checkSnapshot (findCandidatesInDoc globalFolder globalDoc1 (Position.Mk(7, 3)))
 
     [<Fact>]
     let noDupsOnAchor_crossFile () =

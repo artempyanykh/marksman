@@ -78,9 +78,9 @@ let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : 
     let children =
         if Array.isEmpty children then
             None
+        // Emacs' imenu with consult/counsel/etc. doesn't allow selecting intermediate
+        // nodes that have children. As a workaround we add a '.' this node.
         else if isEmacs then
-            // Emacs' imenu with consult/counsel/etc. doesn't allow selecting intermediate
-            // nodes that have children. As a workaround we add a '.' this node.
             let thisHeading =
                 { Name = "."
                   Detail = None

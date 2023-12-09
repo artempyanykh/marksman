@@ -214,6 +214,8 @@ module Conn =
             >> Log.addContext "#removed" (Set.count removed)
         )
 
+        let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+
         let mutable { refs = refs
                       defs = defs
                       tags = tags
@@ -414,6 +416,7 @@ module Conn =
         logger.trace (
             Log.setMessage "Finished updating conn"
             >> Log.addContext "#touched" (Set.count lastTouched)
+            >> Log.addContext "elapsed_ms" (stopwatch.ElapsedMilliseconds)
         )
 
         { refs = refs

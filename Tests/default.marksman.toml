@@ -15,7 +15,7 @@ markdown.file_extensions = ["md", "markdown"]
 #   impact is marginal.
 # Defaults to `full` because the editors have bugs in incremental
 # sync which result in slightly correpted state and are really hard
-# to daignose.
+# to diagnose.
 text_sync = "full"
 # Use incremental resolution of project-wide references.
 # This is much more efficient but is currently experimental

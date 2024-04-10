@@ -33,7 +33,15 @@ else
 		OS_ID := osx
 	endif
 
+	ifeq ($(UNAME_S),FreeBSD)
+		OS_ID := freebsd
+	endif
+
 	ifeq ($(TARGET),x86_64)
+		ARCH_ID := x64
+	endif
+	
+	ifeq ($(TARGET),amd64)
 		ARCH_ID := x64
 	endif
 

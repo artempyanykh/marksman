@@ -32,6 +32,8 @@ toc.enable = true
 create_missing_file.enable = true
 
 [completion]
+# The maximum number of candidates returned for a completion 
+candidates = 50
 # The style of wiki links completion.
 # Other values include: 
 # * "file-stem" to complete using file name without an extension,

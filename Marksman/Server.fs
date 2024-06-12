@@ -793,7 +793,7 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder, doc = State.tryFindFolderAndDoc docUri state
 
-                    let maxCompletions = 50
+                    let maxCompletions = (State.userConfigOrDefault state).ComplCandidates()
 
                     match
                         Compl.findCandidatesInDoc folder doc pos

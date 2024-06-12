@@ -101,6 +101,20 @@ paranoid = true
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
+let testParse_7 () =
+    let content =
+        """
+[completion]
+candidates = 100
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with complCandidates = Some 100 }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
 let testParse_broken_0 () =
     let content =
         """
@@ -138,6 +152,28 @@ let testParse_broken_3 () =
         """
 [core]
 markdown.file_extensions = [["md"], ["markdown"]]
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
+
+[<Fact>]
+let testParse_broken_4 () =
+    let content =
+        """
+[completion]
+candidates = "fifty"
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
+
+[<Fact>]
+let testParse_broken_5 () =
+    let content =
+        """
+[completion]
+candidates = -1
 """
 
     let actual = Config.tryParse content

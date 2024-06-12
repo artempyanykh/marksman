@@ -9,6 +9,7 @@ open Tomlyn.Model
 type LookupError =
     | NotFound of path: list<string>
     | WrongType of path: list<string> * value: obj * expectedType: System.Type
+    | WrongValue of path: list<string> * value: obj * err: string
 
 type LookupResult<'R> = Result<'R, LookupError>
 
@@ -129,7 +130,8 @@ type Config =
       coreTextSync: option<TextSync>
       coreIncrementalReferences: option<bool>
       coreParanoid: option<bool>
-      complWikiStyle: option<ComplWikiStyle> }
+      complWikiStyle: option<ComplWikiStyle>
+      complCandidates: option<int> }
 
     static member Default =
         { caTocEnable = Some true
@@ -138,7 +140,8 @@ type Config =
           coreTextSync = Some Full
           coreIncrementalReferences = Some false
           coreParanoid = Some false
-          complWikiStyle = Some TitleSlug }
+          complWikiStyle = Some TitleSlug
+          complCandidates = Some 50 }
 
     static member Empty =
         { caTocEnable = None
@@ -147,7 +150,8 @@ type Config =
           coreTextSync = None
           coreIncrementalReferences = None
           coreParanoid = None
-          complWikiStyle = None }
+          complWikiStyle = None
+          complCandidates = None }
 
     member this.CaTocEnable() =
         this.caTocEnable
@@ -184,6 +188,11 @@ type Config =
         |> Option.orElse Config.Default.complWikiStyle
         |> Option.get
 
+    member this.ComplCandidates() =
+        this.complCandidates
+        |> Option.orElse Config.Default.complCandidates
+        |> Option.get
+
 let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
@@ -207,13 +216,29 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         let complWikiStyle =
             complWikiStyle |> Option.bind ComplWikiStyle.ofStringOpt
 
+        // TOML parser represents numbers as int64, hence extract as int64 and
+        // convert to int
+        let complCandidatesPath = [ "completion"; "candidates" ]
+        let! complCandidates = getFromTableOpt<int64> table [] complCandidatesPath
+
+        let! complCandidates =
+            match complCandidates with
+            | None -> Ok None
+            | Some v ->
+                if v > 0 then
+                    Ok(Some(int v))
+                else
+                    Error(WrongValue(complCandidatesPath, v, "expected a non-negative number"))
+
+
         { caTocEnable = caTocEnable
           caCreateMissingFileEnable = caCreateMissingFileEnable
           coreMarkdownFileExtensions = coreMarkdownFileExtensions
           coreTextSync = coreTextSync
           coreIncrementalReferences = coreIncrementalReferences
           coreParanoid = coreParanoid
-          complWikiStyle = complWikiStyle }
+          complWikiStyle = complWikiStyle
+          complCandidates = complCandidates }
     }
 
 module Config =
@@ -232,7 +257,8 @@ module Config =
             hi.coreIncrementalReferences
             |> Option.orElse low.coreIncrementalReferences
           coreParanoid = hi.coreParanoid |> Option.orElse low.coreParanoid
-          complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle }
+          complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle
+          complCandidates = hi.complCandidates |> Option.orElse low.complCandidates }
 
     let mergeOpt hi low =
         match low with
@@ -251,7 +277,13 @@ module Config =
 
             match configOfTable table with
             | Ok parsed -> Some parsed
-            | _ -> None
+            | err ->
+                logger.error (
+                    Log.setMessage "Failed to parse configuration"
+                    >> Log.addContext "error" err
+                )
+
+                None
         else
             logger.trace (Log.setMessage "Parsing as TOML failed")
             None

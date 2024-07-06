@@ -161,7 +161,7 @@ module Dest =
         | Some(IntraRef(IntraSection _)) -> Implicit destDoc
         | _ -> failwith $"Link kind cannot be determined for {srcSym} symbol"
 
-    let private tryResolveSym (folder: Folder) (doc: Doc) (srcSym: Sym) : seq<Dest> =
+    let tryResolveSym (folder: Folder) (doc: Doc) (srcSym: Sym) : seq<Dest> =
         let complStyle = (Folder.configOrDefault folder).ComplWikiStyle()
 
         let scopedSym = Sym.scopedToDoc doc.Id srcSym

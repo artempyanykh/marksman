@@ -14,6 +14,8 @@ open Marksman.Index
 open Marksman.Folder
 open Marksman.Refs
 open Marksman.Toc
+open Marksman.Structure
+open Marksman.Syms
 
 let private logger = LogProvider.getLoggerByName "CodeActions"
 
@@ -125,17 +127,23 @@ let createMissingFile
 
     monad' {
         let! atPos = Doc.index doc |> Index.linkAtPos pos
-        let refs = Dest.tryResolveElement folder doc atPos
+
+        // Extract a potential xref to another doc. We should extract only the doc part to ensure
+        // that empty list of references means that the file doesn't exist
+        let! symAtPos = doc.Structure |> Structure.tryFindSymbolForConcrete atPos
+
+        let! docAtPos =
+            match symAtPos with
+            | Sym.Ref(CrossRef r) -> Some(r.Doc)
+            | _ -> None
+
+        let docRefAtPos = Sym.Ref(CrossRef(CrossDoc docAtPos))
+        let refs = Dest.tryResolveSym folder doc docRefAtPos
 
         // Early return if the file exists
         do! guard (Seq.isEmpty refs)
 
-        let! name =
-            match doc.Structure |> Structure.Structure.tryFindSymbolForConcrete atPos with
-            | Some(Syms.Sym.Ref(Syms.CrossRef r)) -> Some r.Doc
-            | _ -> None
-
-        let! internPath = InternName.tryAsPath { name = name; src = doc.Id }
+        let! internPath = InternName.tryAsPath { name = docAtPos; src = doc.Id }
 
         let relPath =
             InternPath.toRel internPath

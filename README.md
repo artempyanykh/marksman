@@ -165,6 +165,6 @@ LSP but it's not a part of the spec at least until and including v3.17.
 
 [eglot-marksman-pr]: https://github.com/joaotavora/eglot/pull/1013
 
-[sublime-marksman]: https://github.com/bitsper2nd/LSP-marksman
+[sublime-marksman]: https://github.com/sublimelsp/LSP-marksman
 
 [ale]: https://github.com/dense-analysis/ale

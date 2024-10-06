@@ -327,7 +327,11 @@ module Markdown =
                         let link = MdLink.RC label |> Node.mk linkText linkRange
                         elements.Add(ML link)
                     // The last remaining option is full reference
-                    else
+                    //
+                    // NOTE: there's something off in Markdig's LinkHelper.TryParseLabelTrivia
+                    // This is called from PatchedInlineLinkParser:341.
+                    // TODO: Figure out why there's an incorrect urlSpan (-1 -- 0) returned.
+                    else if not (String.IsNullOrEmpty url) then
                         let text_ = Node.mkText label (sourceSpanToRange text labelSpan)
                         let label = Node.mkText url (sourceSpanToRange text urlSpan)
                         let link = MdLink.RF(text_, label) |> Node.mk linkText linkRange

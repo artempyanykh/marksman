@@ -147,7 +147,7 @@ LSP but it's not a part of the spec at least until and including v3.17.
 
 [original-zn]: https://github.com/artempyanykh/zeta-note
 
-[nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#marksman
+[nvim-marksman]: https://github.com/neovim/nvim-lspconfig/blob/master/doc/configs.md#marksman
 
 [mason-nvim]: https://github.com/williamboman/mason.nvim
 

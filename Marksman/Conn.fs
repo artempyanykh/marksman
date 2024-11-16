@@ -79,9 +79,46 @@ type ConnDifference =
 
         concatLines lines
 
+type Defs =
+    { byScope: MMap<Scope, Def>
+      bySlug: MMap<ScopeSlug, Scope * Def> }
+
+    static member Empty = { byScope = MMap.empty; bySlug = MMap.empty }
+
+    member this.IsEmpty = MMap.isEmpty this.byScope
+
+    member this.AllSeq = MMap.toSeq this.byScope
+
+    member this.AllSetSeq = MMap.toSetSeq this.byScope
+
+    member this.Add(scope: Scope, def: Def) : Defs =
+        let byScope = this.byScope |> MMap.add scope def
+
+        let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
+
+        let bySlug =
+            scopeSlug
+            |> Option.map (fun x -> this.bySlug |> MMap.add x (scope, def))
+            |> Option.defaultValue this.bySlug
+
+        { byScope = byScope; bySlug = bySlug }
+
+    member this.Remove(scope: Scope, def: Def) : Defs =
+        let byScope = this.byScope |> MMap.removeValue scope def
+
+        let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
+
+        let bySlug =
+            scopeSlug
+            |> Option.map (fun x -> this.bySlug |> MMap.removeValue x (scope, def))
+            |> Option.defaultValue this.bySlug
+
+        { byScope = byScope; bySlug = bySlug }
+
+
 type Conn =
     { refs: MMap<Scope, Ref>
-      defs: MMap<Scope, Def>
+      defs: Defs
       tags: MMap<Scope, Tag>
       resolved: Graph<ScopedSym>
       unresolved: Graph<Unresolved>
@@ -141,10 +178,10 @@ type Conn =
                         for ref in refs do
                             yield Indented(4, ref).ToString()
 
-                if this.defs |> MMap.isEmpty |> not then
+                if not this.defs.IsEmpty then
                     yield "Defs:"
 
-                    for scope, defs in MMap.toSetSeq this.defs do
+                    for scope, defs in this.defs.AllSetSeq do
                         yield $"  {scope}:"
 
                         for def in defs do
@@ -182,7 +219,7 @@ module Conn =
 
     let empty =
         { refs = MMap.empty
-          defs = MMap.empty
+          defs = Defs.Empty
           tags = MMap.empty
           resolved = Graph.empty
           unresolved = Graph.empty
@@ -191,7 +228,7 @@ module Conn =
 
     let isSameStructure c1 c2 =
         c1.refs = c2.refs
-        && c1.defs = c2.defs
+        && c1.defs.byScope = c2.defs.byScope
         && c1.tags = c2.tags
         && c1.resolved = c2.resolved
         && c1.unresolved = c2.unresolved
@@ -296,7 +333,7 @@ module Conn =
                 | _, Sym.Def _
                 | _, Sym.Tag _ -> ()
 
-            defs <- MMap.removeValue scope def defs
+            defs <- defs.Remove(scope, def)
             resolved <- Graph.removeVertexWithCallback cb scopedSym resolved
 
             // When the doc is removed we need to remove all unresolved links within this doc's scope
@@ -326,7 +363,7 @@ module Conn =
                 | CrossRef(CrossDoc _)
                 | IntraRef _ -> ()
             | Sym.Def def ->
-                defs <- MMap.add scope def defs
+                defs <- defs.Add(scope, def)
 
                 match def with
                 | Doc
@@ -334,7 +371,7 @@ module Conn =
                     // Whenever a new title is added, links that were previously pointing at the Doc
                     // or the other titles need to be invalidated
                     let affectedDefs =
-                        defs
+                        defs.byScope
                         |> MMap.tryFind scope
                         |> Option.defaultValue Set.empty
                         |> Seq.filter Def.isTitle
@@ -344,18 +381,11 @@ module Conn =
                     // Similarly, other doc/titles could resolve to the same scope group
                     let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
 
-                    // TODO: we could do this faster if the groups were maintained in a set
                     let affectedDefsInOtherScopes =
                         match scopeSlug with
-                        | None -> Seq.empty
+                        | None -> Set.empty
                         | Some scopeSlug ->
-                            defs
-                            |> MMap.toSeq
-                            |> Seq.choose (fun scopedDef ->
-                                ScopeSlug.ofScopedDef scopedDef
-                                |> Option.map (fun slug -> scopedDef, slug))
-                            |> Seq.filter (fun (_, slug) -> slug = scopeSlug)
-                            |> Seq.map fst
+                            MMap.tryFind scopeSlug defs.bySlug |> Option.defaultValue Set.empty
 
                     let affectedDefs =
                         affectedDefs |> Seq.append affectedDefsInOtherScopes |> Set.ofSeq
@@ -470,7 +500,7 @@ module Conn =
 
     let difference c1 c2 : ConnDifference =
         { refsDifference = MMap.difference c1.refs c2.refs
-          defsDifference = MMap.difference c1.defs c2.defs
+          defsDifference = MMap.difference c1.defs.byScope c2.defs.byScope
           tagsDifference = MMap.difference c1.tags c2.tags
           resolvedDifference = Graph.difference c1.resolved c2.resolved
           unresolvedDifference = Graph.difference c1.unresolved c2.unresolved

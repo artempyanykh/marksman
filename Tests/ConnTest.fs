@@ -192,6 +192,23 @@ module ConnGraphTests =
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
 
     [<Fact>]
+    let addTitle_CrossSection () =
+        let d1 =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# D1"; "[[d2#sub]]" |])
+
+        let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "# D2"; "## Sub" |])
+
+        let d1Upd =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# D2"; "[[d2#sub]]" |])
+
+        let incr = mkFolder [ d1; d2 ] |> Folder.withDoc d1Upd |> Folder.conn
+
+        let fromScratch = mkFolder [ d1Upd; d2 ] |> Folder.conn
+
+        let connDiff = Conn.difference fromScratch incr
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact>]
     let fixRef () =
         let d1 =
             FakeDoc.Mk(path = "d1.md", contentLines = [| "[[#Lnk]]"; "## Link" |])

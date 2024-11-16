@@ -2,6 +2,7 @@ module Marksman.Syms
 
 open Marksman.Misc
 open Marksman.Names
+open Marksman.Paths
 
 
 [<StructuredFormatDisplay("{AsString}")>]
@@ -149,6 +150,12 @@ type Scope =
 
     member this.CompactFormat = this.ToString()
 
+module Scope =
+    let asDoc =
+        function
+        | Scope.Doc id -> Some id
+        | Scope.Global -> None
+
 type ScopedSym = Scope * Sym
 
 module ScopedSym =
@@ -156,6 +163,24 @@ module ScopedSym =
         function
         | scope, Sym.Ref ref -> Some(scope, ref)
         | _ -> None
+
+type ScopeSlug = ScopeSlug of Slug
+
+module ScopeSlug =
+    let private ofDocId (docId: DocId) =
+        docId.Path |> RootedRelPath.filenameStem |> Slug.ofString |> ScopeSlug
+
+    let private ofScopedDefAux (docId: DocId) (def: Def) =
+        match def with
+        | Def.LinkDef _ -> None
+        | Def.Doc -> Some(ofDocId docId)
+        | Def.Header(1, id) -> Some(ScopeSlug(Slug.ofString id))
+        | Def.Header _ -> None
+
+    let ofScopedDef (scope: Scope, def: Def) =
+        match Scope.asDoc scope with
+        | Some docId -> ofScopedDefAux docId def
+        | None -> None
 
 module Sym =
     let asRef =

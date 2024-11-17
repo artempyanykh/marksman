@@ -76,19 +76,20 @@ let main _ =
     // ReferenceResolution().findRefsTime()
     BenchmarkRunner.Run<ReferenceResolution>() |> ignore
     0
-
+// $ dotnet run -c Release --project Benchmarks/Benchmarks.fsproj
 // BenchmarkDotNet=v0.13.5, OS=macOS Ventura 13.3.1 (22E261) [Darwin 22.4.0]
+// BenchmarkDotNet v0.14.0, macOS Sonoma 14.6.1 (23G93) [Darwin 23.6.0]
 // Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores
-// .NET SDK=7.0.302
-//   [Host]     : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD DEBUG [AttachedDebugger]
-//   DefaultJob : .NET 7.0.5 (7.0.523.17405), Arm64 RyuJIT AdvSIMD
+// .NET SDK 8.0.402
+//   [Host]     : .NET 8.0.8 (8.0.824.36612), Arm64 RyuJIT AdvSIMD DEBUG
+//   DefaultJob : .NET 8.0.8 (8.0.824.36612), Arm64 RyuJIT AdvSIMD
 //
 //
-// |       Method | FolderSize |           Mean |       Error |      StdDev |
-// |------------- |----------- |---------------:|------------:|------------:|
-// |  gotoDefTime |         10 |       1.180 us |   0.0034 us |   0.0032 us |
-// | findRefsTime |         10 |     147.967 us |   0.7200 us |   0.6735 us |
-// |  gotoDefTime |         50 |       1.294 us |   0.0013 us |   0.0011 us |
-// | findRefsTime |         50 |   4,040.372 us |   4.7052 us |   4.4013 us |
-// |  gotoDefTime |        250 |       1.433 us |   0.0022 us |   0.0019 us |
-// | findRefsTime |        250 | 115,387.334 us | 118.0649 us | 104.6614 us |
+// | Method       | FolderSize | Mean       | Error     | StdDev     |
+// |------------- |----------- |-----------:|----------:|-----------:|
+// | gotoDefTime  | 10         |   1.683 us | 0.0171 us |  0.0160 us |
+// | findRefsTime | 10         |  10.410 us | 0.1307 us |  0.1223 us |
+// | gotoDefTime  | 50         |   2.428 us | 0.0377 us |  0.0334 us |
+// | findRefsTime | 50         |  58.423 us | 1.0584 us |  0.9901 us |
+// | gotoDefTime  | 250        |   3.247 us | 0.0379 us |  0.0355 us |
+// | findRefsTime | 250        | 388.914 us | 7.6202 us | 11.1697 us |

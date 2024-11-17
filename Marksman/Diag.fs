@@ -40,9 +40,10 @@ let checkNonBreakingWhitespace (doc: Doc) =
         match headingLike with
         | None -> []
         | Some heading ->
-            let whitespaceRange: Lsp.Range =
-                { Start = { Line = x; Character = heading.Length }
-                  End = { Line = x; Character = heading.Length + 1 } }
+            let whitespaceRange: Lsp.Range = {
+                Start = { Line = x; Character = heading.Length }
+                End = { Line = x; Character = heading.Length + 1 }
+            }
 
             [ NonBreakableWhitespace(whitespaceRange) ])
 
@@ -136,15 +137,17 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
 
         let related = dests |> Array.map mkRelated
 
-        { Range = Element.range el
-          Severity = Some severity
-          Code = Some(code diag)
-          CodeDescription = None
-          Source = Some "Marksman"
-          Message = $"Ambiguous link to {refToHuman ref}"
-          RelatedInformation = Some related
-          Tags = None
-          Data = None }
+        {
+            Range = Element.range el
+            Severity = Some severity
+            Code = Some(code diag)
+            CodeDescription = None
+            Source = Some "Marksman"
+            Message = $"Ambiguous link to {refToHuman ref}"
+            RelatedInformation = Some related
+            Tags = None
+            Data = None
+        }
     | BrokenLink(el, ref) ->
         let severity =
             match el with
@@ -157,27 +160,30 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
 
         let msg = $"Link to non-existent {refToHuman ref}"
 
-        { Range = Element.range el
-          Severity = Some severity
-          Code = Some(code diag)
-          CodeDescription = None
-          Source = Some "Marksman"
-          Message = msg
-          RelatedInformation = None
-          Tags = None
-          Data = None }
+        {
+            Range = Element.range el
+            Severity = Some severity
+            Code = Some(code diag)
+            CodeDescription = None
+            Source = Some "Marksman"
+            Message = msg
+            RelatedInformation = None
+            Tags = None
+            Data = None
+        }
 
-    | NonBreakableWhitespace dup ->
-        { Range = dup
-          Severity = Some Lsp.DiagnosticSeverity.Warning
-          Code = Some(code diag)
-          CodeDescription = None
-          Source = Some "Marksman"
-          Message =
+    | NonBreakableWhitespace dup -> {
+        Range = dup
+        Severity = Some Lsp.DiagnosticSeverity.Warning
+        Code = Some(code diag)
+        CodeDescription = None
+        Source = Some "Marksman"
+        Message =
             "Non-breaking whitespace used instead of regular whitespace. This line won't be interpreted as a heading"
-          RelatedInformation = None
-          Tags = None
-          Data = None }
+        RelatedInformation = None
+        Tags = None
+        Data = None
+      }
 
 type FolderDiag = array<DocId * array<Lsp.Diagnostic>>
 

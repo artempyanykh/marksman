@@ -32,16 +32,16 @@ let ast1 = struct1.Ast
 
 [<Fact>]
 let testAstShape () =
-    checkInlineSnapshot
-        ast1.elements
-        [ "# Doc 1 {doc-1}"
-          "[collapsedRef][]"
-          "[[wiki-link]]"
-          "## Sub 1 {sub-1}"
-          "[inline-link](url)"
-          "## Sub 2 {sub-2}"
-          "#tag"
-          "[collapsedRef]: DefURL" ]
+    checkInlineSnapshot ast1.elements [
+        "# Doc 1 {doc-1}"
+        "[collapsedRef][]"
+        "[[wiki-link]]"
+        "## Sub 1 {sub-1}"
+        "[inline-link](url)"
+        "## Sub 2 {sub-2}"
+        "#tag"
+        "[collapsedRef]: DefURL"
+    ]
 
 [<Fact>]
 let testAstLookup () =
@@ -51,12 +51,11 @@ let testAstLookup () =
     let csub1 =
         (Structure.findConcreteForAbstract sub1 struct1) |> Array.ofSeq
 
-    Helpers.checkInlineSnapshot
-        Cst.Element.fmt
-        csub1
-        [ "H2: range=(4,0)-(4,8); scope=(4,0)-(8,0)"
-          "  text=`## Sub 1`"
-          "  title=`Sub 1` @ (4,3)-(4,8)" ]
+    Helpers.checkInlineSnapshot Cst.Element.fmt csub1 [
+        "H2: range=(4,0)-(4,8); scope=(4,0)-(8,0)"
+        "  text=`## Sub 1`"
+        "  title=`Sub 1` @ (4,3)-(4,8)"
+    ]
 
     let shouldBeSub1 = Structure.findMatchingAbstract csub1[0] struct1
     Assert.Equal(sub1, shouldBeSub1)

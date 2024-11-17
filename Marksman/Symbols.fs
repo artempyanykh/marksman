@@ -19,13 +19,14 @@ let tagToSymbolInfo (docUri: DocId) (t: Node<Tag>) : SymbolInformation =
     let kind = SymbolKind.String
     let location = { Uri = docUri.Uri; Range = t.range }
 
-    let sym =
-        { Name = name
-          Kind = kind
-          Location = location
-          ContainerName = None
-          Tags = None
-          Deprecated = None }
+    let sym = {
+        Name = name
+        Kind = kind
+        Location = location
+        ContainerName = None
+        Tags = None
+        Deprecated = None
+    }
 
     sym
 
@@ -34,13 +35,14 @@ let headingToSymbolInfo (docUri: DocId) (h: Node<Heading>) : SymbolInformation =
     let kind = SymbolKind.String
     let location = { Uri = docUri.Uri; Range = h.range }
 
-    let sym =
-        { Name = name
-          Kind = kind
-          Location = location
-          ContainerName = None
-          Tags = None
-          Deprecated = None }
+    let sym = {
+        Name = name
+        Kind = kind
+        Location = location
+        ContainerName = None
+        Tags = None
+        Deprecated = None
+    }
 
     sym
 
@@ -49,14 +51,16 @@ let rec tagToDocumentSymbol (t: Node<Tag>) : DocumentSymbol =
     let kind = SymbolKind.String
     let range = t.range
 
-    { Name = name
-      Detail = None
-      Kind = kind
-      Range = range
-      SelectionRange = range
-      Children = None
-      Tags = None
-      Deprecated = None }
+    {
+        Name = name
+        Detail = None
+        Kind = kind
+        Range = range
+        SelectionRange = range
+        Children = None
+        Tags = None
+        Deprecated = None
+    }
 
 let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : DocumentSymbol =
     let name = Heading.name h.data
@@ -81,28 +85,31 @@ let rec headingToDocumentSymbol (isEmacs: bool) (cst: Cst) (h: Node<Heading>) : 
         // Emacs' imenu with consult/counsel/etc. doesn't allow selecting intermediate
         // nodes that have children. As a workaround we add a '.' this node.
         else if isEmacs then
-            let thisHeading =
-                { Name = "."
-                  Detail = None
-                  Kind = kind
-                  Range = selectionRange
-                  SelectionRange = selectionRange
-                  Children = None
-                  Tags = None
-                  Deprecated = None }
+            let thisHeading = {
+                Name = "."
+                Detail = None
+                Kind = kind
+                Range = selectionRange
+                SelectionRange = selectionRange
+                Children = None
+                Tags = None
+                Deprecated = None
+            }
 
             Some(Array.append [| thisHeading |] children)
         else
             Some children
 
-    { Name = name
-      Detail = None
-      Kind = kind
-      Range = range
-      SelectionRange = selectionRange
-      Children = children
-      Tags = None
-      Deprecated = None }
+    {
+        Name = name
+        Detail = None
+        Kind = kind
+        Range = range
+        SelectionRange = selectionRange
+        Children = children
+        Tags = None
+        Deprecated = None
+    }
 
 let docSymbols
     (hierarchy: bool)

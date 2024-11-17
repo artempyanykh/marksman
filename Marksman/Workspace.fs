@@ -17,8 +17,10 @@ module Workspace =
     let ofFolders (userConfig: option<Config>) (folders: seq<Folder>) : Workspace =
         let folders = folders |> Seq.map (mergeFolderConfig userConfig)
 
-        { config = userConfig
-          folders = folders |> Seq.map (fun f -> Folder.id f, f) |> Map.ofSeq }
+        {
+            config = userConfig
+            folders = folders |> Seq.map (fun f -> Folder.id f, f) |> Map.ofSeq
+        }
 
     let folders (workspace: Workspace) : seq<Folder> =
         seq {
@@ -38,8 +40,10 @@ module Workspace =
             else
                 None)
 
-    let withoutFolder (keyPath: FolderId) (workspace: Workspace) : Workspace =
-        { workspace with folders = Map.remove keyPath workspace.folders }
+    let withoutFolder (keyPath: FolderId) (workspace: Workspace) : Workspace = {
+        workspace with
+            folders = Map.remove keyPath workspace.folders
+    }
 
     let withoutFolders (roots: seq<FolderId>) (workspace: Workspace) : Workspace =
         let newFolders = roots |> Seq.fold (flip Map.remove) workspace.folders

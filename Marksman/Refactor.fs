@@ -57,8 +57,10 @@ let mkWorkspaceEdit
     if supportsDocumentEdit then
         { Changes = None; DocumentChanges = Some docChanges }
     else
-        { Changes = Some(WorkspaceEdit.DocumentChangesToChanges docChanges)
-          DocumentChanges = None }
+        {
+            Changes = Some(WorkspaceEdit.DocumentChangesToChanges docChanges)
+            DocumentChanges = None
+        }
 
 let renameMarkdownLabel (newLabel: string) (element: Element) : option<TextEdit> =
     match element with
@@ -113,8 +115,10 @@ let renameHeadingLink
             let toEdit = if Element.isTitle srcHeading then wl.doc else wl.heading
 
             toEdit
-            |> Option.map (fun node ->
-                { Range = node.range; NewText = WikiEncoded.encodeAsString newTitle })
+            |> Option.map (fun node -> {
+                Range = node.range
+                NewText = WikiEncoded.encodeAsString newTitle
+            })
         | ML { data = MdLink.IL(_, url, _) } ->
             let docUrl = url |> Option.map Url.ofUrlNode
 

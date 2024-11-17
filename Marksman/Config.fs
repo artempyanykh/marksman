@@ -123,35 +123,38 @@ module TextSync =
 ///
 /// Note: all config options are laid out flat to make working with the config
 /// without lenses manageable.
-type Config =
-    { caTocEnable: option<bool>
-      caCreateMissingFileEnable: option<bool>
-      coreMarkdownFileExtensions: option<array<string>>
-      coreTextSync: option<TextSync>
-      coreIncrementalReferences: option<bool>
-      coreParanoid: option<bool>
-      complWikiStyle: option<ComplWikiStyle>
-      complCandidates: option<int> }
+type Config = {
+    caTocEnable: option<bool>
+    caCreateMissingFileEnable: option<bool>
+    coreMarkdownFileExtensions: option<array<string>>
+    coreTextSync: option<TextSync>
+    coreIncrementalReferences: option<bool>
+    coreParanoid: option<bool>
+    complWikiStyle: option<ComplWikiStyle>
+    complCandidates: option<int>
+} with
 
-    static member Default =
-        { caTocEnable = Some true
-          caCreateMissingFileEnable = Some true
-          coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
-          coreTextSync = Some Full
-          coreIncrementalReferences = Some false
-          coreParanoid = Some false
-          complWikiStyle = Some TitleSlug
-          complCandidates = Some 50 }
+    static member Default = {
+        caTocEnable = Some true
+        caCreateMissingFileEnable = Some true
+        coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
+        coreTextSync = Some Full
+        coreIncrementalReferences = Some false
+        coreParanoid = Some false
+        complWikiStyle = Some TitleSlug
+        complCandidates = Some 50
+    }
 
-    static member Empty =
-        { caTocEnable = None
-          caCreateMissingFileEnable = None
-          coreMarkdownFileExtensions = None
-          coreTextSync = None
-          coreIncrementalReferences = None
-          coreParanoid = None
-          complWikiStyle = None
-          complCandidates = None }
+    static member Empty = {
+        caTocEnable = None
+        caCreateMissingFileEnable = None
+        coreMarkdownFileExtensions = None
+        coreTextSync = None
+        coreIncrementalReferences = None
+        coreParanoid = None
+        complWikiStyle = None
+        complCandidates = None
+    }
 
     member this.CaTocEnable() =
         this.caTocEnable
@@ -231,34 +234,37 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
                     Error(WrongValue(complCandidatesPath, v, "expected a non-negative number"))
 
 
-        { caTocEnable = caTocEnable
-          caCreateMissingFileEnable = caCreateMissingFileEnable
-          coreMarkdownFileExtensions = coreMarkdownFileExtensions
-          coreTextSync = coreTextSync
-          coreIncrementalReferences = coreIncrementalReferences
-          coreParanoid = coreParanoid
-          complWikiStyle = complWikiStyle
-          complCandidates = complCandidates }
+        {
+            caTocEnable = caTocEnable
+            caCreateMissingFileEnable = caCreateMissingFileEnable
+            coreMarkdownFileExtensions = coreMarkdownFileExtensions
+            coreTextSync = coreTextSync
+            coreIncrementalReferences = coreIncrementalReferences
+            coreParanoid = coreParanoid
+            complWikiStyle = complWikiStyle
+            complCandidates = complCandidates
+        }
     }
 
 module Config =
     let logger = LogProvider.getLoggerByName "Config"
 
-    let merge hi low =
-        { caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
-          caCreateMissingFileEnable =
+    let merge hi low = {
+        caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
+        caCreateMissingFileEnable =
             hi.caCreateMissingFileEnable
             |> Option.orElse low.caCreateMissingFileEnable
-          coreMarkdownFileExtensions =
+        coreMarkdownFileExtensions =
             hi.coreMarkdownFileExtensions
             |> Option.orElse low.coreMarkdownFileExtensions
-          coreTextSync = hi.coreTextSync |> Option.orElse low.coreTextSync
-          coreIncrementalReferences =
+        coreTextSync = hi.coreTextSync |> Option.orElse low.coreTextSync
+        coreIncrementalReferences =
             hi.coreIncrementalReferences
             |> Option.orElse low.coreIncrementalReferences
-          coreParanoid = hi.coreParanoid |> Option.orElse low.coreParanoid
-          complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle
-          complCandidates = hi.complCandidates |> Option.orElse low.complCandidates }
+        coreParanoid = hi.coreParanoid |> Option.orElse low.coreParanoid
+        complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle
+        complCandidates = hi.complCandidates |> Option.orElse low.complCandidates
+    }
 
     let mergeOpt hi low =
         match low with

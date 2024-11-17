@@ -25,8 +25,10 @@ let patternToGlob (pat: string) : array<Glob> =
 
         try
             if isDir then
-                [| Glob(pat + "**", opts)
-                   Glob(pat.Substring(0, pat.Length - 1), opts) |]
+                [|
+                    Glob(pat + "**", opts)
+                    Glob(pat.Substring(0, pat.Length - 1), opts)
+                |]
             else
                 [| Glob(pat, opts) |]
         with :? GlobPatternException ->

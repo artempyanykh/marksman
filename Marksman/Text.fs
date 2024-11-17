@@ -70,9 +70,10 @@ type LineMap =
 
 
 [<CustomEquality; CustomComparison>]
-type Text =
-    { content: string
-      lineMap: LineMap }
+type Text = {
+    content: string
+    lineMap: LineMap
+} with
 
     override this.Equals(other: obj) =
         match other with
@@ -222,14 +223,13 @@ let private applyChangeOne (text: Text) (change: TextDocumentContentChangeEvent)
 let applyTextChange (changeEvents: array<TextDocumentContentChangeEvent>) (text: Text) : Text =
     Array.fold applyChangeOne text changeEvents
 
-type Span =
-    {
-        text: Text
-        /// Inclusive
-        start: int
-        /// Exclusive
-        end_: int
-    }
+type Span = {
+    text: Text
+    /// Inclusive
+    start: int
+    /// Exclusive
+    end_: int
+} with
 
     override this.ToString() =
         let substr =
@@ -244,9 +244,10 @@ type Span =
 
         $"start={this.start}; end={this.end_}; substr={substr}"
 
-type Cursor =
-    { span: Span
-      pos: int }
+type Cursor = {
+    span: Span
+    pos: int
+} with
 
     override this.ToString() = $"{this.span.text.content[this.pos]} @ {this.pos} : {this.span}"
 
@@ -362,9 +363,10 @@ module Span =
 
     let startChar = startCursor >> (Option.map Cursor.char)
 
-type Line =
-    { text: Text
-      line: int }
+type Line = {
+    text: Text
+    line: int
+} with
 
     override this.ToString() = $"Line {this.line}: {this.text}"
 

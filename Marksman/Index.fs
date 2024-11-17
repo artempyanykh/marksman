@@ -7,15 +7,16 @@ open Marksman.Misc
 
 type Dictionary<'K, 'V> = System.Collections.Generic.Dictionary<'K, 'V>
 
-type Index =
-    { titles: array<Node<Heading>>
-      headings: array<Node<Heading>>
-      headingsBySlug: Map<Slug, list<Node<Heading>>>
-      wikiLinks: array<Node<WikiLink>>
-      mdLinks: array<Node<MdLink>>
-      linkDefs: array<Node<MdLinkDef>>
-      tags: array<Node<Tag>>
-      yamlFrontMatter: option<TextNode> }
+type Index = {
+    titles: array<Node<Heading>>
+    headings: array<Node<Heading>>
+    headingsBySlug: Map<Slug, list<Node<Heading>>>
+    wikiLinks: array<Node<WikiLink>>
+    mdLinks: array<Node<MdLink>>
+    linkDefs: array<Node<MdLinkDef>>
+    tags: array<Node<Tag>>
+    yamlFrontMatter: option<TextNode>
+}
 
 module Index =
     let ofCst (cels: Cst.Element[]) : Index =
@@ -62,14 +63,16 @@ module Index =
         let headings = headings.ToArray()
         let tags = tags.ToArray()
 
-        { titles = titles
-          headings = headings
-          headingsBySlug = headingsBySlug
-          wikiLinks = wikiLinks
-          mdLinks = mdLinks
-          linkDefs = linkDefs
-          tags = tags
-          yamlFrontMatter = yaml }
+        {
+            titles = titles
+            headings = headings
+            headingsBySlug = headingsBySlug
+            wikiLinks = wikiLinks
+            mdLinks = mdLinks
+            linkDefs = linkDefs
+            tags = tags
+            yamlFrontMatter = yaml
+        }
 
     let titles index = index.titles
 

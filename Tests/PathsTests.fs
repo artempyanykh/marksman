@@ -94,10 +94,10 @@ module PathUriTests =
         let id = UriWith.mkRooted root (LocalPath.ofUri uri)
         Assert.Equal("file:///a/b/doc.md", id.uri.ToString())
 
-        Helpers.checkInlineSnapshot
-            (fun x -> x.ToString())
-            (id.data.ToString().Lines())
-            [ "{ root = RootPath (AbsPath \"/a/b/doc.md\")"; "  path = None }" ]
+        Helpers.checkInlineSnapshot (fun x -> x.ToString()) (id.data.ToString().Lines()) [
+            "{ root = RootPath (AbsPath \"/a/b/doc.md\")"
+            "  path = None }"
+        ]
 
     [<Fact>]
     let testAccented_issue274 () =

@@ -20,10 +20,11 @@ type FileLinkKind =
 module FileLinkKind =
     val detect: ComplWikiStyle -> DocId -> string -> (Doc -> FileLinkKind)
 
-type FileLink =
-    { link: string
-      kind: FileLinkKind
-      doc: Doc }
+type FileLink = {
+    link: string
+    kind: FileLinkKind
+    doc: Doc
+}
 
 module FileLink =
     val doc: FileLink -> Doc

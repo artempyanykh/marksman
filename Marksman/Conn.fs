@@ -9,9 +9,10 @@ open Marksman.Graph
 open Marksman.Syms
 
 
-type Oracle =
-    { resolveToScope: Scope -> Ref -> Scope[]
-      resolveInScope: Ref -> Scope -> Def[] }
+type Oracle = {
+    resolveToScope: Scope -> Ref -> Scope[]
+    resolveInScope: Ref -> Scope -> Def[]
+}
 
 module ScopedSym =
     let asRef (scope, sym) = Sym.asRef sym |> Option.map (fun link -> scope, link)
@@ -33,13 +34,14 @@ type Unresolved =
         | Scope FullyUnknown -> "FullyUnknown"
         | Scope(InScope scope) -> $"{scope}"
 
-type ConnDifference =
-    { refsDifference: MMapDifference<Scope, Ref>
-      defsDifference: MMapDifference<Scope, Def>
-      tagsDifference: MMapDifference<Scope, Tag>
-      resolvedDifference: GraphDifference<ScopedSym>
-      unresolvedDifference: GraphDifference<Unresolved>
-      refDepsDifference: GraphDifference<Scope * CrossRef> }
+type ConnDifference = {
+    refsDifference: MMapDifference<Scope, Ref>
+    defsDifference: MMapDifference<Scope, Def>
+    tagsDifference: MMapDifference<Scope, Tag>
+    resolvedDifference: GraphDifference<ScopedSym>
+    unresolvedDifference: GraphDifference<Unresolved>
+    refDepsDifference: GraphDifference<Scope * CrossRef>
+} with
 
     member this.IsEmpty() =
         this.refsDifference.IsEmpty()
@@ -79,9 +81,10 @@ type ConnDifference =
 
         concatLines lines
 
-type Defs =
-    { byScope: MMap<Scope, Def>
-      bySlug: MMap<ScopeSlug, Scope * Def> }
+type Defs = {
+    byScope: MMap<Scope, Def>
+    bySlug: MMap<ScopeSlug, Scope * Def>
+} with
 
     static member Empty = { byScope = MMap.empty; bySlug = MMap.empty }
 
@@ -116,14 +119,15 @@ type Defs =
         { byScope = byScope; bySlug = bySlug }
 
 
-type Conn =
-    { refs: MMap<Scope, Ref>
-      defs: Defs
-      tags: MMap<Scope, Tag>
-      resolved: Graph<ScopedSym>
-      unresolved: Graph<Unresolved>
-      refDeps: Graph<Scope * CrossRef>
-      lastTouched: Set<ScopedSym> }
+type Conn = {
+    refs: MMap<Scope, Ref>
+    defs: Defs
+    tags: MMap<Scope, Tag>
+    resolved: Graph<ScopedSym>
+    unresolved: Graph<Unresolved>
+    refDeps: Graph<Scope * CrossRef>
+    lastTouched: Set<ScopedSym>
+} with
 
     member private this.ResolvedCompactFormat() =
         let byScope =
@@ -217,14 +221,15 @@ type Conn =
 module Conn =
     let private logger = LogProvider.getLoggerByName "Conn"
 
-    let empty =
-        { refs = MMap.empty
-          defs = Defs.Empty
-          tags = MMap.empty
-          resolved = Graph.empty
-          unresolved = Graph.empty
-          refDeps = Graph.empty
-          lastTouched = Set.empty }
+    let empty = {
+        refs = MMap.empty
+        defs = Defs.Empty
+        tags = MMap.empty
+        resolved = Graph.empty
+        unresolved = Graph.empty
+        refDeps = Graph.empty
+        lastTouched = Set.empty
+    }
 
     let isSameStructure c1 c2 =
         c1.refs = c2.refs
@@ -253,12 +258,14 @@ module Conn =
 
         let stopwatch = System.Diagnostics.Stopwatch.StartNew()
 
-        let mutable { refs = refs
-                      defs = defs
-                      tags = tags
-                      resolved = resolved
-                      unresolved = unresolved
-                      refDeps = refDeps } =
+        let mutable {
+                        refs = refs
+                        defs = defs
+                        tags = tags
+                        resolved = resolved
+                        unresolved = unresolved
+                        refDeps = refDeps
+                    } =
             conn
 
         let mutable lastTouched = Set.empty
@@ -470,13 +477,15 @@ module Conn =
             >> Log.addContext "elapsed_ms" stopwatch.ElapsedMilliseconds
         )
 
-        { refs = refs
-          defs = defs
-          tags = tags
-          resolved = resolved
-          unresolved = unresolved
-          refDeps = refDeps
-          lastTouched = lastTouched }
+        {
+            refs = refs
+            defs = defs
+            tags = tags
+            resolved = resolved
+            unresolved = unresolved
+            refDeps = refDeps
+            lastTouched = lastTouched
+        }
 
     let update oracle diff conn =
         if Difference.isEmpty diff then
@@ -498,13 +507,14 @@ module Conn =
 
         update oracle { added = added; removed = Set.empty } empty
 
-    let difference c1 c2 : ConnDifference =
-        { refsDifference = MMap.difference c1.refs c2.refs
-          defsDifference = MMap.difference c1.defs.byScope c2.defs.byScope
-          tagsDifference = MMap.difference c1.tags c2.tags
-          resolvedDifference = Graph.difference c1.resolved c2.resolved
-          unresolvedDifference = Graph.difference c1.unresolved c2.unresolved
-          refDepsDifference = Graph.difference c1.refDeps c2.refDeps }
+    let difference c1 c2 : ConnDifference = {
+        refsDifference = MMap.difference c1.refs c2.refs
+        defsDifference = MMap.difference c1.defs.byScope c2.defs.byScope
+        tagsDifference = MMap.difference c1.tags c2.tags
+        resolvedDifference = Graph.difference c1.resolved c2.resolved
+        unresolvedDifference = Graph.difference c1.unresolved c2.unresolved
+        refDepsDifference = Graph.difference c1.refDeps c2.refDeps
+    }
 
 module Query =
     let resolve (scopedSym: ScopedSym) (conn: Conn) : Set<ScopedSym> =

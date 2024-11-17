@@ -210,8 +210,10 @@ module Markdown =
             let endInclusive = text.lineMap.FindPosition(span.End)
             let endOffset = if Char.IsSurrogate(text.content, span.End) then 2 else 1
 
-            { Start = start
-              End = { endInclusive with Character = endInclusive.Character + endOffset } }
+            {
+                Start = start
+                End = { endInclusive with Character = endInclusive.Character + endOffset }
+            }
 
 
     let scrapeText (text: Text) : array<Element> =
@@ -246,10 +248,11 @@ module Markdown =
                 let range = sourceSpanToRange text h.Span
 
                 let heading =
-                    Node.mk
-                        fullText
-                        range
-                        { level = level; title = Node.mkText title titleRange; scope = range }
+                    Node.mk fullText range {
+                        level = level
+                        title = Node.mkText title titleRange
+                        scope = range
+                    }
 
                 elements.Add(H heading)
             | :? WikiLinkInline as link ->

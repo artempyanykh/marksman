@@ -6,12 +6,13 @@ module ImplTests =
     module SuffixTree = SuffixTree.Impl
 
     let tree =
-        SuffixTree.ofSeq
-            [ [ "a"; "b" ], 0
-              [ "a"; "b"; "c" ], 1
-              [ "a"; "b"; "d" ], 2
-              [ "b" ], 3
-              [ "c" ], 4 ]
+        SuffixTree.ofSeq [
+            [ "a"; "b" ], 0
+            [ "a"; "b"; "c" ], 1
+            [ "a"; "b"; "d" ], 2
+            [ "b" ], 3
+            [ "c" ], 4
+        ]
 
     [<Fact>]
     let filterTest () =

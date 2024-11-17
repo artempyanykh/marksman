@@ -9,13 +9,14 @@ open Marksman.Helpers
 open Marksman.Workspace
 
 module WorkspaceSymbol =
-    let mkSymbolInfo name kind loc =
-        { Name = name
-          Kind = kind
-          Location = loc
-          Tags = None
-          Deprecated = None
-          ContainerName = None }
+    let mkSymbolInfo name kind loc = {
+        Name = name
+        Kind = kind
+        Location = loc
+        Tags = None
+        Deprecated = None
+        ContainerName = None
+    }
 
     let doc1 =
         FakeDoc.Mk(path = "doc1.md", contentLines = [| "# A"; "#tag1" |])
@@ -31,26 +32,28 @@ module WorkspaceSymbol =
         let symbols = Symbols.workspaceSymbols "" workspace
 
         Assert.Equal(
-            [ mkSymbolInfo
-                  "H1: A"
-                  SymbolKind.String
-                  { Uri = doc1.Id.Uri; Range = Range.Mk(0, 0, 0, 3) }
-              mkSymbolInfo
-                  "Tag: tag1"
-                  SymbolKind.String
-                  { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
-              mkSymbolInfo
-                  "H1: B"
-                  SymbolKind.String
-                  { Uri = doc2.Id.Uri; Range = Range.Mk(0, 0, 0, 3) }
-              mkSymbolInfo
-                  "Tag: tag1"
-                  SymbolKind.String
-                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
-              mkSymbolInfo
-                  "Tag: tag2"
-                  SymbolKind.String
-                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } ],
+            [
+                mkSymbolInfo "H1: A" SymbolKind.String {
+                    Uri = doc1.Id.Uri
+                    Range = Range.Mk(0, 0, 0, 3)
+                }
+                mkSymbolInfo "Tag: tag1" SymbolKind.String {
+                    Uri = doc1.Id.Uri
+                    Range = Range.Mk(1, 0, 1, 5)
+                }
+                mkSymbolInfo "H1: B" SymbolKind.String {
+                    Uri = doc2.Id.Uri
+                    Range = Range.Mk(0, 0, 0, 3)
+                }
+                mkSymbolInfo "Tag: tag1" SymbolKind.String {
+                    Uri = doc2.Id.Uri
+                    Range = Range.Mk(1, 0, 1, 5)
+                }
+                mkSymbolInfo "Tag: tag2" SymbolKind.String {
+                    Uri = doc2.Id.Uri
+                    Range = Range.Mk(1, 6, 1, 11)
+                }
+            ],
             symbols
         )
 
@@ -59,31 +62,35 @@ module WorkspaceSymbol =
         let symbols = Symbols.workspaceSymbols "Tag:" workspace
 
         Assert.Equal(
-            [ mkSymbolInfo
-                  "Tag: tag1"
-                  SymbolKind.String
-                  { Uri = doc1.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
-              mkSymbolInfo
-                  "Tag: tag1"
-                  SymbolKind.String
-                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 0, 1, 5) }
-              mkSymbolInfo
-                  "Tag: tag2"
-                  SymbolKind.String
-                  { Uri = doc2.Id.Uri; Range = Range.Mk(1, 6, 1, 11) } ],
+            [
+                mkSymbolInfo "Tag: tag1" SymbolKind.String {
+                    Uri = doc1.Id.Uri
+                    Range = Range.Mk(1, 0, 1, 5)
+                }
+                mkSymbolInfo "Tag: tag1" SymbolKind.String {
+                    Uri = doc2.Id.Uri
+                    Range = Range.Mk(1, 0, 1, 5)
+                }
+                mkSymbolInfo "Tag: tag2" SymbolKind.String {
+                    Uri = doc2.Id.Uri
+                    Range = Range.Mk(1, 6, 1, 11)
+                }
+            ],
             symbols
         )
 
 module DocSymbols =
     let fakeDoc =
         FakeDoc.Mk(
-            [| "# E" //
-               "## D"
-               "#t1"
-               "### B"
-               "#t2"
-               "## C"
-               "# A" |]
+            [|
+                "# E" //
+                "## D"
+                "#t1"
+                "### B"
+                "#t2"
+                "## C"
+                "# A"
+            |]
         )
 
     [<Fact>]
@@ -97,13 +104,15 @@ module DocSymbols =
             |> Array.map (fun x -> x.Name)
 
         Assert.Equal<string>(
-            [| "H1: E"
-               "H2: D"
-               "H3: B"
-               "H2: C"
-               "H1: A"
-               "Tag: t1"
-               "Tag: t2" |],
+            [|
+                "H1: E"
+                "H2: D"
+                "H3: B"
+                "H2: C"
+                "H1: A"
+                "Tag: t1"
+                "Tag: t2"
+            |],
             symNames
         )
 

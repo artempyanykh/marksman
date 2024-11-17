@@ -4,18 +4,20 @@ open Marksman.Misc
 open Marksman.Names
 open Marksman.Syms
 
-type Heading =
-    { level: int
-      text: string
-      id: Slug }
+type Heading = {
+    level: int
+    text: string
+    id: Slug
+} with
 
     member this.CompactFormat() =
         let prefix = String.replicate this.level "#"
         $"{prefix} {this.text} {{{this.id.Raw}}}"
 
-type WikiLink =
-    { doc: option<string>
-      heading: option<string> }
+type WikiLink = {
+    doc: option<string>
+    heading: option<string>
+} with
 
     member this.CompactFormat() =
         let doc = this.doc |> Option.defaultValue ""
@@ -29,10 +31,11 @@ type WikiLink =
 
 
 // [text](url "title")
-type MdLink =
-    { text: string
-      url: option<string>
-      anchor: option<string> }
+type MdLink = {
+    text: string
+    url: option<string>
+    anchor: option<string>
+} with
 
     member this.CompactFormat() =
         let url =
@@ -65,9 +68,10 @@ type MdRef =
 
     member this.DestLabel = LinkLabel.ofString this.Dest
 
-type MdLinkDef =
-    { label: string
-      url: UrlEncoded }
+type MdLinkDef = {
+    label: string
+    url: UrlEncoded
+} with
 
     member this.Label = LinkLabel.ofString this.label
     member this.CompactFormat() = $"[{this.label}]: {UrlEncoded.raw this.url}"

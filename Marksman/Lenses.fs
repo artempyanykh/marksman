@@ -22,22 +22,23 @@ let buildReferenceLens (client: ClientDescription) (folder: Folder) (doc: Doc) (
     if refCount > 0 then
         let data =
             if client.SupportsLensFindReferences then
-                let locations =
-                    [| for doc, el in refs -> { Uri = Doc.uri doc; Range = el.Range } |]
+                let locations = [| for doc, el in refs -> { Uri = Doc.uri doc; Range = el.Range } |]
 
-                let data =
-                    { Uri = Doc.uri doc
-                      Position = el.Range.Start
-                      Locations = locations }
+                let data = {
+                    Uri = Doc.uri doc
+                    Position = el.Range.Start
+                    Locations = locations
+                }
 
                 Some [| LspServer.serialize data |]
             else
                 None
 
-        let command =
-            { Title = humanRefCount refCount
-              Command = findReferencesLens
-              Arguments = data }
+        let command = {
+            Title = humanRefCount refCount
+            Command = findReferencesLens
+            Arguments = data
+        }
 
 
         Some { Range = el.Range; Command = Some command; Data = None }

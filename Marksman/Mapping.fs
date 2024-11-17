@@ -2,8 +2,10 @@ module Marksman.Mapping
 
 open Marksman.MMap
 
-type Mapping<'Dom, 'Cod> when 'Dom: comparison and 'Cod: comparison =
-    { mapping: Map<'Dom, 'Cod>; inverse: MMap<'Cod, 'Dom> }
+type Mapping<'Dom, 'Cod> when 'Dom: comparison and 'Cod: comparison = {
+    mapping: Map<'Dom, 'Cod>
+    inverse: MMap<'Cod, 'Dom>
+}
 
 module Mapping =
     let empty = { mapping = Map.empty; inverse = MMap.empty }

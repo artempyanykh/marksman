@@ -4,10 +4,11 @@ open Marksman.Misc
 
 type MMap<'K, 'V> when 'K: comparison and 'V: comparison = MMap of Map<'K, Set<'V>>
 
-type MMapDifference<'K, 'V> when 'K: comparison and 'V: comparison =
-    { removedKeys: Set<'K>
-      addedKeys: Set<'K>
-      changedKeys: array<'K * Difference<'V>> }
+type MMapDifference<'K, 'V> when 'K: comparison and 'V: comparison = {
+    removedKeys: Set<'K>
+    addedKeys: Set<'K>
+    changedKeys: array<'K * Difference<'V>>
+} with
 
     member this.IsEmpty() =
         Set.isEmpty this.removedKeys

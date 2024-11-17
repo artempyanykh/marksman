@@ -99,20 +99,23 @@ type MdLink =
     // reference shortcut
     | RS of label: TextNode
 
-type Url<'T> =
-    { url: Option<Node<'T>>
-      anchor: Option<Node<'T>> }
+type Url<'T> = {
+    url: Option<Node<'T>>
+    anchor: Option<Node<'T>>
+} with
 
     override this.ToString() : string =
         let parts =
-            [ this.url
-              |> Option.map (fun x -> x.text, x.range)
-              |> Option.map (fun (text, range) -> $"docUrl={text} @ {range}")
-              |> Option.toList
-              this.anchor
-              |> Option.map (fun x -> x.text, x.range)
-              |> Option.map (fun (text, range) -> $"anchor={text} @ {range}")
-              |> Option.toList ]
+            [
+                this.url
+                |> Option.map (fun x -> x.text, x.range)
+                |> Option.map (fun (text, range) -> $"docUrl={text} @ {range}")
+                |> Option.toList
+                this.anchor
+                |> Option.map (fun x -> x.text, x.range)
+                |> Option.map (fun (text, range) -> $"anchor={text} @ {range}")
+                |> Option.toList
+            ]
             |> List.concat
 
         String.Join(';', parts)
@@ -134,21 +137,23 @@ module Url =
         else
             let docText = url.text.Substring(0, offsetHash)
 
-            let docRange =
-                { url.range with
-                    End = Position.Mk(url.range.Start.Line, url.range.Start.Character + offsetHash) }
+            let docRange = {
+                url.range with
+                    End = Position.Mk(url.range.Start.Line, url.range.Start.Character + offsetHash)
+            }
 
             let docUrl = Node.mk docText docRange (coder docText)
 
             let anchorText = url.text.Substring(offsetHash + 1)
 
-            let anchorRange =
-                { url.range with
+            let anchorRange = {
+                url.range with
                     Start =
                         Position.Mk(
                             url.range.Start.Line,
                             url.range.Start.Character + offsetHash + 1
-                        ) }
+                        )
+            }
 
             let anchor = Node.mk anchorText anchorRange (coder anchorText)
 
@@ -219,8 +224,10 @@ module MdLinkDef =
 
     let name (mld: MdLinkDef) = mld.label |> Node.text
 
-    let toAbstract (mdDef: MdLinkDef) : Ast.MdLinkDef =
-        { label = mdDef.label.text; url = mdDef.url.data }
+    let toAbstract (mdDef: MdLinkDef) : Ast.MdLinkDef = {
+        label = mdDef.label.text
+        url = mdDef.url.data
+    }
 
 
 type Tag = { name: TextNode }
@@ -297,8 +304,11 @@ module Heading =
 
     let scope (heading: Heading) : Range = heading.scope
 
-    let toAbstract (cHead: Heading) : Ast.Heading =
-        { level = cHead.level; text = cHead.title.text; id = slug cHead }
+    let toAbstract (cHead: Heading) : Ast.Heading = {
+        level = cHead.level
+        text = cHead.title.text
+        id = slug cHead
+    }
 
 
 module Element =

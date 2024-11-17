@@ -175,7 +175,7 @@ module ScopeSlug =
         | Def.LinkDef _ -> None
         | Def.Doc -> Some(ofDocId docId)
         | Def.Header(1, id) -> Some(ScopeSlug(Slug.ofString id))
-        | Def.Header _ -> None
+        | Def.Header _ -> Some(ofDocId docId)
 
     let ofScopedDef (scope: Scope, def: Def) =
         match Scope.asDoc scope with

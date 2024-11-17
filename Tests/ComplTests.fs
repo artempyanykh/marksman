@@ -211,10 +211,11 @@ module PartialElementInline =
     let anchor1 () =
         let text = Text.mkText "](t# other"
 
-        checkSnapshot
-            [ parsePartialElement text 0 2
-              parsePartialElement text 0 3
-              parsePartialElement text 0 4 ]
+        checkSnapshot [
+            parsePartialElement text 0 2
+            parsePartialElement text 0 3
+            parsePartialElement text 0 4
+        ]
 
     [<Fact>]
     let anchor2 () =
@@ -300,14 +301,16 @@ module Candidates =
             path = "doc1.md",
             contentLines =
                 //  012345678901234567890
-                [| "# H1" // 0
-                   "[[#"
-                   "# A"
-                   "## H2" // 3
-                   "#B"
-                   "## H2"
-                   "[](/doc%202.md#)"
-                   "[[#]]" |] // 7
+                [|
+                    "# H1" // 0
+                    "[[#"
+                    "# A"
+                    "## H2" // 3
+                    "#B"
+                    "## H2"
+                    "[](/doc%202.md#)"
+                    "[[#]]"
+                |] // 7
         //  012345678901234567890
         )
 
@@ -433,8 +436,7 @@ module Candidates =
         let doc3 =
             FakeDoc.Mk(path = "sub3/this is doc 3.md", contentLines = [| "# Doc 3"; "## H3" |])
 
-        let config =
-            { Config.Config.Empty with complWikiStyle = Some Config.FilePathStem }
+        let config = { Config.Config.Empty with complWikiStyle = Some Config.FilePathStem }
 
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
 
@@ -452,8 +454,7 @@ module Candidates =
         let doc3 =
             FakeDoc.Mk(path = "sub3/this is doc 3.md", contentLines = [| "# Doc 3"; "## H3" |])
 
-        let config =
-            { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
+        let config = { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
 
         let folder = FakeFolder.Mk([ doc1; doc2; doc3 ], config = config)
 
@@ -557,13 +558,14 @@ module Candidates =
         let doc1 =
             FakeDoc.Mk(
                 path = "doc1.md",
-                contentLines =
-                    [| "# Doc 1"
-                       "## Foo / Bar"
-                       "## Baz"
-                       //1234
-                       "[[#f"
-                       "" |]
+                contentLines = [|
+                    "# Doc 1"
+                    "## Foo / Bar"
+                    "## Baz"
+                    //1234
+                    "[[#f"
+                    ""
+                |]
             )
 
         let folder = FakeFolder.Mk([ doc1 ])
@@ -584,8 +586,7 @@ module Candidates =
             //                                              0123456789012345
             FakeDoc.Mk(path = "doc2.md", contentLines = [| "[[blah%23blah#]]" |])
 
-        let config =
-            { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
+        let config = { Config.Config.Empty with complWikiStyle = Some Config.FileStem }
 
         let folder = FakeFolder.Mk([ doc1; doc2 ], config)
 
@@ -596,12 +597,13 @@ module Candidates =
         let doc1 =
             FakeDoc.Mk(
                 path = "doc1.md",
-                contentLines =
-                    [| "We have #tag and #anotherTag"
-                       //12345678901234567
-                       "And an opening # "
-                       //12345678901234567
-                       "And partial #ta " |]
+                contentLines = [|
+                    "We have #tag and #anotherTag"
+                    //12345678901234567
+                    "And an opening # "
+                    //12345678901234567
+                    "And partial #ta "
+                |]
             )
 
         let doc2 =

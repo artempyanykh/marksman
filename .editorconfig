@@ -15,3 +15,12 @@ fsharp_max_value_binding_width=70
 fsharp_max_function_binding_width=70
 fsharp_max_dot_get_expression_width=70
 fsharp_max_elmish_width=70
+
+[Marksman/*.{fs,fsi}]
+fsharp_multiline_bracket_style = stroustrup
+
+[Tests/*.{fs,fsi}]
+fsharp_multiline_bracket_style = stroustrup
+
+[Benchmarks/*.{fs,fsi}]
+fsharp_multiline_bracket_style = stroustrup

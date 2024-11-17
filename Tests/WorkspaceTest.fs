@@ -72,12 +72,16 @@ module DocTest =
         let empty =
             Doc.mk defaultMarkdownExtensions dummyPath None (Text.mkText "")
 
-        let insertChange =
-            { TextDocument = { Uri = RootedRelPath.toSystem dummyPath.Path; Version = 1 }
-              ContentChanges =
-                [| { Range = Some(Range.Mk(0, 0, 0, 0))
-                     RangeLength = Some 0
-                     Text = "[" } |] }
+        let insertChange = {
+            TextDocument = { Uri = RootedRelPath.toSystem dummyPath.Path; Version = 1 }
+            ContentChanges = [|
+                {
+                    Range = Some(Range.Mk(0, 0, 0, 0))
+                    RangeLength = Some 0
+                    Text = "["
+                }
+            |]
+        }
 
         let updated =
             Doc.applyLspChange defaultMarkdownExtensions insertChange empty
@@ -91,11 +95,12 @@ module DocTest =
 
     [<Fact>]
     let fromLsp_singleFile () =
-        let par =
-            { Uri = "file:///a/b/doc.md"
-              LanguageId = "md"
-              Version = 1
-              Text = "text" }
+        let par = {
+            Uri = "file:///a/b/doc.md"
+            LanguageId = "md"
+            Version = 1
+            Text = "text"
+        }
 
         let singletonRoot = UriWith.mkRoot par.Uri
         let doc = Doc.fromLsp defaultMarkdownExtensions singletonRoot par

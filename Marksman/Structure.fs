@@ -5,13 +5,13 @@ open FSharpPlus.GenericBuilders
 open Marksman.Syms
 open Marksman.Mapping
 
-type Structure =
-    private
-        { cst: Cst.Cst
-          ast: Ast.Ast
-          sym: Set<Sym>
-          c2a: Mapping<Cst.Element, Ast.Element>
-          a2s: Mapping<Ast.Element, Sym> }
+type Structure = private {
+    cst: Cst.Cst
+    ast: Ast.Ast
+    sym: Set<Sym>
+    c2a: Mapping<Cst.Element, Ast.Element>
+    a2s: Mapping<Ast.Element, Sym>
+} with
 
     member this.Cst = this.cst
     member this.Ast = this.ast
@@ -92,8 +92,10 @@ module Structure =
 
         let ast: Ast.Ast = { elements = abs.ToArray() }
 
-        { cst = cst
-          ast = ast
-          sym = syms.ToArray() |> Set.ofArray
-          c2a = c2a
-          a2s = a2s }
+        {
+            cst = cst
+            ast = ast
+            sym = syms.ToArray() |> Set.ofArray
+            c2a = c2a
+            a2s = a2s
+        }

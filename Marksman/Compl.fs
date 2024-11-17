@@ -384,23 +384,27 @@ module Completions =
                 let range = if Completable.isPartial compl then range else inputRange
                 let textEdit = { Range = range; NewText = newText }
 
-                Some
-                    { CompletionItem.Create(targetName) with
+                Some {
+                    CompletionItem.Create(targetName) with
                         Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                         TextEdit = Some(First textEdit)
-                        FilterText = Some filterText }
+                        FilterText = Some filterText
+                }
             | Some _ ->
                 let newText = targetLink
                 let range = inputRange
 
-                let textEdit =
-                    { Range = range; NewText = WikiEncoded.raw (WikiDest.encode newText) }
+                let textEdit = {
+                    Range = range
+                    NewText = WikiEncoded.raw (WikiDest.encode newText)
+                }
 
-                Some
-                    { CompletionItem.Create(targetName) with
+                Some {
+                    CompletionItem.Create(targetName) with
                         Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                         TextEdit = Some(First textEdit)
-                        FilterText = Some targetName }
+                        FilterText = Some targetName
+                }
         | _ -> None
 
     let wikiHeadingInSrcDoc
@@ -427,10 +431,11 @@ module Completions =
 
             let textEdit = { Range = range; NewText = newText }
 
-            Some
-                { CompletionItem.Create(completionHeading) with
+            Some {
+                CompletionItem.Create(completionHeading) with
                     TextEdit = Some(First textEdit)
-                    FilterText = Some newText }
+                    FilterText = Some newText
+            }
         | _ -> None
 
     let wikiHeadingInOtherDoc
@@ -442,8 +447,10 @@ module Completions =
         let label = $"{Doc.name doc} / {heading}"
 
         match compl with
-        | E(WL { data = { doc = Some destPart; heading = Some headingPart }
-                 range = range })
+        | E(WL {
+                   data = { doc = Some destPart; heading = Some headingPart }
+                   range = range
+               })
         | PE(PartialElement.WikiLink(Some destPart, Some headingPart, range)) ->
             let targetLink = CompletionHelpers.wikiTargetLink config doc
 
@@ -468,11 +475,12 @@ module Completions =
 
             let textEdit = { Range = range; NewText = newText }
 
-            Some
-                { CompletionItem.Create(label) with
+            Some {
+                CompletionItem.Create(label) with
                     Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                     TextEdit = Some(First textEdit)
-                    FilterText = Some filterText }
+                    FilterText = Some filterText
+            }
         | _ -> None
 
     let reference (pos: Position) (compl: Completable) (def: MdLinkDef) : option<CompletionItem> =
@@ -503,12 +511,13 @@ module Completions =
 
             let textEdit = { Range = range; NewText = newText }
 
-            Some
-                { CompletionItem.Create(linkDefLabel) with
+            Some {
+                CompletionItem.Create(linkDefLabel) with
                     Detail = MdLinkDef.titleContent def
                     Documentation = MdLinkDef.urlContent def |> Documentation.String |> Some
                     TextEdit = Some(First textEdit)
-                    FilterText = Some newText }
+                    FilterText = Some newText
+            }
 
     let inlineDoc (pos: Position) (compl: Completable) (doc: Doc) : option<CompletionItem> =
         let targetPath = (Doc.pathFromRoot doc) |> RelPath.toSystem
@@ -519,18 +528,20 @@ module Completions =
 
         match compl with
         | E(ML { data = MdLink.IL(_, None, _) }) ->
-            Some
-                { CompletionItem.Create(targetPath) with
+            Some {
+                CompletionItem.Create(targetPath) with
                     Detail = detail
                     TextEdit =
-                        Some(First { Range = Range.Mk(pos, pos); NewText = targetPathEncoded }) }
+                        Some(First { Range = Range.Mk(pos, pos); NewText = targetPathEncoded })
+            }
         | E(ML { data = MdLink.IL(_, Some url, _) }) ->
             match Url.ofUrlNode url with
             | { url = Some url } ->
-                Some
-                    { CompletionItem.Create(targetPath) with
+                Some {
+                    CompletionItem.Create(targetPath) with
                         Detail = detail
-                        TextEdit = Some(First { Range = url.range; NewText = targetPathEncoded }) }
+                        TextEdit = Some(First { Range = url.range; NewText = targetPathEncoded })
+                }
             | _ -> None
         | PE(PartialElement.InlineLink(Some _text, path, Some _anchor, _range)) ->
             let range =
@@ -538,19 +549,21 @@ module Completions =
                 |> Option.map Node.range
                 |> Option.defaultValue (Range.Mk(pos, pos))
 
-            Some
-                { CompletionItem.Create(targetPath) with
+            Some {
+                CompletionItem.Create(targetPath) with
                     Detail = detail
-                    TextEdit = Some(First { Range = range; NewText = targetPathEncoded }) }
+                    TextEdit = Some(First { Range = range; NewText = targetPathEncoded })
+            }
         | PE(PartialElement.InlineLink(Some text, _path, None, range)) ->
             let newText =
                 MdLink.renderInline (Node.text text |> Some) (Some targetPathEncoded) None
 
-            Some
-                { CompletionItem.Create(targetPath) with
+            Some {
+                CompletionItem.Create(targetPath) with
                     Detail = detail
                     TextEdit = Some(First { Range = range; NewText = newText })
-                    FilterText = Some newText }
+                    FilterText = Some newText
+            }
         | _ -> None
 
     let inlineAnchorInSrcDoc
@@ -568,18 +581,20 @@ module Completions =
             | { url = None; anchor = Some anchor } ->
                 let newText = headingSlug
 
-                Some
-                    { CompletionItem.Create(completionHeading) with
+                Some {
+                    CompletionItem.Create(completionHeading) with
                         TextEdit = Some(First { Range = anchor.range; NewText = newText })
-                        FilterText = Some newText }
+                        FilterText = Some newText
+                }
             | _ -> None
         | PE(PartialElement.InlineLink(Some text, None, Some _anchor, range)) ->
             let newText = $"[{text.text}](#{headingSlug})"
 
-            Some
-                { CompletionItem.Create(completionHeading) with
+            Some {
+                CompletionItem.Create(completionHeading) with
                     TextEdit = Some(First { Range = range; NewText = newText })
-                    FilterText = Some newText }
+                    FilterText = Some newText
+            }
         | _ -> None
 
     let inlineAnchorInOtherDoc
@@ -604,11 +619,12 @@ module Completions =
                 let newRange = Range.Mk(url.range.Start, anchor.range.End)
                 let filterText = $"{targetPathEncoded}#{targetHeading}"
 
-                Some
-                    { CompletionItem.Create(label) with
+                Some {
+                    CompletionItem.Create(label) with
                         Detail = detail
                         TextEdit = Some(First { Range = newRange; NewText = newText })
-                        FilterText = Some filterText }
+                        FilterText = Some filterText
+                }
             | _, _ -> None
         | PE(PartialElement.InlineLink(Some text, Some _path, Some _anchor, range)) ->
             let newText =
@@ -616,11 +632,12 @@ module Completions =
 
             let filterText = $"[{text.text}]({targetPathEncoded}#{targetHeading})"
 
-            Some
-                { CompletionItem.Create(label) with
+            Some {
+                CompletionItem.Create(label) with
                     Detail = detail
                     TextEdit = Some(First { Range = range; NewText = newText })
-                    FilterText = Some filterText }
+                    FilterText = Some filterText
+            }
         | _ -> None
 
     let tag
@@ -642,10 +659,11 @@ module Completions =
             let detail = $"{numUsages} usages"
 
             // IDEA: since we have numUsages we could provide sort text that would sort based on usages.
-            Some
-                { CompletionItem.Create(label) with
+            Some {
+                CompletionItem.Create(label) with
                     Detail = Some detail
-                    TextEdit = Some(First { Range = range; NewText = label }) }
+                    TextEdit = Some(First { Range = range; NewText = label })
+            }
 
 module Candidates =
     let findDocCandidates (folder: Folder) (srcDoc: Doc) (destPart: option<InternName>) : seq<Doc> =

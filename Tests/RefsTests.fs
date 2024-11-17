@@ -153,8 +153,10 @@ module FileLinkTests =
         let folder =
             FakeFolder.Mk(
                 [ doc1; subDoc1; subSubDoc1; doc2; subDoc2 ],
-                { Config.Config.Default with
-                    complWikiStyle = Some Config.FilePathStem }
+                {
+                    Config.Config.Default with
+                        complWikiStyle = Some Config.FilePathStem
+                }
             )
 
         let actual =
@@ -215,52 +217,54 @@ module BasicRefsTests =
     let doc1 =
         FakeDoc.Mk(
             path = "doc1.md",
-            contentLines =
-                [| "# Doc 1" // 0
-                   "" // 1
-                   "## D1 H2.1" // 2
-                   "" // 3
-                   "[[doc-2#d2-h22]]" // 4
-                   "" // 5
-                   "## D1 H2.2" // 6
-                   "" // 7
-                   "[[#dup]]" // 8
-                   "" // 9
-                   "## Dup" // 10
-                   "Entry 1" // 11
-                   "" // 12
-                   "## Dup" // 13
-                   "Entry 2" // 14
-                   "" // 15
-                   "#tag1 #tag2" |] // 16
+            contentLines = [|
+                "# Doc 1" // 0
+                "" // 1
+                "## D1 H2.1" // 2
+                "" // 3
+                "[[doc-2#d2-h22]]" // 4
+                "" // 5
+                "## D1 H2.2" // 6
+                "" // 7
+                "[[#dup]]" // 8
+                "" // 9
+                "## Dup" // 10
+                "Entry 1" // 11
+                "" // 12
+                "## Dup" // 13
+                "Entry 2" // 14
+                "" // 15
+                "#tag1 #tag2"
+            |] // 16
         )
 
     let doc2 =
         FakeDoc.Mk(
             path = "doc2.md",
-            contentLines =
-                [| "# Doc 2" // 0
-                   "" // 1
-                   "# D2 H2.1" // 2
-                   "" // 3
-                   "[D2-Link-1]" // 4
-                   "" // 5
-                   "[[#d2-h22]]" // 6
-                   "" // 7
-                   "[d2-LINK-1]" // 8
-                   "" // 9
-                   "# D2 H2.2" // 10
-                   "" // 11
-                   "[[doc-1]]" // 12
-                   "[[doc-1#dup]]" // 13
-                   "[lbl1](/doc1.md)" // 14
-                   "[^fn1]" // 15
-                   "" // 16
-                   "[d2-link-1]: some-url" // 17
-                   "" // 18
-                   "[^fn1]: This is footnote" // 19
-                   "" //20
-                   "#tag1" |] //21
+            contentLines = [|
+                "# Doc 2" // 0
+                "" // 1
+                "# D2 H2.1" // 2
+                "" // 3
+                "[D2-Link-1]" // 4
+                "" // 5
+                "[[#d2-h22]]" // 6
+                "" // 7
+                "[d2-LINK-1]" // 8
+                "" // 9
+                "# D2 H2.2" // 10
+                "" // 11
+                "[[doc-1]]" // 12
+                "[[doc-1#dup]]" // 13
+                "[lbl1](/doc1.md)" // 14
+                "[^fn1]" // 15
+                "" // 16
+                "[d2-link-1]: some-url" // 17
+                "" // 18
+                "[^fn1]: This is footnote" // 19
+                "" //20
+                "#tag1"
+            |] //21
         )
 
     let folder = FakeFolder.Mk [ doc1; doc2 ]
@@ -283,10 +287,10 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc1.md, (16,0)-(16,5))"; "(doc2.md, (21,0)-(21,5))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc1.md, (16,0)-(16,5))"
+            "(doc2.md, (21,0)-(21,5))"
+        ]
 
     [<Fact>]
     let refToLinkDef_atDef () =
@@ -296,10 +300,10 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc2.md, (4,0)-(4,11))"
+            "(doc2.md, (8,0)-(8,11))"
+        ]
 
     [<Fact>]
     let refToLinkDef_atDef_withDecl () =
@@ -309,12 +313,11 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc2.md, (4,0)-(4,11))"
-              "(doc2.md, (8,0)-(8,11))"
-              "(doc2.md, (17,0)-(17,21))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc2.md, (4,0)-(4,11))"
+            "(doc2.md, (8,0)-(8,11))"
+            "(doc2.md, (17,0)-(17,21))"
+        ]
 
     [<Fact>]
     let refToLinkDef_atLink () =
@@ -324,10 +327,10 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc2.md, (4,0)-(4,11))"; "(doc2.md, (8,0)-(8,11))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc2.md, (4,0)-(4,11))"
+            "(doc2.md, (8,0)-(8,11))"
+        ]
 
     [<Fact>]
     let refToLinkDef_atLink_withDecl () =
@@ -337,12 +340,11 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc2.md, (4,0)-(4,11))"
-              "(doc2.md, (8,0)-(8,11))"
-              "(doc2.md, (17,0)-(17,21))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc2.md, (4,0)-(4,11))"
+            "(doc2.md, (8,0)-(8,11))"
+            "(doc2.md, (17,0)-(17,21))"
+        ]
 
     [<Fact(Skip = "Footnote parsing not implemented")>]
     let refToFootnote_atLink () =
@@ -352,10 +354,10 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc2 fnLink |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc2.md, (19,0)-(19,16))"; "(doc2.md, (15,0)-(15,6))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc2.md, (19,0)-(19,16))"
+            "(doc2.md, (15,0)-(15,6))"
+        ]
 
     [<Fact>]
     let refToDoc_atTitle () =
@@ -365,12 +367,11 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs false folder doc1 title |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc2.md, (12,0)-(12,9))"
-              "(doc2.md, (13,0)-(13,13))"
-              "(doc2.md, (14,0)-(14,16))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc2.md, (12,0)-(12,9))"
+            "(doc2.md, (13,0)-(13,13))"
+            "(doc2.md, (14,0)-(14,16))"
+        ]
 
     [<Fact>]
     let refToDoc_atTitle_withDecl () =
@@ -380,13 +381,12 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc1 title |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc1.md, (0,0)-(0,7))"
-              "(doc2.md, (12,0)-(12,9))"
-              "(doc2.md, (13,0)-(13,13))"
-              "(doc2.md, (14,0)-(14,16))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc1.md, (0,0)-(0,7))"
+            "(doc2.md, (12,0)-(12,9))"
+            "(doc2.md, (13,0)-(13,13))"
+            "(doc2.md, (14,0)-(14,16))"
+        ]
 
     [<Fact>]
     let refToDoc_atLink () =
@@ -396,10 +396,10 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs false folder doc1 wl |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc1.md, (4,0)-(4,16))"; "(doc2.md, (6,0)-(6,11))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc1.md, (4,0)-(4,16))"
+            "(doc2.md, (6,0)-(6,11))"
+        ]
 
     [<Fact>]
     let refToDoc_atLink_withDecl () =
@@ -409,26 +409,26 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc1 wl |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(doc1.md, (4,0)-(4,16))"
-              "(doc2.md, (6,0)-(6,11))"
-              "(doc2.md, (10,0)-(10,9))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(doc1.md, (4,0)-(4,16))"
+            "(doc2.md, (6,0)-(6,11))"
+            "(doc2.md, (10,0)-(10,9))"
+        ]
 
 
 module LinkKindRefsTests =
     let doc1 =
         FakeDoc.Mk(
             path = "file1.md",
-            contentLines =
-                [| "# Doc 1 Title"
-                   "[[file2]]"
-                   "[[file2.md]]"
-                   "[[file2#doc-2-subtitle]]"
-                   "[[doc-2-title]]"
-                   "[link](file2)"
-                   "[[file3]]" |]
+            contentLines = [|
+                "# Doc 1 Title"
+                "[[file2]]"
+                "[[file2.md]]"
+                "[[file2#doc-2-subtitle]]"
+                "[[doc-2-title]]"
+                "[link](file2)"
+                "[[file3]]"
+            |]
         )
 
     let doc2 =
@@ -448,25 +448,24 @@ module LinkKindRefsTests =
         let link = requireElementAtPos doc1 1 2
         let refs = Dest.findElementRefs false folder doc1 link |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(file1.md, (1,0)-(1,9))"
-              "(file1.md, (2,0)-(2,12))"
-              // Referencing a doc should resolve to all sections in the doc
-              "(file1.md, (3,0)-(3,24))"
-              "(file1.md, (4,0)-(4,15))"
-              "(file1.md, (5,0)-(5,13))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(file1.md, (1,0)-(1,9))"
+            "(file1.md, (2,0)-(2,12))"
+            // Referencing a doc should resolve to all sections in the doc
+            "(file1.md, (3,0)-(3,24))"
+            "(file1.md, (4,0)-(4,15))"
+            "(file1.md, (5,0)-(5,13))"
+        ]
 
     [<Fact>]
     let atWiki_Filenames_Subfolder () =
         let link = requireElementAtPos doc2 2 3
         let refs = Dest.findElementRefs false folder doc2 link |> formatRefs
 
-        checkInlineSnapshot
-            (fun x -> x.ToString())
-            refs
-            [ "(file1.md, (6,0)-(6,9))"; "(file2.md, (2,0)-(2,15))" ]
+        checkInlineSnapshot (fun x -> x.ToString()) refs [
+            "(file1.md, (6,0)-(6,9))"
+            "(file2.md, (2,0)-(2,15))"
+        ]
 
 module EncodingTests =
     let doc1 =
@@ -506,8 +505,10 @@ module EncodingTests =
     let folder =
         FakeFolder.Mk(
             [ doc1; doc2; doc3 ],
-            { Config.Config.Default with
-                complWikiStyle = Some Config.FilePathStem }
+            {
+                Config.Config.Default with
+                    complWikiStyle = Some Config.FilePathStem
+            }
         )
 
     let exts = (Folder.configOrDefault folder).CoreMarkdownFileExtensions()

@@ -24,8 +24,11 @@ type EntryLevel = int
 type Entry = { level: EntryLevel; title: Title; link: Slug }
 
 module Entry =
-    let Mk (level: EntryLevel, title: Title) =
-        { level = level; title = title; link = Slug.ofString title }
+    let Mk (level: EntryLevel, title: Title) = {
+        level = level
+        title = title
+        link = Slug.ofString title
+    }
 
     let renderLink entry minLevel =
         let offset = String.replicate (entry.level - minLevel) "  "

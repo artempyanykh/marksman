@@ -38,10 +38,11 @@ module InitOptions =
 
             { preferredTextSyncKind = kind }
 
-type ClientDescription =
-    { info: ClientInfo option
-      caps: ClientCapabilities
-      opts: InitOptions }
+type ClientDescription = {
+    info: ClientInfo option
+    caps: ClientCapabilities
+    opts: InitOptions
+} with
 
     member this.IsVSCode: bool =
         this.info |> Option.exists (fun x -> x.Name = "Visual Studio Code")
@@ -89,15 +90,17 @@ type ClientDescription =
         this.opts.preferredTextSyncKind
 
 module ClientDescription =
-    let empty =
-        { info = None
-          caps =
-            { Workspace = None
-              TextDocument = None
-              General = None
-              Experimental = None
-              Window = None }
-          opts = InitOptions.empty }
+    let empty = {
+        info = None
+        caps = {
+            Workspace = None
+            TextDocument = None
+            General = None
+            Experimental = None
+            Window = None
+        }
+        opts = InitOptions.empty
+    }
 
     let ofParams (par: InitializeParams) : ClientDescription =
         let caps = par.Capabilities |> Option.defaultValue empty.caps
@@ -109,19 +112,22 @@ module ClientDescription =
 
         { info = par.ClientInfo; caps = caps; opts = opts }
 
-type State =
-    private
-        { client: ClientDescription
-          workspace: Workspace
-          revision: int }
+type State = private {
+    client: ClientDescription
+    workspace: Workspace
+    revision: int
+} with
 
     member this.Diag() : WorkspaceDiag = WorkspaceDiag.mk this.workspace
 
 module State =
     let private logger = LogProvider.getLoggerByName "State"
 
-    let mk (client: ClientDescription) (ws: Workspace) =
-        { client = client; workspace = ws; revision = 0 }
+    let mk (client: ClientDescription) (ws: Workspace) = {
+        client = client
+        workspace = ws
+        revision = 0
+    }
 
     let client s = s.client
 
@@ -185,9 +191,11 @@ module State =
             Workspace.withoutFolders removedUris state.workspace
             |> Workspace.withFolders addedFolders
 
-        { client = state.client
-          workspace = newWorkspace
-          revision = state.revision + 1 }
+        {
+            client = state.client
+            workspace = newWorkspace
+            revision = state.revision + 1
+        }
 
     let updateFolder (newFolder: Folder) (state: State) : State =
         let newWs = Workspace.withFolder newFolder state.workspace

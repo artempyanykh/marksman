@@ -26,15 +26,14 @@ let basicHeaderLenses () =
         Lenses.forDoc ClientDescription.empty f d1
         |> Array.map (fun lens -> $"{lens.Command.Value}, {lens.Range}")
 
-    checkInlineSnapshot
-        id
-        lenses
-        [ "{ Title = \"1 reference\""
-          "  Command = \"marksman.findReferences\""
-          "  Arguments = None }, (0,0)-(0,7)"
-          "{ Title = \"2 references\""
-          "  Command = \"marksman.findReferences\""
-          "  Arguments = None }, (1,0)-(1,6)" ]
+    checkInlineSnapshot id lenses [
+        "{ Title = \"1 reference\""
+        "  Command = \"marksman.findReferences\""
+        "  Arguments = None }, (0,0)-(0,7)"
+        "{ Title = \"2 references\""
+        "  Command = \"marksman.findReferences\""
+        "  Arguments = None }, (1,0)-(1,6)"
+    ]
 
 [<Fact>]
 let basicHeaderLenses_withCommandArguments () =
@@ -49,11 +48,13 @@ let basicHeaderLenses_withCommandArguments () =
 
     let f = FakeFolder.Mk([ d1; d2 ])
 
-    let client =
-        { ClientDescription.empty with
-            caps =
-                { ClientDescription.empty.caps with
-                    Experimental = Some(JToken.Parse("""{"codeLensFindReferences": true}""")) } }
+    let client = {
+        ClientDescription.empty with
+            caps = {
+                ClientDescription.empty.caps with
+                    Experimental = Some(JToken.Parse("""{"codeLensFindReferences": true}"""))
+            }
+    }
 
     let lensesData =
         Lenses.forDoc client f d1
@@ -85,9 +86,8 @@ let basicLinkDefLenses () =
         Lenses.forDoc ClientDescription.empty f d1
         |> Array.map (fun lens -> $"{lens.Command.Value}, {lens.Range}")
 
-    checkInlineSnapshot
-        id
-        lenses
-        [ "{ Title = \"2 references\""
-          "  Command = \"marksman.findReferences\""
-          "  Arguments = None }, (4,0)-(4,11)" ]
+    checkInlineSnapshot id lenses [
+        "{ Title = \"2 references\""
+        "  Command = \"marksman.findReferences\""
+        "  Arguments = None }, (4,0)-(4,11)"
+    ]

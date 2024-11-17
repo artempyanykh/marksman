@@ -230,9 +230,10 @@ type Position with
 
 type Range with
 
-    static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range =
-        { Start = Position.Mk(startLine, startChar)
-          End = Position.Mk(endLine, endChar) }
+    static member Mk(startLine: int, startChar: int, endLine: int, endChar: int) : Range = {
+        Start = Position.Mk(startLine, startChar)
+        End = Position.Mk(endLine, endChar)
+    }
 
     static member Mk(start: Position, end_: Position) : Range = { Start = start; End = end_ }
 
@@ -279,9 +280,10 @@ type Indented<'A> =
 
     member this.AsString = this.ToString()
 
-type Difference<'A> when 'A: comparison =
-    { added: Set<'A>
-      removed: Set<'A> }
+type Difference<'A> when 'A: comparison = {
+    added: Set<'A>
+    removed: Set<'A>
+} with
 
     member this.CompactFormat() =
         let lines =
@@ -312,11 +314,14 @@ module Difference =
 
         { added = after - before; removed = before - after }
 
-    let map f { added = added; removed = removed } =
-        { added = Set.map f added; removed = Set.map f removed }
+    let map f { added = added; removed = removed } = {
+        added = Set.map f added
+        removed = Set.map f removed
+    }
 
-type FullDifference<'A> when 'A: comparison =
-    { added: Set<'A>
-      removed: Set<'A>
-      changed: Set<'A>
-      unchanged: Set<'A> }
+type FullDifference<'A> when 'A: comparison = {
+    added: Set<'A>
+    removed: Set<'A>
+    changed: Set<'A>
+    unchanged: Set<'A>
+}

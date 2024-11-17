@@ -27,9 +27,10 @@ module TokenType =
 
     let mapping = [| WikiLink; RefLink; Tag |] |> Array.map toLspName
 
-type Token =
-    { range: Range
-      typ: TokenType }
+type Token = {
+    range: Range
+    typ: TokenType
+} with
 
     override this.ToString() = $"{this.typ}@{this.range}"
 
@@ -61,11 +62,13 @@ module Token =
 
                 deltaLine, deltaChar
 
-        [| uint32 deltaLine
-           uint32 deltaChar
-           uint32 (lenSingleLine curTok)
-           TokenType.toNum curTok.typ
-           Modifiers |]
+        [|
+            uint32 deltaLine
+            uint32 deltaChar
+            uint32 (lenSingleLine curTok)
+            TokenType.toNum curTok.typ
+            Modifiers
+        |]
 
     let encodeAll (tokens: seq<Token>) : array<uint32> =
         let tokens =

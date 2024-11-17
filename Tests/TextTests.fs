@@ -34,9 +34,13 @@ let applyTextChange_insert_single () =
 
     let actual =
         Text.applyTextChange
-            [| { Range = Some(Text.mkRange ((0, 1), (0, 1)))
-                 RangeLength = Some 0
-                 Text = " Holla!" } |]
+            [|
+                {
+                    Range = Some(Text.mkRange ((0, 1), (0, 1)))
+                    RangeLength = Some 0
+                    Text = " Holla!"
+                }
+            |]
             text
 
     let expected = "! Holla!"
@@ -48,12 +52,18 @@ let applyTextChange_insert_multiple () =
 
     let actual =
         Text.applyTextChange
-            [| { Range = Some(Text.mkRange ((0, 1), (0, 1)))
-                 RangeLength = Some 0
-                 Text = " H" }
-               { Range = Some(Text.mkRange ((0, 3), (0, 3)))
-                 RangeLength = Some 0
-                 Text = "i" } |]
+            [|
+                {
+                    Range = Some(Text.mkRange ((0, 1), (0, 1)))
+                    RangeLength = Some 0
+                    Text = " H"
+                }
+                {
+                    Range = Some(Text.mkRange ((0, 3), (0, 3)))
+                    RangeLength = Some 0
+                    Text = "i"
+                }
+            |]
             text
 
     let expected = "! Hi"
@@ -65,9 +75,13 @@ let applyTextChange_insert_on_empty () =
 
     let actual =
         Text.applyTextChange
-            [| { Range = Some(Text.mkRange ((0, 0), (0, 0)))
-                 RangeLength = Some 0
-                 Text = "H" } |]
+            [|
+                {
+                    Range = Some(Text.mkRange ((0, 0), (0, 0)))
+                    RangeLength = Some 0
+                    Text = "H"
+                }
+            |]
             text
 
     let expected = "H"
@@ -79,9 +93,13 @@ let applyTextChange_insert_next_line () =
 
     let actual =
         Text.applyTextChange
-            [| { Range = Some(Text.mkRange ((1, 0), (1, 0)))
-                 RangeLength = Some 0
-                 Text = "B" } |]
+            [|
+                {
+                    Range = Some(Text.mkRange ((1, 0), (1, 0)))
+                    RangeLength = Some 0
+                    Text = "B"
+                }
+            |]
             text
 
     let expected = "A\nB"
@@ -94,9 +112,13 @@ let applyTextChange_replace_single () =
 
     let actual =
         Text.applyTextChange
-            [| { Range = Some(Text.mkRange ((0, 0), (0, 5)))
-                 RangeLength = Some 5
-                 Text = "Bye" } |]
+            [|
+                {
+                    Range = Some(Text.mkRange ((0, 0), (0, 5)))
+                    RangeLength = Some 5
+                    Text = "Bye"
+                }
+            |]
             text
 
     let expected = "Bye World!"

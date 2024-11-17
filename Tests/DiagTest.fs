@@ -68,19 +68,23 @@ let noDiagOnRealUrls () =
 let noDiagOnNonMarkdownFiles () =
     let doc =
         FakeDoc.Mk(
-            [| "# H1"
-               "## H2"
-               "[](bad.md)"
-               "[](another%20bad.md)"
-               "[](good/folder)" |]
+            [|
+                "# H1"
+                "## H2"
+                "[](bad.md)"
+                "[](another%20bad.md)"
+                "[](good/folder)"
+            |]
         )
 
     let folder = FakeFolder.Mk([ doc ])
     let diag = checkFolder folder |> diagToHuman
 
     Assert.Equal<string * string>(
-        [ "fake.md", "Link to non-existent document 'bad.md'"
-          "fake.md", "Link to non-existent document 'another bad.md'" ],
+        [
+            "fake.md", "Link to non-existent document 'bad.md'"
+            "fake.md", "Link to non-existent document 'another bad.md'"
+        ],
         diag
     )
 
@@ -98,15 +102,19 @@ let crossFileDiagOnBrokenWikiLinks () =
 let noCrossFileDiagOnSingleFileFolders () =
     let doc =
         FakeDoc.Mk(
-            [| "[](bad.md)" //
-               "[[another-bad]]"
-               "[bad-ref][bad-ref]" |]
+            [|
+                "[](bad.md)" //
+                "[[another-bad]]"
+                "[bad-ref][bad-ref]"
+            |]
         )
 
     let folder = Folder.singleFile doc None
     let diag = checkFolder folder |> diagToHuman
 
     Assert.Equal<string * string>(
-        [ "fake.md", "Link to non-existent link definition with the label 'bad-ref'" ],
+        [
+            "fake.md", "Link to non-existent link definition with the label 'bad-ref'"
+        ],
         diag
     )

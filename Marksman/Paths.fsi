@@ -67,10 +67,10 @@ module RootPath =
     val filenameStem: RootPath -> string
 
 [<Struct>]
-type RootedRelPath =
-    private
-        { root: RootPath
-          path: option<RelPath> }
+type RootedRelPath = private {
+    root: RootPath
+    path: option<RelPath>
+}
 
 module RootedRelPath =
     val mk: RootPath -> LocalPath -> RootedRelPath

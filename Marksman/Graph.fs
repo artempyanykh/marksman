@@ -6,8 +6,9 @@ open Marksman.Misc
 /// Undirected graph
 type Graph<'V> when 'V: comparison = { edges: MMap<'V, 'V> }
 
-type GraphDifference<'V> when 'V: comparison =
-    { edgeDifference: Difference<'V * 'V> }
+type GraphDifference<'V> when 'V: comparison = {
+    edgeDifference: Difference<'V * 'V>
+} with
 
     member this.IsEmpty() = Difference.isEmpty this.edgeDifference
 

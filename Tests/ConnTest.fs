@@ -14,59 +14,63 @@ open Marksman.Conn
 let d1 =
     FakeDoc.Mk(
         path = "d1.md",
-        contentLines =
-            [| "# Doc 1" //
-               ""
-               "## D1.S1"
-               ""
-               "[[doc-2]]"
-               "[[doc-NA]]"
-               "" |]
+        contentLines = [|
+            "# Doc 1" //
+            ""
+            "## D1.S1"
+            ""
+            "[[doc-2]]"
+            "[[doc-NA]]"
+            ""
+        |]
     )
 
 let d1_dup =
     FakeDoc.Mk(
         path = "d1_dup.md",
-        contentLines =
-            [| "# Doc 1" //
-               ""
-               "[[doc-2]]"
-               "" |]
+        contentLines = [|
+            "# Doc 1" //
+            ""
+            "[[doc-2]]"
+            ""
+        |]
     )
 
 let d2 =
     FakeDoc.Mk(
         path = "d2.md",
-        contentLines =
-            [| "# Doc 2" //
-               "[[doc-1]]"
-               "[[doc-1#d1s1]]"
-               "[[doc-NA2]]"
-               "" |]
+        contentLines = [|
+            "# Doc 2" //
+            "[[doc-1]]"
+            "[[doc-1#d1s1]]"
+            "[[doc-NA2]]"
+            ""
+        |]
     )
 
 let d3 =
     FakeDoc.Mk(
         path = "d3.md",
-        contentLines =
-            [| "# Doc 3"
-               ""
-               "[link1]"
-               "[link1][]"
-               "[linkX]"
-               ""
-               "[link1]: /url1"
-               "" |]
+        contentLines = [|
+            "# Doc 3"
+            ""
+            "[link1]"
+            "[link1][]"
+            "[linkX]"
+            ""
+            "[link1]: /url1"
+            ""
+        |]
     )
 
 let checkSnapshot (conn: Conn) = conn.CompactFormat().Lines().ShouldMatchSnapshot()
 
-let emptyOracle =
-    { resolveToScope = fun _ _ -> [||] //
-      resolveInScope = fun _ _ -> [||] }
+let emptyOracle = {
+    resolveToScope = fun _ _ -> [||] //
+    resolveInScope = fun _ _ -> [||]
+}
 
-let incrConfig =
-    { Config.Config.Default with coreIncrementalReferences = Some true }
+let incrConfig = { Config.Config.Default with coreIncrementalReferences = Some true }
 
 let mkFolder docs = FakeFolder.Mk(config = incrConfig, docs = docs)
 
@@ -97,9 +101,10 @@ module ConnGraphTests =
         let dNA =
             FakeDoc.Mk(
                 path = "docNA.md",
-                contentLines =
-                    [| "# Doc NA" //
-                       "" |]
+                contentLines = [|
+                    "# Doc NA" //
+                    ""
+                |]
             )
 
         let f2 = Folder.withDoc dNA f1
@@ -112,16 +117,17 @@ module ConnGraphTests =
         let d3Update =
             FakeDoc.Mk(
                 path = "d3.md",
-                contentLines =
-                    [| "# Doc 3"
-                       ""
-                       "[link1]"
-                       "[link1][]"
-                       "[linkX]"
-                       ""
-                       "[link1]: /url1"
-                       "[linkX]: /url2"
-                       "" |]
+                contentLines = [|
+                    "# Doc 3"
+                    ""
+                    "[link1]"
+                    "[link1][]"
+                    "[linkX]"
+                    ""
+                    "[link1]: /url1"
+                    "[linkX]: /url2"
+                    ""
+                |]
             )
 
         let f2 = Folder.withDoc d3Update f1
@@ -134,12 +140,13 @@ module ConnGraphTests =
         let d1Update =
             FakeDoc.Mk(
                 path = "d1.md",
-                contentLines =
-                    [| "# Doc 1" //
-                       ""
-                       "[[doc-2]]"
-                       "[[doc-NA]]"
-                       "" |]
+                contentLines = [|
+                    "# Doc 1" //
+                    ""
+                    "[[doc-2]]"
+                    "[[doc-NA]]"
+                    ""
+                |]
             )
 
         let f2 = Folder.withDoc d1Update f1
@@ -159,10 +166,11 @@ module ConnGraphTests =
         let d2 =
             FakeDoc.Mk(path = "fsharp.md", contentLines = [| "# FSharp"; "[[OCaml#Multicore]]" |])
 
-        let config =
-            { incrConfig with
+        let config = {
+            incrConfig with
                 complWikiStyle = Some Config.FilePathStem
-                coreParanoid = Some true }
+                coreParanoid = Some true
+        }
 
         let incr =
             FakeFolder.Mk(docs = [ d1; d2 ], config = config)

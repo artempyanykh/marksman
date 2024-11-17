@@ -29,13 +29,14 @@ module DetectToc =
     [<Fact>]
     let detectToc_withMarker () =
         let doc =
-            FakeDoc.Mk
-                [| StartMarker
-                   "- [T1][#t1]"
-                   " - [T2][#t2]"
-                   EndMarker
-                   "# T1"
-                   "## T2" |]
+            FakeDoc.Mk [|
+                StartMarker
+                "- [T1][#t1]"
+                " - [T2][#t2]"
+                EndMarker
+                "# T1"
+                "## T2"
+            |]
 
         let toc = (TableOfContents.detect (Doc.text doc)).Value
         let tocText = (Doc.text doc).Substring toc
@@ -64,14 +65,15 @@ module CreateToc =
     [<Fact>]
     let createToc_yamlFrontMatter () =
         let doc =
-            FakeDoc.Mk
-                [| "---"
-                   """title: "First" """
-                   """tags: ["1", "2"] """
-                   "---"
-                   ""
-                   "# T1"
-                   "## T2" |]
+            FakeDoc.Mk [|
+                "---"
+                """title: "First" """
+                """tags: ["1", "2"] """
+                "---"
+                ""
+                "# T1"
+                "## T2"
+            |]
 
         let titles = TableOfContents.mk (Doc.index doc) |> Option.get
 
@@ -104,14 +106,15 @@ module InsertToc =
     [<Fact>]
     let insert_afterYaml () =
         let doc =
-            FakeDoc.Mk
-                [| "---"
-                   """title: "First" """
-                   """tags: ["1", "2"] """
-                   "---"
-                   ""
-                   "## T1"
-                   "## T2" |]
+            FakeDoc.Mk [|
+                "---"
+                """title: "First" """
+                """tags: ["1", "2"] """
+                "---"
+                ""
+                "## T1"
+                "## T2"
+            |]
 
 
         let insertion = TableOfContents.insertionPoint doc
@@ -122,14 +125,15 @@ module InsertToc =
     [<Fact>]
     let insert_afterFirstTitle_withYaml () =
         let doc =
-            FakeDoc.Mk
-                [| "---"
-                   """title: "First" """
-                   """tags: ["1", "2"] """
-                   "---"
-                   ""
-                   "# T1"
-                   "## T2" |]
+            FakeDoc.Mk [|
+                "---"
+                """title: "First" """
+                """tags: ["1", "2"] """
+                "---"
+                ""
+                "# T1"
+                "## T2"
+            |]
 
 
         let insertion = TableOfContents.insertionPoint doc
@@ -148,14 +152,15 @@ module RenderToc =
             |> Option.get
             |> TableOfContents.render
 
-        let expectedLines =
-            [| StartMarker
-               "- [T1](#t1)"
-               "  - [T2](#t2)"
-               "    - [T3](#t3)"
-               "  - [T4](#t4)"
-               "    - [T5](#t5)"
-               EndMarker |]
+        let expectedLines = [|
+            StartMarker
+            "- [T1](#t1)"
+            "  - [T2](#t2)"
+            "    - [T3](#t3)"
+            "  - [T4](#t4)"
+            "    - [T5](#t5)"
+            EndMarker
+        |]
 
         let expected = String.concat NewLine expectedLines
 

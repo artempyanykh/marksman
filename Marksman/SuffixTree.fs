@@ -1,8 +1,10 @@
 module Marksman.SuffixTree
 
 module Impl =
-    type SuffixTree<'K, 'V> when 'K: comparison =
-        { nodes: Map<'K, SuffixTree<'K, 'V>>; value: option<'V> }
+    type SuffixTree<'K, 'V> when 'K: comparison = {
+        nodes: Map<'K, SuffixTree<'K, 'V>>
+        value: option<'V>
+    }
 
     let empty = { nodes = Map.empty; value = None }
 
@@ -69,10 +71,10 @@ module Impl =
         st |> collectValues
 
 [<CustomEquality; NoComparison>]
-type SuffixTree<'K, 'V> when 'V: equality =
-    private
-        { splitFn: 'K -> list<string>
-          tree: Impl.SuffixTree<string, 'V> }
+type SuffixTree<'K, 'V> when 'V: equality = private {
+    splitFn: 'K -> list<string>
+    tree: Impl.SuffixTree<string, 'V>
+} with
 
     override this.Equals(other) =
         match other with

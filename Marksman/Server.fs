@@ -118,21 +118,25 @@ module ServerUtil =
         (textSyncKind: TextSync)
         (par: InitializeParams)
         : ServerCapabilities =
-        let workspaceFoldersCaps =
-            { Supported = Some true; ChangeNotifications = Some(Second true) }
+        let workspaceFoldersCaps = {
+            Supported = Some true
+            ChangeNotifications = Some(Second true)
+        }
 
         let glob = mkWatchGlob markdownExts
 
-        let markdownFilePattern =
-            { Glob = glob
-              Matches = Some FileOperationPatternKind.File
-              Options = Some { IgnoreCase = Some true } }
+        let markdownFilePattern = {
+            Glob = glob
+            Matches = Some FileOperationPatternKind.File
+            Options = Some { IgnoreCase = Some true }
+        }
 
-        let markdownFileRegistration =
-            { Filters = [| { Scheme = None; Pattern = markdownFilePattern } |] }
+        let markdownFileRegistration = {
+            Filters = [| { Scheme = None; Pattern = markdownFilePattern } |]
+        }
 
-        let workspaceFileCaps =
-            { WorkspaceFileOperationsServerCapabilities.Default with
+        let workspaceFileCaps = {
+            WorkspaceFileOperationsServerCapabilities.Default with
                 DidCreate = Some markdownFileRegistration
                 DidDelete = Some markdownFileRegistration
                 // VSCode behaves weirdly when communicating file renames, so let's turn this off.
@@ -140,27 +144,29 @@ module ServerUtil =
                 // - didClose on the old name, and
                 // - didOpen on the new one
                 // which is enough to keep the state in sync.
-                DidRename = None }
+                DidRename = None
+        }
 
-        let workspaceCaps =
-            { WorkspaceFolders = Some workspaceFoldersCaps
-              FileOperations = Some workspaceFileCaps }
+        let workspaceCaps = {
+            WorkspaceFolders = Some workspaceFoldersCaps
+            FileOperations = Some workspaceFileCaps
+        }
 
         let syncKind =
             match textSyncKind with
             | Full -> TextDocumentSyncKind.Full
             | Incremental -> TextDocumentSyncKind.Incremental
 
-        let textSyncCaps =
-            { TextDocumentSyncOptions.Default with
+        let textSyncCaps = {
+            TextDocumentSyncOptions.Default with
                 OpenClose = Some true
-                Change = Some syncKind }
+                Change = Some syncKind
+        }
 
 
         let clientDesc = ClientDescription.ofParams par
 
-        let codeActionOptions =
-            { CodeActionKinds = None; ResolveProvider = Some false }
+        let codeActionOptions = { CodeActionKinds = None; ResolveProvider = Some false }
 
         let renameOptions =
             if clientDesc.SupportsPrepareRename then
@@ -168,29 +174,33 @@ module ServerUtil =
             else
                 Some(U2.First true)
 
-        { ServerCapabilities.Default with
-            Workspace = Some workspaceCaps
-            WorkspaceSymbolProvider = Some(First <| not clientDesc.IsVSCode)
-            TextDocumentSync = Some textSyncCaps
-            DocumentSymbolProvider = Some(First <| not clientDesc.IsVSCode)
-            CompletionProvider =
-                Some
-                    { TriggerCharacters = Some [| '['; '#'; '(' |]
-                      ResolveProvider = None
-                      AllCommitCharacters = None
-                      CompletionItem = None }
-            DefinitionProvider = Some true
-            HoverProvider = Some true
-            ReferencesProvider = Some true
-            CodeActionProvider = Some(Second codeActionOptions)
-            SemanticTokensProvider =
-                Some
-                    { Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
-                      Range = Some true
-                      Full = { Delta = Some false } |> U2.Second |> Some }
-            RenameProvider = renameOptions
-            CodeLensProvider = Some { ResolveProvider = None }
-            ExecuteCommandProvider = Some { commands = Some [||] } }
+        {
+            ServerCapabilities.Default with
+                Workspace = Some workspaceCaps
+                WorkspaceSymbolProvider = Some(First <| not clientDesc.IsVSCode)
+                TextDocumentSync = Some textSyncCaps
+                DocumentSymbolProvider = Some(First <| not clientDesc.IsVSCode)
+                CompletionProvider =
+                    Some {
+                        TriggerCharacters = Some [| '['; '#'; '(' |]
+                        ResolveProvider = None
+                        AllCommitCharacters = None
+                        CompletionItem = None
+                    }
+                DefinitionProvider = Some true
+                HoverProvider = Some true
+                ReferencesProvider = Some true
+                CodeActionProvider = Some(Second codeActionOptions)
+                SemanticTokensProvider =
+                    Some {
+                        Legend = { TokenTypes = Semato.TokenType.mapping; TokenModifiers = [||] }
+                        Range = Some true
+                        Full = { Delta = Some false } |> U2.Second |> Some
+                    }
+                RenameProvider = renameOptions
+                CodeLensProvider = Some { ResolveProvider = None }
+                ExecuteCommandProvider = Some { commands = Some [||] }
+        }
 
 type MarksmanStatusParams = { state: string; docCount: int }
 
@@ -270,8 +280,11 @@ let calcDiagnosticsUpdate
                     )
 
                     // TODO: check how the behavior changes when we supply the document version here
-                    let publishParams =
-                        { Uri = docUri.Uri; Diagnostics = newDocDiag; Version = None }
+                    let publishParams = {
+                        Uri = docUri.Uri
+                        Diagnostics = newDocDiag
+                        Version = None
+                    }
 
                     yield publishParams
     }
@@ -569,8 +582,7 @@ type MarksmanServer(client: MarksmanClient) =
 
             let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
 
-            let initResult =
-                { InitializeResult.Default with Capabilities = serverCaps }
+            let initResult = { InitializeResult.Default with Capabilities = serverCaps }
 
             logger.debug (
                 Log.setMessage
@@ -804,9 +816,11 @@ type MarksmanServer(client: MarksmanClient) =
                     | candidates ->
                         let isIncomplete = Array.length candidates >= maxCompletions
 
-                        { IsIncomplete = isIncomplete
-                          Items = candidates
-                          ItemDefaults = None }
+                        {
+                            IsIncomplete = isIncomplete
+                            Items = candidates
+                            ItemDefaults = None
+                        }
                 }
 
             LspResult.success candidates
@@ -825,8 +839,10 @@ type MarksmanServer(client: MarksmanClient) =
 
                     let locs =
                         refs
-                        |> Seq.map (fun ref ->
-                            { Uri = ref |> Dest.doc |> Doc.uri; Range = (Dest.range ref) })
+                        |> Seq.map (fun ref -> {
+                            Uri = ref |> Dest.doc |> Doc.uri
+                            Range = (Dest.range ref)
+                        })
                         |> Array.ofSeq
 
                     if locs.Length = 0 then return! None
@@ -929,15 +945,16 @@ type MarksmanServer(client: MarksmanClient) =
         <| fun state ->
             let docPath = opts.TextDocument.Uri |> UriWith.mkAbs
 
-            let codeAction title kind edit =
-                { Title = title
-                  Kind = kind
-                  Diagnostics = None
-                  Command = None
-                  Data = None
-                  IsPreferred = Some false
-                  Disabled = None
-                  Edit = Some edit }
+            let codeAction title kind edit = {
+                Title = title
+                Kind = kind
+                Diagnostics = None
+                Command = None
+                Data = None
+                IsPreferred = Some false
+                Disabled = None
+                Edit = Some edit
+            }
 
             match State.tryFindFolderAndDoc docPath state with
             | None -> Mutation.output (LspResult.success None)

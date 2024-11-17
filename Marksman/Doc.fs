@@ -16,12 +16,13 @@ open Marksman.Structure
 open Marksman.Cst
 
 [<CustomEquality; CustomComparison>]
-type Doc =
-    { id: DocId
-      version: option<int>
-      text: Text
-      structure: Structure
-      index: Index }
+type Doc = {
+    id: DocId
+    version: option<int>
+    text: Text
+    structure: Structure
+    index: Index
+} with
 
     member this.RootPath = RootedRelPath.rootPath this.id.Path
 
@@ -65,11 +66,13 @@ module Doc =
         let structure = Parser.parse exts text
         let index = Index.ofCst (Structure.concreteElements structure)
 
-        { id = id
-          version = version
-          text = text
-          structure = structure
-          index = index }
+        {
+            id = id
+            version = version
+            text = text
+            structure = structure
+            index = index
+        }
 
     let id { id = id } = id
     let text doc = doc.text
@@ -78,10 +81,12 @@ module Doc =
         let newStructure = Parser.parse exts newText
         let newIndex = Index.ofCst (Structure.concreteElements newStructure)
 
-        { doc with
-            text = newText
-            structure = newStructure
-            index = newIndex }
+        {
+            doc with
+                text = newText
+                structure = newStructure
+                index = newIndex
+        }
 
 
     let applyLspChange exts (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =

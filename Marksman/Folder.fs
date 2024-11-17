@@ -16,11 +16,12 @@ open Marksman.Paths
 open Marksman.MMap
 open Marksman.Syms
 
-type MultiFile =
-    { name: string
-      root: FolderId
-      docs: Map<CanonDocPath, Doc>
-      config: option<Config> }
+type MultiFile = {
+    name: string
+    root: FolderId
+    docs: Map<CanonDocPath, Doc>
+    config: option<Config>
+} with
 
     member this.RootPath = this.root.data
 
@@ -87,10 +88,11 @@ module FolderData =
 
         mapping
 
-type FolderLookup =
-    { docsBySlug: Map<Slug, Set<Doc>>
-      docsByPath: SuffixTree<CanonDocPath, Doc>
-      config: option<Config> }
+type FolderLookup = {
+    docsBySlug: Map<Slug, Set<Doc>>
+    docsByPath: SuffixTree<CanonDocPath, Doc>
+    config: option<Config>
+}
 
 module FolderLookup =
     let ofData (data: FolderData) =
@@ -358,9 +360,9 @@ module Folder =
 
                 Seq.empty
 
-        collect
-            (RootPath.toLocal folderId.data)
-            [ GlobMatcher.mkDefault (RootPath.toSystem folderId.data) ]
+        collect (RootPath.toLocal folderId.data) [
+            GlobMatcher.mkDefault (RootPath.toSystem folderId.data)
+        ]
 
     let private tryLoadFolderConfig (folderId: FolderId) : option<Config> =
         let folderConfigPath =
@@ -416,10 +418,12 @@ module Folder =
 
         let idsUnchanged = idsBoth - idsChanged
 
-        { added = idsAdded
-          removed = idsRemoved
-          changed = idsChanged
-          unchanged = idsUnchanged }
+        {
+            added = idsAdded
+            removed = idsRemoved
+            changed = idsChanged
+            unchanged = idsUnchanged
+        }
 
     let symsDifference (before: Folder) (after: Folder) =
         let docsDifference = docsDifference before after

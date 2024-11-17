@@ -75,11 +75,11 @@ module WikiLinkTests =
         let text = "[[note#heading]]"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "WL: [[note#heading]]; (0,0)-(0,16)"
-              "  doc=note; (0,2)-(0,6)"
-              "  head=heading; (0,7)-(0,14)" ]
+        checkInlineSnapshot document [
+            "WL: [[note#heading]]; (0,0)-(0,16)"
+            "  doc=note; (0,2)-(0,6)"
+            "  head=heading; (0,7)-(0,14)"
+        ]
 
     [<Fact>]
     let parser_xref_text_before () =
@@ -117,11 +117,11 @@ module WikiLinkTests =
         let text = "[[T#]]"
         let doc = scrapeString text
 
-        checkInlineSnapshot
-            doc
-            [ "WL: [[T#]]; (0,0)-(0,6)" //
-              "  doc=T; (0,2)-(0,3)"
-              "  head=; (0,4)-(0,4)" ]
+        checkInlineSnapshot doc [
+            "WL: [[T#]]; (0,0)-(0,6)" //
+            "  doc=T; (0,2)-(0,3)"
+            "  head=; (0,4)-(0,4)"
+        ]
 
     [<Fact>]
     let parse_wiki_escaped_hash () =
@@ -198,10 +198,10 @@ module MdLinkTest =
         let text = "[title](url)"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [title](url) @ (0,0)-(0,12)"
-              "  IL: label=title @ (0,1)-(0,6); url=url @ (0,8)-(0,11); title=∅" ]
+        checkInlineSnapshot document [
+            "ML: [title](url) @ (0,0)-(0,12)"
+            "  IL: label=title @ (0,1)-(0,6); url=url @ (0,8)-(0,11); title=∅"
+        ]
 
     [<Fact>]
     let parser_link_2 () =
@@ -223,114 +223,114 @@ module MdLinkTest =
         let text = "[]()"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: []() @ (0,0)-(0,4)"
-              "  IL: label= @ (0,0)-(0,0); url=∅; title=∅" ]
+        checkInlineSnapshot document [
+            "ML: []() @ (0,0)-(0,4)"
+            "  IL: label= @ (0,0)-(0,0); url=∅; title=∅"
+        ]
 
     [<Fact>]
     let parser_link_5 () =
         let text = "[la bel](url \"title\")"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [la bel](url \"title\") @ (0,0)-(0,21)"
-              "  IL: label=la bel @ (0,1)-(0,7); url=url @ (0,9)-(0,12); title=title @ (0,13)-(0,20)" ]
+        checkInlineSnapshot document [
+            "ML: [la bel](url \"title\") @ (0,0)-(0,21)"
+            "  IL: label=la bel @ (0,1)-(0,7); url=url @ (0,9)-(0,12); title=title @ (0,13)-(0,20)"
+        ]
 
     [<Fact>]
     let parser_link_6 () =
         let text = "[la bel](url title)" // without quotation of title only the shortcut parses
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [la bel] @ (0,0)-(0,8)" //
-              "  RS: label=la bel @ (0,1)-(0,7)" ]
+        checkInlineSnapshot document [
+            "ML: [la bel] @ (0,0)-(0,8)" //
+            "  RS: label=la bel @ (0,1)-(0,7)"
+        ]
 
     [<Fact>]
     let parser_link_7 () =
         let text = "[](url)"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [](url) @ (0,0)-(0,7)"
-              "  IL: label= @ (0,0)-(0,0); url=url @ (0,3)-(0,6); title=∅" ]
+        checkInlineSnapshot document [
+            "ML: [](url) @ (0,0)-(0,7)"
+            "  IL: label= @ (0,0)-(0,0); url=url @ (0,3)-(0,6); title=∅"
+        ]
 
     [<Fact>]
     let parser_link_8 () =
         let text = "[short_cut]"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [short_cut] @ (0,0)-(0,11)"
-              "  RS: label=short_cut @ (0,1)-(0,10)" ]
+        checkInlineSnapshot document [
+            "ML: [short_cut] @ (0,0)-(0,11)"
+            "  RS: label=short_cut @ (0,1)-(0,10)"
+        ]
 
     [<Fact>]
     let parser_link_9 () =
         let text = "[short cut][]"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [short cut][] @ (0,0)-(0,13)"
-              "  RC: label=short cut @ (0,1)-(0,10)" ]
+        checkInlineSnapshot document [
+            "ML: [short cut][] @ (0,0)-(0,13)"
+            "  RC: label=short cut @ (0,1)-(0,10)"
+        ]
 
     [<Fact>]
     let parser_link_10 () =
         let text = "[label][ref]"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [label][ref] @ (0,0)-(0,12)"
-              "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)" ]
+        checkInlineSnapshot document [
+            "ML: [label][ref] @ (0,0)-(0,12)"
+            "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)"
+        ]
 
     [<Fact>]
     let parser_link_11 () =
         let text = "[foo]: /foo 'foo title'"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "MLD: [foo]: /foo 'foo title' @ (0,0)-(0,23)"
-              "  label=foo @ (0,1)-(0,4); url=/foo @ (0,7)-(0,11); title=foo title @ (0,12)-(0,23)" ]
+        checkInlineSnapshot document [
+            "MLD: [foo]: /foo 'foo title' @ (0,0)-(0,23)"
+            "  label=foo @ (0,1)-(0,4); url=/foo @ (0,7)-(0,11); title=foo title @ (0,12)-(0,23)"
+        ]
 
     [<Fact>]
     let parser_link_12 () =
         let text = "[foo]: /foo"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "MLD: [foo]: /foo @ (0,0)-(0,11)"
-              "  label=foo @ (0,1)-(0,4); url=/foo @ (0,7)-(0,11); title=∅" ]
+        checkInlineSnapshot document [
+            "MLD: [foo]: /foo @ (0,0)-(0,11)"
+            "  label=foo @ (0,1)-(0,4); url=/foo @ (0,7)-(0,11); title=∅"
+        ]
 
     [<Fact>]
     let parser_link_13 () =
         let text = "[foo]: /bar\nHere comes [foo]."
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "MLD: [foo]: /bar @ (0,0)-(0,11)"
-              "  label=foo @ (0,1)-(0,4); url=/bar @ (0,7)-(0,11); title=∅"
-              "ML: [foo] @ (1,11)-(1,16)"
-              "  RS: label=foo @ (1,12)-(1,15)" ]
+        checkInlineSnapshot document [
+            "MLD: [foo]: /bar @ (0,0)-(0,11)"
+            "  label=foo @ (0,1)-(0,4); url=/bar @ (0,7)-(0,11); title=∅"
+            "ML: [foo] @ (1,11)-(1,16)"
+            "  RS: label=foo @ (1,12)-(1,15)"
+        ]
 
     [<Fact>]
     let parser_link_14 () =
         let text = "[label][ref]\n\n[ref]: https://some.url"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [label][ref] @ (0,0)-(0,12)"
-              "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)"
-              "MLD: [ref]: https://some.url @ (2,0)-(2,23)"
-              "  label=ref @ (2,1)-(2,4); url=https://some.url @ (2,7)-(2,23); title=∅" ]
+        checkInlineSnapshot document [
+            "ML: [label][ref] @ (0,0)-(0,12)"
+            "  RF: text=label @ (0,1)-(0,6); label=ref @ (0,8)-(0,11)"
+            "MLD: [ref]: https://some.url @ (2,0)-(2,23)"
+            "  label=ref @ (2,1)-(2,4); url=https://some.url @ (2,7)-(2,23); title=∅"
+        ]
 
 module FootnoteTests =
     [<Fact(Skip = "Footnote parsing not implemented")>]
@@ -338,12 +338,12 @@ module FootnoteTests =
         let text = "[^1]\n\n[^1]: Single line footnote"
         let document = scrapeString text
 
-        checkInlineSnapshot
-            document
-            [ "ML: [^1] @ (0,0)-(0,4)"
-              "  RS: label=^1 @ (0,1)-(0,3)"
-              "MLD: [^1]: Footnote @ (2,0)-(2,14)"
-              "  label=^1 @ (2,1)-(2,3); url=Footnote @ (2,6)-(2,14); title=∅" ]
+        checkInlineSnapshot document [
+            "ML: [^1] @ (0,0)-(0,4)"
+            "  RS: label=^1 @ (0,1)-(0,3)"
+            "MLD: [^1]: Footnote @ (2,0)-(2,14)"
+            "  label=^1 @ (2,1)-(2,3); url=Footnote @ (2,6)-(2,14); title=∅"
+        ]
 
 module TagsTests =
     [<Fact>]
@@ -358,13 +358,13 @@ module TagsTests =
         let text = "(#tag\n(#tag\n(#tag)\n[?](#tag)"
         let cst = scrapeString text
 
-        checkInlineSnapshot
-            cst
-            [ "T: name=tag; range=(0,2)-(0,5) @ (0,1)-(0,5)"
-              "T: name=tag; range=(1,2)-(1,5) @ (1,1)-(1,5)"
-              "T: name=tag; range=(2,2)-(2,5) @ (2,1)-(2,5)"
-              "ML: [?](#tag) @ (3,0)-(3,9)"
-              "  IL: label=? @ (3,1)-(3,2); url=#tag @ (3,4)-(3,8); title=∅" ]
+        checkInlineSnapshot cst [
+            "T: name=tag; range=(0,2)-(0,5) @ (0,1)-(0,5)"
+            "T: name=tag; range=(1,2)-(1,5) @ (1,1)-(1,5)"
+            "T: name=tag; range=(2,2)-(2,5) @ (2,1)-(2,5)"
+            "ML: [?](#tag) @ (3,0)-(3,9)"
+            "  IL: label=? @ (3,1)-(3,2); url=#tag @ (3,4)-(3,8); title=∅"
+        ]
 
     [<Fact>]
     let tags_3 () =
@@ -372,20 +372,20 @@ module TagsTests =
         let text = "#tag1,#tag2"
         let cst = scrapeString text
 
-        checkInlineSnapshot
-            cst
-            [ "T: name=tag1; range=(0,1)-(0,5) @ (0,0)-(0,5)"
-              "T: name=tag2; range=(0,7)-(0,11) @ (0,6)-(0,11)" ]
+        checkInlineSnapshot cst [
+            "T: name=tag1; range=(0,1)-(0,5) @ (0,0)-(0,5)"
+            "T: name=tag2; range=(0,7)-(0,11) @ (0,6)-(0,11)"
+        ]
 
     [<Fact>]
     let tags_nested () =
         let text = "#tag1/subtag1,#tag2/subtag2/subsubtag2"
         let cst = scrapeString text
 
-        checkInlineSnapshot
-            cst
-            [ "T: name=tag1/subtag1; range=(0,1)-(0,13) @ (0,0)-(0,13)"
-              "T: name=tag2/subtag2/subsubtag2; range=(0,15)-(0,38) @ (0,14)-(0,38)" ]
+        checkInlineSnapshot cst [
+            "T: name=tag1/subtag1; range=(0,1)-(0,13) @ (0,0)-(0,13)"
+            "T: name=tag2/subtag2/subsubtag2; range=(0,15)-(0,38) @ (0,14)-(0,38)"
+        ]
 
 module DocUrlTests =
     let mkUrlNode str =
@@ -419,13 +419,13 @@ module RegressionTests =
 
         let actual = scrapeString content
 
-        checkInlineSnapshot
-            actual
-            [ "H2: range=(2,0)-(3,1); scope=(2,0)-(4,0)"
-              "  text=`-"
-              "-`"
-              "  title=`-"
-              "-` @ (2,0)-(3,1)" ]
+        checkInlineSnapshot actual [
+            "H2: range=(2,0)-(3,1); scope=(2,0)-(4,0)"
+            "  text=`-"
+            "-`"
+            "  title=`-"
+            "-` @ (2,0)-(3,1)"
+        ]
 
     [<Fact>]
     let no235 () =
@@ -443,22 +443,22 @@ module RegressionTests =
 
         let actual = scrapeString content
 
-        checkInlineSnapshot
-            actual
-            [ "ML: [                                                                               "
-              "'00000048', '00000681', '00000552', '00000206', '00000031', '00000303',         "
-              "'00001268', '00000540', '00000519', '00000821', '00000731', '00001089',         "
-              "'00000311', '00000784', '00000015', '00001052', '00000030', '00000352',         "
-              "'00000758', '00000113', '00000152', '00000099', '00000932', '00000071',         "
-              "'00000126', '00000450', '00000677', '00000722', '00000724', '00000182',         "
-              "'00000507', '00000001', '00000866', '00000147', '00000186', '00000711'          "
-              "] @ (1,0)-(8,1)"
-              "  RS: label='00000048', '00000681', '00000552', '00000206', '00000031', '00000303',         "
-              "  '00001268', '00000540', '00000519', '00000821', '00000731', '00001089',         "
-              "  '00000311', '00000784', '00000015', '00001052', '00000030', '00000352',         "
-              "  '00000758', '00000113', '00000152', '00000099', '00000932', '00000071',         "
-              "  '00000126', '00000450', '00000677', '00000722', '00000724', '00000182',         "
-              "  '00000507', '00000001', '00000866', '00000147', '00000186', '00000711' @ (2,0)-(7,70)" ]
+        checkInlineSnapshot actual [
+            "ML: [                                                                               "
+            "'00000048', '00000681', '00000552', '00000206', '00000031', '00000303',         "
+            "'00001268', '00000540', '00000519', '00000821', '00000731', '00001089',         "
+            "'00000311', '00000784', '00000015', '00001052', '00000030', '00000352',         "
+            "'00000758', '00000113', '00000152', '00000099', '00000932', '00000071',         "
+            "'00000126', '00000450', '00000677', '00000722', '00000724', '00000182',         "
+            "'00000507', '00000001', '00000866', '00000147', '00000186', '00000711'          "
+            "] @ (1,0)-(8,1)"
+            "  RS: label='00000048', '00000681', '00000552', '00000206', '00000031', '00000303',         "
+            "  '00001268', '00000540', '00000519', '00000821', '00000731', '00001089',         "
+            "  '00000311', '00000784', '00000015', '00001052', '00000030', '00000352',         "
+            "  '00000758', '00000113', '00000152', '00000099', '00000932', '00000071',         "
+            "  '00000126', '00000450', '00000677', '00000722', '00000724', '00000182',         "
+            "  '00000507', '00000001', '00000866', '00000147', '00000186', '00000711' @ (2,0)-(7,70)"
+        ]
 
     [<Fact>]
     let no334 () =

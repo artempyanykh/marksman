@@ -5,26 +5,41 @@ open Marksman.MMap
 type Mapping<'Dom, 'Cod> when 'Dom: comparison and 'Cod: comparison = {
     mapping: Map<'Dom, 'Cod>
     inverse: MMap<'Cod, 'Dom>
-}
+} with
+
+    member this.Add(x: 'Dom, y: 'Cod) : Mapping<'Dom, 'Cod> =
+        let cod = this.mapping.TryFind(x)
+
+        let inverse =
+            match cod with
+            | None -> this.inverse
+            | Some cod -> this.inverse.RemoveValue(cod, x)
+
+        { mapping = this.mapping.Add(x, y); inverse = inverse.Add(y, x) }
+
+    member this.InDom(x: 'Dom) : bool = this.mapping.ContainsKey(x)
+
+    member this.InCod(y: 'Cod) : bool = this.inverse.ContainsKey(y)
+
+    member this.Image(x: 'Dom) : 'Cod = Map.find x this.mapping
+
+    member this.TryImage(x: 'Dom) : option<'Cod> = Map.tryFind x this.mapping
+
+    member this.PreImage(y: 'Cod) : Set<'Dom> = this.inverse.Find(y)
+
+    member this.TryPreImage(y: 'Cod) : option<Set<'Dom>> = this.inverse.TryFind(y)
+
 
 module Mapping =
     let empty = { mapping = Map.empty; inverse = MMap.empty }
 
-    let add (x: 'Dom) (y: 'Cod) (s: Mapping<'Dom, 'Cod>) =
-        let cod = Map.tryFind x s.mapping
+    let add (x: 'Dom) (y: 'Cod) (m: Mapping<'Dom, 'Cod>) = m.Add(x, y)
 
-        let inverse =
-            match cod with
-            | None -> s.inverse
-            | Some cod -> MMap.removeValue cod x s.inverse
+    let inDom x (m: Mapping<'Dom, 'Cod>) = m.InDom(x)
+    let inCod y (m: Mapping<'Dom, 'Cod>) = m.InCod(y)
 
-        { mapping = Map.add x y s.mapping; inverse = MMap.add y x inverse }
+    let image x (m: Mapping<'Dom, 'Cod>) = m.Image(x)
+    let tryImage x (m: Mapping<'Dom, 'Cod>) = m.TryImage(x)
 
-    let inDom x s = Map.containsKey x s.mapping
-    let inCod y s = MMap.containsKey y s.inverse
-
-    let image x s = Map.find x s.mapping
-    let tryImage x s = Map.tryFind x s.mapping
-
-    let preImage y s = MMap.find y s.inverse
-    let tryPreImage y s = MMap.tryFind y s.inverse
+    let preImage y (m: Mapping<'Dom, 'Cod>) = m.PreImage(y)
+    let tryPreImage y (m: Mapping<'Dom, 'Cod>) = m.TryPreImage(y)

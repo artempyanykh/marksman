@@ -332,24 +332,45 @@ module Conn =
                 | Doc
                 | Header(1, _) ->
                     // Whenever a new title is added, links that were previously pointing at the Doc
-                    // or the other titles need to be invalidate
+                    // or the other titles need to be invalidated
                     let affectedDefs =
                         defs
                         |> MMap.tryFind scope
                         |> Option.defaultValue Set.empty
                         |> Seq.filter Def.isTitle
-                        |> Seq.append [ Doc ]
+                        |> Seq.map (fun x -> (scope, x))
+                        |> Seq.append [ (scope, Doc) ]
+
+                    // Similarly, other doc/titles could resolve to the same scope group
+                    let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
+
+                    // TODO: we could do this faster if the groups were maintained in a set
+                    let affectedDefsInOtherScopes =
+                        match scopeSlug with
+                        | None -> Seq.empty
+                        | Some scopeSlug ->
+                            defs
+                            |> MMap.toSeq
+                            |> Seq.choose (fun scopedDef ->
+                                ScopeSlug.ofScopedDef scopedDef
+                                |> Option.map (fun slug -> scopedDef, slug))
+                            |> Seq.filter (fun (_, slug) -> slug = scopeSlug)
+                            |> Seq.map fst
+
+                    let affectedDefs =
+                        affectedDefs |> Seq.append affectedDefsInOtherScopes |> Set.ofSeq
 
                     let affectedRefs =
                         Seq.fold
-                            (fun acc def -> acc + Graph.edges (scope, Sym.Def def) resolved)
+                            (fun acc (scope, def) ->
+                                acc + Graph.edges (scope, Sym.Def def) resolved)
                             Set.empty
                             affectedDefs
                         |> Seq.choose ScopedSym.asRef
 
                     resolved <-
                         Seq.fold
-                            (fun g def -> Graph.removeVertex (scope, Sym.Def def) g)
+                            (fun g (scope, def) -> Graph.removeVertex (scope, Sym.Def def) g)
                             resolved
                             affectedDefs
 
@@ -416,7 +437,7 @@ module Conn =
         logger.trace (
             Log.setMessage "Finished updating conn"
             >> Log.addContext "#touched" (Set.count lastTouched)
-            >> Log.addContext "elapsed_ms" (stopwatch.ElapsedMilliseconds)
+            >> Log.addContext "elapsed_ms" stopwatch.ElapsedMilliseconds
         )
 
         { refs = refs

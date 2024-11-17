@@ -177,6 +177,21 @@ module ConnGraphTests =
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
 
     [<Fact>]
+    let addTitle_SameAsFileName () =
+        let d1 = FakeDoc.Mk(path = "d1.md", contentLines = [| "[[d2]]" |])
+        let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "Some content" |])
+        let d3 = FakeDoc.Mk(path = "d3.md", contentLines = [| "# D3" |])
+
+        let d3Upd = FakeDoc.Mk(path = "d3.md", contentLines = [| "# D2" |])
+
+        let incr = mkFolder [ d1; d2; d3 ] |> Folder.withDoc d3Upd |> Folder.conn
+
+        let fromScratch = mkFolder [ d1; d2; d3Upd ] |> Folder.conn
+
+        let connDiff = Conn.difference fromScratch incr
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+    [<Fact>]
     let fixRef () =
         let d1 =
             FakeDoc.Mk(path = "d1.md", contentLines = [| "[[#Lnk]]"; "## Link" |])

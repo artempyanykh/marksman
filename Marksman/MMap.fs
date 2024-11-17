@@ -2,7 +2,67 @@ module Marksman.MMap
 
 open Marksman.Misc
 
-type MMap<'K, 'V> when 'K: comparison and 'V: comparison = MMap of Map<'K, Set<'V>>
+type MMap<'K, 'V> when 'K: comparison and 'V: comparison =
+    | MMap of Map<'K, Set<'V>>
+
+    member private this.Inner = let (MMap map) = this in map
+
+    member this.TryFind(k: 'K) = this.Inner.TryFind(k)
+
+    member this.Add(k: 'K, v: 'V) : MMap<'K, 'V> =
+        let valueSet =
+            this.TryFind(k) |> Option.defaultValue Set.empty |> Set.add v
+
+        this.Inner.Add(k, valueSet) |> MMap
+
+    member this.RemoveValue(k: 'K, v: 'V) : MMap<'K, 'V> =
+        this.TryFind(k)
+        |> Option.map (fun valueSet ->
+            let valueSet = valueSet.Remove(v)
+
+            if valueSet.IsEmpty then
+                this.Inner.Remove(k)
+            else
+                this.Inner.Add(k, valueSet))
+        |> Option.defaultValue this.Inner
+        |> MMap
+
+    member this.IsEmpty = this.Inner.IsEmpty
+
+    static member OfSeq(seq: seq<'K * 'V>) : MMap<'K, 'V> =
+        Seq.groupBy fst seq
+        |> Seq.map (fun (k, els) -> k, Seq.map snd els |> Set.ofSeq)
+        |> Map.ofSeq
+        |> MMap
+
+    member this.Find(k: 'K) = Map.find k this.Inner
+
+    member this.ContainsKey(k) = Map.containsKey k this.Inner
+
+    member this.AddEmpty(k) = Map.add k Set.empty this.Inner |> MMap
+
+    member this.FoldSet(f, state) = Map.fold f state this.Inner
+
+    member this.Fold(f, state) =
+        let f acc k vs = Set.fold (flip f k) acc vs
+        Map.fold f state this.Inner
+
+    member this.MapKeys(f) =
+        let m =
+            Map.fold (fun acc k vs -> Map.add (f k) vs acc) Map.empty this.Inner
+
+        MMap m
+
+    member this.Iter(f) = this.Inner |> Map.iter (f >> Set.iter)
+
+    member this.ToSeq =
+        seq {
+            for KeyValue(k, vs) in this.Inner do
+                for v in vs do
+                    yield (k, v)
+        }
+
+    member this.ToSetSeq = Map.toSeq this.Inner
 
 type MMapDifference<'K, 'V> when 'K: comparison and 'V: comparison = {
     removedKeys: Set<'K>
@@ -41,62 +101,35 @@ type MMapDifference<'K, 'V> when 'K: comparison and 'V: comparison = {
         concatLines lines
 
 module MMap =
-    let add k v (MMap map) =
-        let valueSet =
-            Map.tryFind k map |> Option.defaultValue Set.empty |> Set.add v
+    let add k v (mm: MMap<'K, 'V>) = mm.Add(k, v)
 
-        Map.add k valueSet map |> MMap
+    let removeValue k v (mm: MMap<'K, 'V>) = mm.RemoveValue(k, v)
 
-    let removeValue k v (MMap map) =
-        Map.tryFind k map
-        |> Option.map (fun valueSet ->
-            let valueSet = Set.remove v valueSet
-
-            if Set.isEmpty valueSet then
-                Map.remove k map
-            else
-                Map.add k valueSet map)
-        |> Option.defaultValue map
-        |> MMap
-
-    let isEmpty (MMap inner) = Map.isEmpty inner
+    let isEmpty (mm: MMap<'K, 'V>) = mm.IsEmpty
 
     let empty = MMap(Map.empty)
 
-    let ofSeq seq =
-        Seq.groupBy fst seq
-        |> Seq.map (fun (k, els) -> k, Seq.map snd els |> Set.ofSeq)
-        |> Map.ofSeq
-        |> MMap
+    let ofSeq seq = MMap.OfSeq(seq)
 
-    let tryFind k (MMap m) = Map.tryFind k m
+    let tryFind k (mm: MMap<'K, 'V>) = mm.TryFind(k)
 
-    let find k (MMap m) = Map.find k m
+    let find k (mm: MMap<'K, 'V>) = mm.Find(k)
 
-    let containsKey k (MMap m) = Map.containsKey k m
+    let containsKey k (mm: MMap<'K, 'V>) = mm.ContainsKey(k)
 
-    let addEmpty k (MMap m) = Map.add k Set.empty m |> MMap
+    let addEmpty k (mm: MMap<'K, 'V>) = mm.AddEmpty(k)
 
-    let foldSet f state (MMap m) = Map.fold f state m
+    let foldSet f state (mm: MMap<'K, 'V>) = mm.FoldSet(f, state)
 
-    let fold f state (MMap m) =
-        let f acc k vs = Set.fold (flip f k) acc vs
-        Map.fold f state m
+    let fold f state (mm: MMap<'K, 'V>) = mm.Fold(f, state)
 
-    let mapKeys f (MMap m) =
-        let m = Map.fold (fun acc k vs -> Map.add (f k) vs acc) Map.empty m
-        MMap m
+    let mapKeys f (mm: MMap<'K, 'V>) = mm.MapKeys(f)
 
-    let iter f (MMap m) = m |> Map.iter (f >> Set.iter)
+    let iter f (mm: MMap<'K, 'V>) = mm.Iter(f)
 
-    let toSeq (MMap m) =
-        seq {
-            for KeyValue(k, vs) in m do
-                for v in vs do
-                    yield (k, v)
-        }
+    let toSeq (mm: MMap<'K, 'V>) = mm.ToSeq
 
-    let toSetSeq (MMap m) = Map.toSeq m
+    let toSetSeq (mm: MMap<'K, 'V>) = mm.ToSetSeq
 
     let difference (MMap m1) (MMap m2) =
         let ks1 = Map.keys m1 |> Set.ofSeq

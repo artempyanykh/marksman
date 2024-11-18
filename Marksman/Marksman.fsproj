@@ -4,7 +4,6 @@
         <OutputType>Exe</OutputType>
         <AssemblyName>marksman</AssemblyName>
         <VersionPrefix>1.0.0</VersionPrefix>
-        <EnableLint>false</EnableLint>
         <TargetFramework>net8.0</TargetFramework>
     </PropertyGroup>
     <Target Name="Version" BeforeTargets="BeforeBuild">
@@ -16,12 +15,6 @@
             <VersionSuffix Condition="$(VersionString.StartsWith('0'))">r$(VersionString)</VersionSuffix>
             <Version>$(VersionPrefix)-$(VersionSuffix)</Version>
         </PropertyGroup>
-    </Target>
-    <Target Name="FSharpLint" AfterTargets="BeforeBuild" Condition="$(EnableLint)">
-        <PropertyGroup>
-            <LintCommand>dotnet fsharplint -f msbuild lint --lint-config $(MSBuildProjectDirectory)/../fsharplint.json $(MSBuildProjectFullPath)</LintCommand>
-        </PropertyGroup>
-        <Exec Command="$(LintCommand)" ConsoleToMSBuild="true" IgnoreExitCode="true"/>
     </Target>
     <ItemGroup>
         <Compile Include="Misc.fs"/>

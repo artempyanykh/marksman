@@ -71,7 +71,6 @@ setup:
 .PHONY: check
 check: setup
 	dotnet fantomas --check Marksman
-	dotnet fsi scripts/silent-lint.fsx
 
 .PHONY: build
 build:

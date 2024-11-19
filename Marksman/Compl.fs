@@ -463,7 +463,7 @@ module Completions =
 
             let filterText =
                 WikiLink.render
-                    (targetLink |> WikiDest.encode |> Some)
+                    (destPart.data |> Some)
                     (heading |> WikiEncoded.mkUnchecked |> Some)
                     (Completable.isPartial compl)
 

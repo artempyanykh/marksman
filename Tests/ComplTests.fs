@@ -592,6 +592,17 @@ module Candidates =
 
         checkSnapshot (findCandidatesInDoc folder doc2 (Position.Mk(0, 14)))
 
+    [<Fact>]
+    let wiki_CrossHeading_TitleNameVsSlug () =
+        let d1 =
+            FakeDoc.Mk(path = "d1.md", contentLines = [| "# Doc Title"; "## Subtitle" |])
+        //                                                     01234567890123
+        let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "[[Doc Title#]]" |])
+
+        let folder = FakeFolder.Mk([ d1; d2 ])
+
+        checkSnapshot (findCandidatesInDoc folder d2 (Position.Mk(0, 12)))
+
     [<StoreSnapshotsPerClass>]
     module Tags =
         let doc1 =

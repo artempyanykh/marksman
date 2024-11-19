@@ -147,8 +147,8 @@ module RenameTests =
                     "doc1.md", [| Range.Mk(0, 2, 0, 7), "New Title" |]
                     "doc2.md",
                     [|
-                        Range.Mk(2, 2, 2, 7), "New Title"
-                        Range.Mk(1, 2, 1, 7), "New Title"
+                        Range.Mk(2, 2, 2, 7), "new-title"
+                        Range.Mk(1, 2, 1, 7), "new-title"
                     |]
                 ]
 

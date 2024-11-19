@@ -114,11 +114,19 @@ let renameHeadingLink
         | WL { data = wl } ->
             let toEdit = if Element.isTitle srcHeading then wl.doc else wl.heading
 
+            // TODO: consolidate with the completion logic
+            let encodeFn =
+                if Element.isTitle srcHeading then
+                    match complStyle with
+                    | TitleSlug -> Slug.str
+                    | _ -> WikiEncoded.encodeAsString
+                else
+                    WikiEncoded.encodeAsString
+
+            let newText = encodeFn newTitle
+
             toEdit
-            |> Option.map (fun node -> {
-                Range = node.range
-                NewText = WikiEncoded.encodeAsString newTitle
-            })
+            |> Option.map (fun node -> { Range = node.range; NewText = newText })
         | ML { data = MdLink.IL(_, url, _) } ->
             let docUrl = url |> Option.map Url.ofUrlNode
 

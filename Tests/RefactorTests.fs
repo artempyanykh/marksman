@@ -5,7 +5,7 @@ open Ionide.LanguageServerProtocol.Types
 open Xunit
 open Misc
 
-let editRanges =
+let editsByFile =
     function
     | Refactor.Edit wsEdit ->
         match wsEdit.DocumentChanges with
@@ -18,7 +18,7 @@ let editRanges =
                     | _ -> failwith $"Refactoring should always produce TextDocumentEdits"
 
                 let doc = Path.GetFileName(docEdit.TextDocument.Uri)
-                let ranges = docEdit.Edits |> Array.map (fun x -> x.Range)
+                let ranges = docEdit.Edits |> Array.map (fun x -> x.Range, x.NewText)
                 doc, ranges)
             |> Map.ofArray
         | _ ->
@@ -26,7 +26,7 @@ let editRanges =
             | Some docEditMap ->
                 Map.toSeq docEditMap
                 |> Seq.map (fun (doc, edits) ->
-                    let ranges = edits |> Array.map (fun x -> x.Range)
+                    let ranges = edits |> Array.map (fun x -> x.Range, x.NewText)
                     (Path.GetFileName doc), ranges)
                 |> Map.ofSeq
             | _ -> Map.empty
@@ -65,15 +65,18 @@ module RenameTests =
                 Map.ofSeq [
                     "doc1.md",
                     [|
-                        Range.Mk(5, 1, 5, 5)
-                        Range.Mk(2, 6, 2, 10)
-                        Range.Mk(1, 7, 1, 11)
+                        Range.Mk(5, 1, 5, 5), "newLbl"
+                        Range.Mk(2, 6, 2, 10), "newLbl"
+                        Range.Mk(1, 7, 1, 11), "newLbl"
                     |]
                 ]
 
-            let actualRanges = editRanges res
+            let actualRanges = editsByFile res
 
-            Assert.Equal<Range>(Map.find "doc1.md" expectedRanges, Map.find "doc1.md" actualRanges)
+            Assert.Equal<Range * string>(
+                Map.find "doc1.md" expectedRanges,
+                Map.find "doc1.md" actualRanges
+            )
 
         [<Fact>]
         let onDefLabel () =
@@ -85,22 +88,25 @@ module RenameTests =
                 Map.ofSeq [
                     "doc1.md",
                     [|
-                        Range.Mk(5, 1, 5, 5)
-                        Range.Mk(2, 6, 2, 10)
-                        Range.Mk(1, 7, 1, 11)
+                        Range.Mk(5, 1, 5, 5), "newLbl"
+                        Range.Mk(2, 6, 2, 10), "newLbl"
+                        Range.Mk(1, 7, 1, 11), "newLbl"
                     |]
                 ]
 
-            let actualRanges = editRanges res
+            let actualRanges = editsByFile res
 
-            Assert.Equal<Range>(Map.find "doc1.md" expectedRanges, Map.find "doc1.md" actualRanges)
+            Assert.Equal<Range * string>(
+                Map.find "doc1.md" expectedRanges,
+                Map.find "doc1.md" actualRanges
+            )
 
     module HeadingLinks =
         let mkWorkspace () =
             let doc1 =
                 Helpers.FakeDoc.Mk(
-                    //  0         1         2
-                    //  0123456789012345678901234567890
+                    //   0         1         2
+                    //   0123456789012345678901234567890
                     [|
                         "# Doc 1"
                         "## Doc 1.2"
@@ -113,8 +119,8 @@ module RenameTests =
 
             let doc2 =
                 Helpers.FakeDoc.Mk(
-                    //  0         1         2
-                    //  0123456789012345678901234567890
+                    //   0         1         2
+                    //   0123456789012345678901234567890
                     [|
                         "# Doc 2"
                         "[[doc-1]]"
@@ -138,14 +144,25 @@ module RenameTests =
 
             let expectedRanges =
                 Map.ofSeq [
-                    "doc1.md", [| Range.Mk(0, 2, 0, 7) |]
-                    "doc2.md", [| Range.Mk(2, 2, 2, 7); Range.Mk(1, 2, 1, 7) |]
+                    "doc1.md", [| Range.Mk(0, 2, 0, 7), "New Title" |]
+                    "doc2.md",
+                    [|
+                        Range.Mk(2, 2, 2, 7), "New Title"
+                        Range.Mk(1, 2, 1, 7), "New Title"
+                    |]
                 ]
 
-            let actualRanges = editRanges res
+            let actualRanges = editsByFile res
 
-            Assert.Equal<Range>(Map.find "doc1.md" expectedRanges, Map.find "doc1.md" actualRanges)
-            Assert.Equal<Range>(Map.find "doc2.md" expectedRanges, Map.find "doc2.md" actualRanges)
+            Assert.Equal<Range * string>(
+                Map.find "doc1.md" expectedRanges,
+                Map.find "doc1.md" actualRanges
+            )
+
+            Assert.Equal<Range * string>(
+                Map.find "doc2.md" expectedRanges,
+                Map.find "doc2.md" actualRanges
+            )
 
         [<Fact>]
         let onSubtitle () =
@@ -157,14 +174,25 @@ module RenameTests =
                 Map.ofSeq [
                     "doc1.md",
                     [|
-                        Range.Mk(4, 9, 4, 15)
-                        Range.Mk(3, 7, 3, 13)
-                        Range.Mk(1, 3, 1, 10)
+                        Range.Mk(4, 9, 4, 15), "new-title"
+                        Range.Mk(3, 7, 3, 13), "New Title"
+                        Range.Mk(1, 3, 1, 10), "New Title"
                     |]
-                    "doc2.md", [| Range.Mk(3, 12, 3, 18); Range.Mk(2, 8, 2, 14) |]
+                    "doc2.md",
+                    [|
+                        Range.Mk(3, 12, 3, 18), "new-title"
+                        Range.Mk(2, 8, 2, 14), "New Title"
+                    |]
                 ]
 
-            let actualRanges = editRanges res
+            let actualRanges = editsByFile res
 
-            Assert.Equal<Range>(Map.find "doc1.md" expectedRanges, Map.find "doc1.md" actualRanges)
-            Assert.Equal<Range>(Map.find "doc2.md" expectedRanges, Map.find "doc2.md" actualRanges)
+            Assert.Equal<Range * string>(
+                Map.find "doc1.md" expectedRanges,
+                Map.find "doc1.md" actualRanges
+            )
+
+            Assert.Equal<Range * string>(
+                Map.find "doc2.md" expectedRanges,
+                Map.find "doc2.md" actualRanges
+            )

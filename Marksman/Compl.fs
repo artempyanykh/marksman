@@ -389,6 +389,7 @@ module Completions =
                         Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                         TextEdit = Some(First textEdit)
                         FilterText = Some filterText
+                        Kind = Some CompletionItemKind.Reference
                 }
             | Some _ ->
                 let newText = targetLink
@@ -404,6 +405,7 @@ module Completions =
                         Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                         TextEdit = Some(First textEdit)
                         FilterText = Some targetName
+                        Kind = Some CompletionItemKind.Reference
                 }
         | _ -> None
 
@@ -435,6 +437,7 @@ module Completions =
                 CompletionItem.Create(completionHeading) with
                     TextEdit = Some(First textEdit)
                     FilterText = Some newText
+                    Kind = Some CompletionItemKind.Reference
             }
         | _ -> None
 
@@ -480,6 +483,7 @@ module Completions =
                     Detail = Some(Doc.pathFromRoot doc |> RelPath.toSystem)
                     TextEdit = Some(First textEdit)
                     FilterText = Some filterText
+                    Kind = Some CompletionItemKind.Reference
             }
         | _ -> None
 
@@ -517,6 +521,7 @@ module Completions =
                     Documentation = MdLinkDef.urlContent def |> Documentation.String |> Some
                     TextEdit = Some(First textEdit)
                     FilterText = Some newText
+                    Kind = Some CompletionItemKind.Reference
             }
 
     let inlineDoc (pos: Position) (compl: Completable) (doc: Doc) : option<CompletionItem> =
@@ -533,6 +538,7 @@ module Completions =
                     Detail = detail
                     TextEdit =
                         Some(First { Range = Range.Mk(pos, pos); NewText = targetPathEncoded })
+                    Kind = Some CompletionItemKind.Reference
             }
         | E(ML { data = MdLink.IL(_, Some url, _) }) ->
             match Url.ofUrlNode url with
@@ -541,6 +547,7 @@ module Completions =
                     CompletionItem.Create(targetPath) with
                         Detail = detail
                         TextEdit = Some(First { Range = url.range; NewText = targetPathEncoded })
+                        Kind = Some CompletionItemKind.Reference
                 }
             | _ -> None
         | PE(PartialElement.InlineLink(Some _text, path, Some _anchor, _range)) ->
@@ -553,6 +560,7 @@ module Completions =
                 CompletionItem.Create(targetPath) with
                     Detail = detail
                     TextEdit = Some(First { Range = range; NewText = targetPathEncoded })
+                    Kind = Some CompletionItemKind.Reference
             }
         | PE(PartialElement.InlineLink(Some text, _path, None, range)) ->
             let newText =
@@ -563,6 +571,7 @@ module Completions =
                     Detail = detail
                     TextEdit = Some(First { Range = range; NewText = newText })
                     FilterText = Some newText
+                    Kind = Some CompletionItemKind.Reference
             }
         | _ -> None
 
@@ -585,6 +594,7 @@ module Completions =
                     CompletionItem.Create(completionHeading) with
                         TextEdit = Some(First { Range = anchor.range; NewText = newText })
                         FilterText = Some newText
+                        Kind = Some CompletionItemKind.Reference
                 }
             | _ -> None
         | PE(PartialElement.InlineLink(Some text, None, Some _anchor, range)) ->
@@ -594,6 +604,7 @@ module Completions =
                 CompletionItem.Create(completionHeading) with
                     TextEdit = Some(First { Range = range; NewText = newText })
                     FilterText = Some newText
+                    Kind = Some CompletionItemKind.Reference
             }
         | _ -> None
 
@@ -624,6 +635,7 @@ module Completions =
                         Detail = detail
                         TextEdit = Some(First { Range = newRange; NewText = newText })
                         FilterText = Some filterText
+                        Kind = Some CompletionItemKind.Reference
                 }
             | _, _ -> None
         | PE(PartialElement.InlineLink(Some text, Some _path, Some _anchor, range)) ->
@@ -637,6 +649,7 @@ module Completions =
                     Detail = detail
                     TextEdit = Some(First { Range = range; NewText = newText })
                     FilterText = Some filterText
+                    Kind = Some CompletionItemKind.Reference
             }
         | _ -> None
 
@@ -663,6 +676,7 @@ module Completions =
                 CompletionItem.Create(label) with
                     Detail = Some detail
                     TextEdit = Some(First { Range = range; NewText = label })
+                    Kind = Some CompletionItemKind.Reference
             }
 
 module Candidates =

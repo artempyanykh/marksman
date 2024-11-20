@@ -80,12 +80,14 @@ type Tag =
 [<StructuredFormatDisplay("{AsString}")>]
 type Def =
     | Doc
+    | Title of string
     | Header of level: int * id: string
     | LinkDef of LinkLabel
 
     override this.ToString() =
         match this with
         | Doc -> "Doc"
+        | Title t -> $"T {{{t}}}"
         | Header(l, h) -> $"H{l} {{{h}}}"
         | LinkDef ld -> $"[{ld}]:"
 
@@ -94,31 +96,34 @@ type Def =
 module Def =
     let isDoc =
         function
-        | Def.Doc -> true
+        | Doc -> true
         | _ -> false
 
     let isTitle =
         function
-        | Def.Header(level, _) when level <= 1 -> true
+        | Title _ -> true
         | _ -> false
 
-    let isHeader =
+    let isHeaderOrTitle =
         function
-        | Def.Header _ -> true
+        | Title _
+        | Header _ -> true
         | _ -> false
 
-    let isHeaderWithId id =
+    let isHeaderOrTitleWithId id =
         function
-        | Def.Header(_, id') when id = id' -> true
+        | Title id'
+        | Header(_, id') -> id = id'
         | _ -> false
 
     let isLinkDefWithLabel label =
         function
-        | Def.LinkDef label' when label = label' -> true
+        | LinkDef label' when label = label' -> true
         | _ -> false
 
     let asHeader =
         function
+        | Title id -> Some(1, id)
         | Header(level, id) -> Some(level, id)
         | _ -> None
 
@@ -172,10 +177,10 @@ module ScopeSlug =
 
     let private ofScopedDefAux (docId: DocId) (def: Def) =
         match def with
-        | Def.LinkDef _ -> None
-        | Def.Doc -> Some(ofDocId docId)
-        | Def.Header(1, id) -> Some(ScopeSlug(Slug.ofString id))
-        | Def.Header _ -> Some(ofDocId docId)
+        | LinkDef _ -> None
+        | Doc
+        | Header _ -> Some(ofDocId docId)
+        | Title id -> Some(ScopeSlug(Slug.ofString id))
 
     let ofScopedDef (scope: Scope, def: Def) =
         match Scope.asDoc scope with

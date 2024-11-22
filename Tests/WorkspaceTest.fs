@@ -69,8 +69,7 @@ module DocTest =
         let dummyPath =
             (dummyRootPath [ "dummy.md" ]) |> mkDocId (mkFolderId dummyRoot)
 
-        let empty =
-            Doc.mk defaultMarkdownExtensions dummyPath None (Text.mkText "")
+        let empty = Doc.mk ParserSettings.Default dummyPath None (Text.mkText "")
 
         let insertChange = {
             TextDocument = { Uri = RootedRelPath.toSystem dummyPath.Path; Version = 1 }
@@ -83,8 +82,7 @@ module DocTest =
             |]
         }
 
-        let updated =
-            Doc.applyLspChange defaultMarkdownExtensions insertChange empty
+        let updated = Doc.applyLspChange ParserSettings.Default insertChange empty
 
         Assert.Equal("[", (Doc.text updated).content)
 
@@ -103,7 +101,7 @@ module DocTest =
         }
 
         let singletonRoot = UriWith.mkRoot par.Uri
-        let doc = Doc.fromLsp defaultMarkdownExtensions singletonRoot par
+        let doc = Doc.fromLsp ParserSettings.Default singletonRoot par
         Assert.Equal("file:///a/b/doc.md", (Doc.uri doc).ToString())
         Assert.Equal("AbsPath \"/a/b/doc.md\"", (Doc.path doc).ToString())
 

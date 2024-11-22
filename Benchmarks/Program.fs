@@ -6,6 +6,7 @@ open BenchmarkDotNet.Running
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
+open Marksman.Config
 open Marksman.Names
 open Marksman.Paths
 open Marksman.Cst
@@ -32,7 +33,7 @@ type ReferenceResolution() =
                 let contentLines = $"# Doc {i}" :: links
                 let content = String.concat "\n" contentLines
                 let text = Text.mkText content
-                Doc.mk Config.defaultMarkdownExtensions docId None text)
+                Doc.mk ParserSettings.Default docId None text)
 
         Folder.multiFile "docs" folderId docs None
 

@@ -19,6 +19,7 @@ module Folder =
     val withConfig: option<Config> -> Folder -> Folder
 
     val configuredMarkdownExts: Folder -> seq<string>
+    val parserSettings: Folder -> ParserSettings
 
     val docs: Folder -> seq<Doc>
     val docCount: Folder -> int

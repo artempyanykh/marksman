@@ -22,7 +22,7 @@ let checkSnapshot (document: array<Element>) =
 let checkInlineSnapshot = checkInlineSnapshot Element.fmt
 
 let scrapeString content =
-    parse Config.defaultMarkdownExtensions (Text.mkText content)
+    parse Config.ParserSettings.Default (Text.mkText content)
     |> Structure.concreteElements
 
 [<StoreSnapshotsPerClass>]

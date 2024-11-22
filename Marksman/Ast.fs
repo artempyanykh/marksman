@@ -109,7 +109,7 @@ module Element =
         | _ -> None
 
     // TODO: instead of checking for 'all whitespace' symbols all the time, create smart constructors
-    let toSym (exts: seq<string>) (el: Element) : option<Sym> =
+    let toSym (parserSettings: Config.ParserSettings) (el: Element) : option<Sym> =
         match el with
         | Element.H { level = level; id = id } ->
             if Slug.isEmpty id then
@@ -144,7 +144,9 @@ module Element =
         // Markdown links mapping
         | Element.ML { url = url; anchor = anchor } ->
             let urlIsRef =
-                url |> Option.map (fun url -> url, isPotentiallyInternalRef exts url)
+                url
+                |> Option.map (fun url ->
+                    url, isPotentiallyInternalRef parserSettings.mdFileExt url)
 
             match urlIsRef, anchor with
             | None, None -> None

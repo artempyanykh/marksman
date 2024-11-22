@@ -61,12 +61,12 @@ module Structure =
         findAbstractForSymbol sym structure
         |> Set.fold (fun acc ael -> acc + findConcreteForAbstract ael structure) Set.empty
 
-    let ofCst (exts: seq<string>) (cst: Cst.Cst) : Structure =
+    let ofCst (parserSettings: Config.ParserSettings) (cst: Cst.Cst) : Structure =
         let rec go cst =
             seq {
                 for cel in cst do
                     let ael = Cst.Element.toAbstract cel
-                    let sym = ael |> Option.bind (Ast.Element.toSym exts)
+                    let sym = ael |> Option.bind (Ast.Element.toSym parserSettings)
 
                     match ael with
                     | Some ael -> yield cel, ael, sym

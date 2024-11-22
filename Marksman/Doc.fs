@@ -62,8 +62,8 @@ module Doc =
 
     let logger = LogProvider.getLoggerByName "Doc"
 
-    let mk exts id version text =
-        let structure = Parser.parse exts text
+    let mk parserSettings id version text =
+        let structure = Parser.parse parserSettings text
         let index = Index.ofCst (Structure.concreteElements structure)
 
         {
@@ -77,8 +77,8 @@ module Doc =
     let id { id = id } = id
     let text doc = doc.text
 
-    let withText exts newText doc =
-        let newStructure = Parser.parse exts newText
+    let withText config newText doc =
+        let newStructure = Parser.parse config newText
         let newIndex = Index.ofCst (Structure.concreteElements newStructure)
 
         {
@@ -89,7 +89,7 @@ module Doc =
         }
 
 
-    let applyLspChange exts (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =
+    let applyLspChange parserSettings (change: DidChangeTextDocumentParams) (doc: Doc) : Doc =
         let newVersion = change.TextDocument.Version
 
         logger.trace (
@@ -101,16 +101,16 @@ module Doc =
 
         let newText = applyTextChange change.ContentChanges doc.text
 
-        { withText exts newText doc with version = Some newVersion }
+        { withText parserSettings newText doc with version = Some newVersion }
 
-    let fromLsp exts (folderId: FolderId) (item: TextDocumentItem) : Doc =
+    let fromLsp parserSettings (folderId: FolderId) (item: TextDocumentItem) : Doc =
         let path = LocalPath.ofUri item.Uri
         let id = DocId(UriWith.mkRooted folderId path)
         let text = mkText item.Text
 
-        mk exts id (Some item.Version) text
+        mk parserSettings id (Some item.Version) text
 
-    let tryLoad exts (folderId: FolderId) (path: LocalPath) : option<Doc> =
+    let tryLoad parserSettings (folderId: FolderId) (path: LocalPath) : option<Doc> =
         try
             let content =
                 using (new StreamReader(LocalPath.toSystem path)) (fun f -> f.ReadToEnd())
@@ -119,7 +119,7 @@ module Doc =
 
             let id = DocId(UriWith.mkRooted folderId path)
 
-            Some(mk exts id None text)
+            Some(mk parserSettings id None text)
         with :? FileNotFoundException ->
             None
 

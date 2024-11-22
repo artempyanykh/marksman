@@ -128,6 +128,7 @@ type Config = {
     caCreateMissingFileEnable: option<bool>
     coreMarkdownFileExtensions: option<array<string>>
     coreTextSync: option<TextSync>
+    coreTitleFromHeading: option<bool>
     coreIncrementalReferences: option<bool>
     coreParanoid: option<bool>
     complWikiStyle: option<ComplWikiStyle>
@@ -139,6 +140,7 @@ type Config = {
         caCreateMissingFileEnable = Some true
         coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
         coreTextSync = Some Full
+        coreTitleFromHeading = Some true
         coreIncrementalReferences = Some false
         coreParanoid = Some false
         complWikiStyle = Some TitleSlug
@@ -150,6 +152,7 @@ type Config = {
         caCreateMissingFileEnable = None
         coreMarkdownFileExtensions = None
         coreTextSync = None
+        coreTitleFromHeading = None
         coreIncrementalReferences = None
         coreParanoid = None
         complWikiStyle = None
@@ -176,6 +179,11 @@ type Config = {
         |> Option.orElse Config.Default.coreTextSync
         |> Option.get
 
+    member this.CoreTitleFromHeading() =
+        this.coreTitleFromHeading
+        |> Option.orElse Config.Default.coreTitleFromHeading
+        |> Option.get
+
     member this.CoreIncrementalReferences() =
         this.coreIncrementalReferences
         |> Option.orElse Config.Default.coreIncrementalReferences
@@ -187,9 +195,13 @@ type Config = {
         |> Option.get
 
     member this.ComplWikiStyle() =
-        this.complWikiStyle
-        |> Option.orElse Config.Default.complWikiStyle
-        |> Option.get
+        match this.complWikiStyle with
+        | Some x -> x
+        | None ->
+            if this.CoreTitleFromHeading() then
+                Option.get Config.Default.complWikiStyle
+            else
+                ComplWikiStyle.FileStem
 
     member this.ComplCandidates() =
         this.complCandidates
@@ -208,6 +220,8 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
 
         let! coreTextSync = getFromTableOpt<string> table [] [ "core"; "text_sync" ]
         let coreTextSync = coreTextSync |> Option.bind TextSync.ofStringOpt
+
+        let! coreTitleFromHeading = getFromTableOpt<bool> table [] [ "core"; "title_from_heading" ]
 
         let! coreIncrementalReferences =
             getFromTableOpt<bool> table [] [ "core"; "incremental_references" ]
@@ -239,6 +253,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
             caCreateMissingFileEnable = caCreateMissingFileEnable
             coreMarkdownFileExtensions = coreMarkdownFileExtensions
             coreTextSync = coreTextSync
+            coreTitleFromHeading = coreTitleFromHeading
             coreIncrementalReferences = coreIncrementalReferences
             coreParanoid = coreParanoid
             complWikiStyle = complWikiStyle
@@ -258,6 +273,7 @@ module Config =
             hi.coreMarkdownFileExtensions
             |> Option.orElse low.coreMarkdownFileExtensions
         coreTextSync = hi.coreTextSync |> Option.orElse low.coreTextSync
+        coreTitleFromHeading = hi.coreTitleFromHeading |> Option.orElse low.coreTitleFromHeading
         coreIncrementalReferences =
             hi.coreIncrementalReferences
             |> Option.orElse low.coreIncrementalReferences

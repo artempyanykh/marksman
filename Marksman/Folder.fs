@@ -501,11 +501,8 @@ module Folder =
             let folderConfig = tryLoadFolderConfig folderId
             let folderConfig = Config.mergeOpt folderConfig userConfig
 
-            let configuredExts =
-                (Option.defaultValue Config.Default folderConfig)
-                    .CoreMarkdownFileExtensions()
-
-            let parserSettings = { mdFileExt = configuredExts }
+            let parserSettings =
+                ParserSettings.OfConfig(Option.defaultValue Config.Default folderConfig)
 
             let documents = loadDocs parserSettings folderId
 

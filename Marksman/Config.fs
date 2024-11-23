@@ -334,7 +334,12 @@ let defaultMarkdownExtensions =
 
 type ParserSettings = {
     mdFileExt: string[]
+    titleFromHeading: bool
 } with
 
-    static member OfConfig(config: Config) = { mdFileExt = config.CoreMarkdownFileExtensions() }
+    static member OfConfig(config: Config) = {
+        mdFileExt = config.CoreMarkdownFileExtensions()
+        titleFromHeading = config.CoreTitleFromHeading()
+    }
+
     static member Default = ParserSettings.OfConfig(Config.Default)

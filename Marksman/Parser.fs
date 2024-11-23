@@ -5,6 +5,7 @@ open System.Collections.Generic
 open Ionide.LanguageServerProtocol.Types
 open Markdig.Syntax
 
+open Marksman.Config
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Text
@@ -216,7 +217,7 @@ module Markdown =
             }
 
 
-    let scrapeText (text: Text) : array<Element> =
+    let scrapeText (parserSettings: ParserSettings) (text: Text) : array<Element> =
         let parsed: MarkdownObject = Markdown.Parse(text.content, markdigPipeline)
 
         let elements = ResizeArray()
@@ -250,6 +251,7 @@ module Markdown =
                 let heading =
                     Node.mk fullText range {
                         level = level
+                        isTitle = parserSettings.titleFromHeading && level <= 1
                         title = Node.mkText title titleRange
                         scope = range
                     }
@@ -476,11 +478,11 @@ module Markdown =
 
         { elements = elements; childMap = childMap }
 
-let parse (parserSettings: Config.ParserSettings) (text: Text) : Structure =
+let parse (parserSettings: ParserSettings) (text: Text) : Structure =
     if String.IsNullOrEmpty text.content then
         let cst: Cst.Cst = { elements = [||]; childMap = Map.empty }
         Structure.ofCst parserSettings cst
     else
-        let flatElements = Markdown.scrapeText text
+        let flatElements = Markdown.scrapeText parserSettings text
         let cst = Markdown.buildCst text flatElements
         Structure.ofCst parserSettings cst

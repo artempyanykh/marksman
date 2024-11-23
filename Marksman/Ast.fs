@@ -6,6 +6,7 @@ open Marksman.Syms
 
 type Heading = {
     level: int
+    isTitle: bool
     text: string
     id: Slug
 } with
@@ -111,14 +112,13 @@ module Element =
     // TODO: instead of checking for 'all whitespace' symbols all the time, create smart constructors
     let toSym (parserSettings: Config.ParserSettings) (el: Element) : option<Sym> =
         match el with
-        | Element.H { level = level; id = id } ->
+        | Element.H { level = level; isTitle = isTitle; id = id } ->
             if Slug.isEmpty id then
                 None
             else
                 let id = Slug.toString id
 
-                // TODO: make this configurable
-                if level <= 1 then
+                if isTitle then
                     Syms.Sym.Def(Title(id)) |> Some
                 else
                     Syms.Sym.Def(Header(level, id)) |> Some

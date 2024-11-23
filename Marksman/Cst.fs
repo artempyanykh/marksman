@@ -252,7 +252,7 @@ type Element =
         | T n -> n.range
         | YML n -> n.range
 
-and Heading = { level: int; title: TextNode; scope: Range }
+and Heading = { level: int; isTitle: bool; title: TextNode; scope: Range }
 
 let rec private fmtElement =
     function
@@ -298,7 +298,7 @@ module Heading =
 
     let slug (heading: Heading) : Slug = name heading |> Slug.ofString
 
-    let isTitle (heading: Heading) = heading.level <= 1
+    let isTitle (heading: Heading) = heading.isTitle
 
     let range (heading: Heading) : Range = heading.title.range
 
@@ -306,6 +306,7 @@ module Heading =
 
     let toAbstract (cHead: Heading) : Ast.Heading = {
         level = cHead.level
+        isTitle = cHead.isTitle
         text = cHead.title.text
         id = slug cHead
     }

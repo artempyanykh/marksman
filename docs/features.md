@@ -1,6 +1,5 @@
 # Features
 
-
 ✅ - done; 🗓 - planned.
 
 - ✅ Document symbols from headings.
@@ -13,7 +12,7 @@
 - ✅ Diagnostics for wiki-links.
 - ✅ Support multi-folder workspaces.
 - ✅ Custom parser for more fine-grained note structure.
-- 🗓 Code Lens with "# references" on headings.
+- ✅ Code Lens with "# references" on headings.
 - ✅ Rename refactor.
 - 🗓 Add support for images (diagnostics, completion, goto).
 - 🗓 Add "check" command for standalone workspace checking.
@@ -33,9 +32,53 @@ or ``[[#some-heading]]``. This is particularly convenient when working with a Ze
 notes, as it streamlines linking and cross-linking of notes. This is what tool like [Obsidian][obsidian]
 and [Emanote][emanote] use.
 
-By default Marksman uses a document **title's slug** when referencing a document, however there is an configuration
-setting to use a **file name** or a file path instead. This functionality is currently **experimental** and may change
-in future depending on user's feedback. See [Configuration](/docs/configuration.md) for more details.
+Documents can be referred either by their **title** or **filename**.
+The exact behavior depends on the combination of settings.
+
+### Titles from headings
+
+Level 1 heading (`# Foo`) is treated as document's title.
+This implies that there supposed to be at most one 'level 1 heading' in a document.
+
+This is the default behavior. Users that don't want this behavior can change it in their
+`.marksman.toml`:
+
+```toml
+[core]
+title_from_heading = false
+```
+
+Note that setting `core.title_from_heading` to `false` automatically changes the default completion style to a
+file-based one.
+See [this config file](../Tests/default.marksman.toml) for more details.
+
+### Completion style for wiki link
+
+Wiki links can use both a title and a filename to reference a document.
+The preferred style of completion is configured via `completion.wiki.style` configuration setting.
+
+See [the example config file](../Tests/default.marksman.toml) for more details.
+
+### Completion style and refactorings
+
+Completion style is also used to resolve reference ambiguity.
+For instance, let's take the following doc:
+
+```md
+// file:foo.md
+
+# Foo
+
+Bar
+```
+
+A wiki-link `[[foo]]` can either bind to the title `Foo` when the completion style is title-based, or to the filename
+`foo.md` when completion style is file-based. Both point to the same document, but the effects of
+refactorings will differ based on whether the link binds to the file or the title. For instance,
+
+* when the preferred style is `title-slug`, renaming `foo.md` won't change `[[foo]]` because it's bound to the title,
+  but renaming a title `# Foo` to `# Bar` will update `[[foo]]` to `[[bar]]`.
+* when the preferred style is `file-stem`, the effect will be opposite to the above.
 
 ## Code actions
 
@@ -78,7 +121,6 @@ don't understand why, you can either:
 2. create a `.marksman.toml` at the root folder of your project, or
 3. refer to your editor/LSP client documentation regarding how a project root
    is defined.
-
 
 [obsidian]: https://obsidian.md
 

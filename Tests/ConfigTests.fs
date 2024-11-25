@@ -2,6 +2,7 @@ module Marksman.ConfigTests
 
 open System.IO
 open System.Reflection
+open FSharpPlus.Data.Validation
 open Xunit
 
 open Marksman.Config
@@ -189,3 +190,18 @@ let testDefault () =
     let content = using (new StreamReader(content)) (fun f -> f.ReadToEnd())
     let parsed = Config.tryParse content
     Assert.Equal(Some Config.Default, parsed)
+
+[<Fact>]
+let testDefault_titleVsCompletionStyle () =
+    let content =
+        """
+[core]
+title_from_heading = false
+"""
+
+    let actual =
+        Config.tryParse content
+        |> Option.defaultWith (fun () -> failwith "Expected a successful parse")
+
+    Assert.False(actual.CoreTitleFromHeading())
+    Assert.Equal(ComplWikiStyle.FileStem, actual.ComplWikiStyle())

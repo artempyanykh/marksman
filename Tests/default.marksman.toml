@@ -17,6 +17,11 @@ markdown.file_extensions = ["md", "markdown"]
 # sync which result in slightly correpted state and are really hard
 # to diagnose.
 text_sync = "full"
+# When set to true, level 1 headings will be treated as document titles
+# (this includes an assumption of having a single title in the document).
+# Setting this to false automatically changes the default wiki link 
+# completion style to a file-based one.
+title_from_heading = true
 # Use incremental resolution of project-wide references.
 # This is much more efficient but is currently experimental
 incremental_references = false

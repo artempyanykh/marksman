@@ -3,6 +3,7 @@ module Marksman.Doc
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
+open Marksman.Config
 open Marksman.Names
 open Marksman.Structure
 open Marksman.Paths
@@ -41,7 +42,7 @@ module Doc =
     val slug: Doc -> Slug
     val index: Doc -> Index
 
-    val tryLoad: exts: seq<string> -> FolderId -> path: LocalPath -> option<Doc>
-    val mk: exts: seq<string> -> DocId -> version: option<int> -> Text -> Doc
-    val fromLsp: exts: seq<string> -> FolderId -> TextDocumentItem -> Doc
-    val applyLspChange: exts: seq<string> -> DidChangeTextDocumentParams -> Doc -> Doc
+    val tryLoad: ParserSettings -> FolderId -> path: LocalPath -> option<Doc>
+    val mk: ParserSettings -> DocId -> version: option<int> -> Text -> Doc
+    val fromLsp: ParserSettings -> FolderId -> TextDocumentItem -> Doc
+    val applyLspChange: ParserSettings -> DidChangeTextDocumentParams -> Doc -> Doc

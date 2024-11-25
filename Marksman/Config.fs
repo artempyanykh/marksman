@@ -331,3 +331,10 @@ module Config =
 
 let defaultMarkdownExtensions =
     Config.Default.CoreMarkdownFileExtensions() |> Seq.ofArray
+
+type ParserSettings = {
+    mdFileExt: string[]
+} with
+
+    static member OfConfig(config: Config) = { mdFileExt = config.CoreMarkdownFileExtensions() }
+    static member Default = ParserSettings.OfConfig(Config.Default)

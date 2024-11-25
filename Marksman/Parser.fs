@@ -476,11 +476,11 @@ module Markdown =
 
         { elements = elements; childMap = childMap }
 
-let parse (exts: seq<string>) (text: Text) : Structure =
+let parse (parserSettings: Config.ParserSettings) (text: Text) : Structure =
     if String.IsNullOrEmpty text.content then
         let cst: Cst.Cst = { elements = [||]; childMap = Map.empty }
-        Structure.ofCst exts cst
+        Structure.ofCst parserSettings cst
     else
         let flatElements = Markdown.scrapeText text
         let cst = Markdown.buildCst text flatElements
-        Structure.ofCst exts cst
+        Structure.ofCst parserSettings cst

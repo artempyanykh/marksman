@@ -6,7 +6,7 @@ open Snapper
 open Marksman.Ast
 open Marksman.Structure
 
-let parseString content = Parser.parse Config.defaultMarkdownExtensions (Text.mkText content)
+let parseString content = Parser.parse Config.ParserSettings.Default (Text.mkText content)
 
 let checkInlineSnapshot =
     Helpers.checkInlineSnapshot (fun (el: Element) -> el.CompactFormat())

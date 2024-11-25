@@ -301,7 +301,7 @@ module Folder =
 
         lines.ToArray()
 
-    let private loadDocs (configuredExts: array<string>) (folderId: FolderId) : seq<Doc> =
+    let private loadDocs (parserSettings: ParserSettings) (folderId: FolderId) : seq<Doc> =
         let rec collect (cur: LocalPath) (ignoreMatchers: list<GlobMatcher>) =
             let ignoreMatchers =
                 match readIgnoreFiles cur with
@@ -317,12 +317,12 @@ module Folder =
                 seq {
                     for file in files do
                         if
-                            (isMarkdownFile configuredExts file.FullName)
+                            (isMarkdownFile parserSettings.mdFileExt file.FullName)
                             && not (GlobMatcher.ignoresAny ignoreMatchers file.FullName)
                         then
                             let pathUri = LocalPath.ofSystem file.FullName
 
-                            let document = Doc.tryLoad configuredExts folderId pathUri
+                            let document = Doc.tryLoad parserSettings folderId pathUri
 
                             match document with
                             | Some document -> yield document
@@ -505,8 +505,9 @@ module Folder =
                 (Option.defaultValue Config.Default folderConfig)
                     .CoreMarkdownFileExtensions()
 
-            let documents = loadDocs configuredExts folderId
+            let parserSettings = { mdFileExt = configuredExts }
 
+            let documents = loadDocs parserSettings folderId
 
             multiFile name folderId documents folderConfig |> Some
         else
@@ -612,12 +613,14 @@ module Folder =
             else
                 None
 
+    let parserSettings folder = ParserSettings.OfConfig(configOrDefault folder)
+
     let closeDoc (docId: DocId) (folder: Folder) : option<Folder> =
-        let exts = (configOrDefault folder).CoreMarkdownFileExtensions()
+        let parserSettings = parserSettings folder
 
         match folder.data with
         | MultiFile { root = root } ->
-            match Doc.tryLoad exts root (Abs <| RootedRelPath.toAbs docId.Path) with
+            match Doc.tryLoad parserSettings root (Abs <| RootedRelPath.toAbs docId.Path) with
             | Some doc -> withDoc doc folder |> Some
             | _ -> withoutDoc docId folder
         | SingleFile { doc = doc } ->

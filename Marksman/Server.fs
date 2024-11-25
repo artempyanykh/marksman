@@ -637,8 +637,7 @@ type MarksmanServer(client: MarksmanClient) =
             let newState =
                 match State.tryFindFolderAndDoc docPath state with
                 | Some(folder, doc) ->
-                    let newDoc =
-                        Doc.applyLspChange (Folder.configuredMarkdownExts folder) par doc
+                    let newDoc = Doc.applyLspChange (Folder.parserSettings folder) par doc
 
                     let newFolder = Folder.withDoc newDoc folder
 
@@ -677,10 +676,10 @@ type MarksmanServer(client: MarksmanClient) =
             let newState =
                 match State.tryFindFolderEnclosing path state with
                 | None ->
-                    let configuredExts =
-                        (State.userConfigOrDefault state).CoreMarkdownFileExtensions()
+                    let config = State.userConfigOrDefault state
+                    let parserSettings = ParserSettings.OfConfig(config)
 
-                    if isMarkdownFile configuredExts (AbsPath.toSystem path.data) then
+                    if isMarkdownFile parserSettings.mdFileExt (AbsPath.toSystem path.data) then
                         let singletonRoot = UriWith.mkRoot par.TextDocument.Uri
 
                         logger.trace (
@@ -689,17 +688,17 @@ type MarksmanServer(client: MarksmanClient) =
                             >> Log.addContext "root" singletonRoot
                         )
 
-                        let doc = Doc.fromLsp configuredExts singletonRoot par.TextDocument
+                        let doc = Doc.fromLsp parserSettings singletonRoot par.TextDocument
                         let userConfig = (State.workspace state) |> Workspace.userConfig
                         let newFolder = Folder.singleFile doc userConfig
                         State.updateFolder newFolder state
                     else
                         state
                 | Some folder ->
-                    let configuredExts = (Folder.configuredMarkdownExts folder)
+                    let parserSettings = Folder.parserSettings folder
 
-                    if isMarkdownFile configuredExts (AbsPath.toSystem path.data) then
-                        let doc = Doc.fromLsp configuredExts (Folder.id folder) par.TextDocument
+                    if isMarkdownFile parserSettings.mdFileExt (AbsPath.toSystem path.data) then
+                        let doc = Doc.fromLsp parserSettings (Folder.id folder) par.TextDocument
                         let newFolder = Folder.withDoc doc folder
                         State.updateFolder newFolder state
                     else
@@ -732,11 +731,10 @@ type MarksmanServer(client: MarksmanClient) =
                 match State.tryFindFolderEnclosing docUri newState with
                 | None -> ()
                 | Some folder ->
-                    let configuredExts =
-                        (Folder.configOrDefault folder).CoreMarkdownFileExtensions()
+                    let parserSettings = Folder.parserSettings folder
 
-                    if isMarkdownFile configuredExts (AbsPath.toSystem docUri.data) then
-                        match Doc.tryLoad configuredExts (Folder.id folder) (Abs docUri.data) with
+                    if isMarkdownFile parserSettings.mdFileExt (AbsPath.toSystem docUri.data) then
+                        match Doc.tryLoad parserSettings (Folder.id folder) (Abs docUri.data) with
                         | Some doc ->
                             let newFolder = Folder.withDoc doc folder
                             newState <- State.updateFolder newFolder newState

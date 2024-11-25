@@ -374,7 +374,7 @@ module Conn =
 
                 match def with
                 | Doc
-                | Header(1, _) ->
+                | Title _ ->
                     // Whenever a new title is added, links that were previously pointing at the Doc
                     // or the other titles need to be invalidated
                     let affectedDefs =

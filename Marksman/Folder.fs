@@ -221,7 +221,7 @@ module Oracle =
         | Ref.IntraRef(IntraSection section) ->
             Structure.symbols destStruct
             |> Seq.choose Sym.asDef
-            |> Seq.filter (Def.isHeaderWithId (Slug.toString section))
+            |> Seq.filter (Def.isHeaderOrTitleWithId (Slug.toString section))
             |> Seq.toArray
         | Ref.IntraRef(IntraLinkDef label) ->
             Structure.symbols destStruct

@@ -396,7 +396,7 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs false folder doc1 wl |> formatRefs
 
-        checkInlineSnapshot (fun x -> x.ToString()) refs [
+        checkInlineSnapshot (_.ToString()) refs [
             "(doc1.md, (4,0)-(4,16))"
             "(doc2.md, (6,0)-(6,11))"
         ]
@@ -409,7 +409,7 @@ module BasicRefsTests =
 
         let refs = Dest.findElementRefs true folder doc1 wl |> formatRefs
 
-        checkInlineSnapshot (fun x -> x.ToString()) refs [
+        checkInlineSnapshot (_.ToString()) refs [
             "(doc1.md, (4,0)-(4,16))"
             "(doc2.md, (6,0)-(6,11))"
             "(doc2.md, (10,0)-(10,9))"

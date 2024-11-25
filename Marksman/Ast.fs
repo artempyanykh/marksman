@@ -115,7 +115,13 @@ module Element =
             if Slug.isEmpty id then
                 None
             else
-                Syms.Sym.Def(Def.Header(level, Slug.toString id)) |> Some
+                let id = Slug.toString id
+
+                // TODO: make this configurable
+                if level <= 1 then
+                    Syms.Sym.Def(Title(id)) |> Some
+                else
+                    Syms.Sym.Def(Header(level, id)) |> Some
         // Wiki-links mapping
         | Element.WL { doc = None; heading = None } -> None
         | Element.WL { doc = Some doc; heading = None } ->
@@ -160,7 +166,7 @@ module Element =
                     Some(Syms.Sym.Ref(CrossRef(CrossSection(url, Slug.ofString anchor))))
         // The rest
         | Element.MR mdRef -> Some(Syms.Sym.Ref(IntraRef(IntraLinkDef mdRef.DestLabel)))
-        | Element.MLD mdLinkDef -> Some(Syms.Sym.Def(Def.LinkDef(mdLinkDef.Label)))
+        | Element.MLD mdLinkDef -> Some(Syms.Sym.Def(LinkDef(mdLinkDef.Label)))
         | Element.T(Tag tag) -> Some(Syms.Sym.Tag(Syms.Tag tag))
 
 type Ast = { elements: Element[] }

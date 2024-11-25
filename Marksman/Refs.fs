@@ -179,6 +179,7 @@ module Dest =
 
                     match destSym with
                     | Sym.Def Doc -> Dest.Doc(detectFileLink destDoc)
+                    | Sym.Def(Title _)
                     | Sym.Def(Header _) ->
                         let docLink = detectDocLink destDoc
 
@@ -238,24 +239,23 @@ module Dest =
                 Seq.empty
 
         // This logic is a bit involved but the idea is that whenever we invoke 'find references'
-        // on a level 1 header (aka a title) we should also look for references to the document
-        // itself
+        // on a title we should also look for references to the document itself
         let defs, filter =
             match def with
-            | LinkDef _ -> Seq.singleton def, konst true
-            | Header(level, _) when level > 1 -> Seq.singleton def, konst true
+            | LinkDef _
+            | Header _ -> Seq.singleton def, konst true
             | Doc ->
                 let headers =
                     inDoc.Structure.Symbols
                     |> Seq.choose Sym.asDef
-                    |> Seq.filter Def.isHeader
+                    |> Seq.filter Def.isHeaderOrTitle
 
                 Seq.append [ Def.Doc ] headers, Sym.isRefWithExplicitDoc
-            | Header(_, id) ->
+            | Title id ->
                 let headers =
                     inDoc.Structure.Symbols
                     |> Seq.choose Sym.asDef
-                    |> Seq.filter Def.isHeader
+                    |> Seq.filter Def.isHeaderOrTitle
 
                 let filter sym =
                     Sym.isRefWithExplicitDoc sym

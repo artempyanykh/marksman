@@ -1,6 +1,7 @@
 module Marksman.Helpers
 
 open System.Runtime.InteropServices
+open Marksman.Config
 open Snapper
 open Marksman.Misc
 open Marksman.Paths
@@ -53,21 +54,22 @@ let stripMarginTrim (str: string) = stripMargin (str.Trim())
 
 type FakeDoc =
     class
-        static member Mk(content: string, ?path: string, ?root: string) : Doc =
+        static member Mk(content: string, ?path: string, ?root: string, ?config: Config) : Doc =
             let text = Text.mkText content
             let path = defaultArg path "fake.md"
             let pathUri = pathToUri (dummyRootPath (pathComps path))
             let root = Option.map pathComps root |> Option.defaultValue []
             let rootUri = dummyRootPath root |> pathToUri
+            let config = defaultArg config Config.Default
 
             let docId =
                 DocId(UriWith.mkRooted (UriWith.mkRoot rootUri) (LocalPath.ofUri pathUri))
 
-            Doc.mk Config.ParserSettings.Default docId None text
+            Doc.mk (ParserSettings.OfConfig(config)) docId None text
 
-        static member Mk(contentLines: array<string>, ?path: string) : Doc =
+        static member Mk(contentLines: array<string>, ?path: string, ?config: Config) : Doc =
             let content = String.concat System.Environment.NewLine contentLines
-            FakeDoc.Mk(content, ?path = path)
+            FakeDoc.Mk(content, ?path = path, ?config = config)
     end
 
 type FakeFolder =

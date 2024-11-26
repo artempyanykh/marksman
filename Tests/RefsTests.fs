@@ -2,6 +2,7 @@ module Marksman.RefsTests
 
 open Ionide.LanguageServerProtocol.Types
 open System.IO
+open Marksman.Config
 open Xunit
 
 open Marksman.Cst
@@ -573,6 +574,39 @@ module EncodingTests =
 
         let refs = resolveAtPos doc1 14 5
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "doc.3.with.dots" ]
+
+// Cases where title_from_heading = false
+module TitleLess =
+    [<Fact>]
+    let refToH1 () =
+        let baseConfig = {
+            Config.Config.Default with
+                complWikiStyle = Some ComplWikiStyle.TitleSlug
+        }
+
+        let mkFolder config =
+            let d1 =
+                FakeDoc.Mk(path = "d1.md", config = config, contentLines = [| "# Doc1" |])
+
+            let d2 =
+                //                                                             012345
+                FakeDoc.Mk(path = "d2.md", config = config, contentLines = [| "[[Doc1]]" |])
+
+            let folder = FakeFolder.Mk([ d1; d2 ], config = config)
+            d1, d2, folder
+
+        // In title-less mode headings are not referenceable cross-doc
+        let _, d2, folder =
+            mkFolder { baseConfig with coreTitleFromHeading = Some false }
+
+        let el = requireElementAtPos d2 0 2
+        Assert.Empty(Dest.tryResolveElement folder d2 el)
+
+        // In title-full mode headings *are* referenceable cross-doc
+        let _, d2, folder =
+            mkFolder { baseConfig with coreTitleFromHeading = Some true }
+
+        Assert.NotEmpty(Dest.tryResolveElement folder d2 el)
 
 module RegressionTests =
     [<Fact>]

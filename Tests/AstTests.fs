@@ -1,5 +1,6 @@
 module Marksman.AstTests
 
+open Marksman.Config
 open Xunit
 open Snapper
 
@@ -62,3 +63,51 @@ let testAstLookup () =
 
     let madeUpAbstract = Element.MR(Collapsed "WAT")
     Assert.Equal(Structure.tryFindConcreteForAbstract madeUpAbstract struct1, None)
+
+[<Fact>]
+let testSymsWhenTitleFromHeadingIsOff () =
+    let doc =
+        """
+# H1
+Is this a title?
+# H2
+Is this another title?
+## H2.2
+# H3
+And this?
+"""
+
+    let strukt =
+        Parser.parse { ParserSettings.Default with titleFromHeading = false } (Text.mkText doc)
+
+    Helpers.checkInlineSnapshot _.ToString() strukt.Symbols [
+        "Doc"
+        "H1 {h1}"
+        "H1 {h2}"
+        "H1 {h3}"
+        "H2 {h22}"
+    ]
+
+[<Fact>]
+let testSymsWhenTitleFromHeadingIsOn () =
+    let doc =
+        """
+# H1
+Is this a title?
+# H2
+Is this another title?
+## H2.2
+# H3
+And this?
+"""
+
+    let strukt =
+        Parser.parse { ParserSettings.Default with titleFromHeading = true } (Text.mkText doc)
+
+    Helpers.checkInlineSnapshot _.ToString() strukt.Symbols [
+        "Doc"
+        "T {h1}"
+        "T {h2}"
+        "T {h3}"
+        "H2 {h22}"
+    ]

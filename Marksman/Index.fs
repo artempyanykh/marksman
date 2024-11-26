@@ -7,6 +7,7 @@ open Marksman.Misc
 
 type Dictionary<'K, 'V> = System.Collections.Generic.Dictionary<'K, 'V>
 
+// TODO: get rid of this; use Structure directly
 type Index = {
     titles: array<Node<Heading>>
     headings: array<Node<Heading>>

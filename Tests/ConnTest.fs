@@ -1,5 +1,6 @@
 module Marksman.ConnTest
 
+open Marksman.Config
 open Xunit
 
 open Snapper
@@ -363,3 +364,35 @@ module ConnGraphTests =
         let d2 = FakeDoc.Mk(path = "d2.md", contentLines = [| "#tag2"; "#tag3" |])
         let f' = mkFolder [ d1; d2 ] |> Folder.withDoc d1'
         checkSnapshot (Folder.conn f')
+
+[<StoreSnapshotsPerClass>]
+module ConnGraphTests_TitleLess =
+    let incrConfig = {
+        Config.Config.Default with
+            coreIncrementalReferences = Some true
+            coreTitleFromHeading = Some false
+            complWikiStyle = Some ComplWikiStyle.TitleSlug
+    }
+
+    let mkFolder docs = FakeFolder.Mk(config = incrConfig, docs = docs)
+    let mkDoc path content = FakeDoc.Mk(path = path, config = incrConfig, contentLines = content)
+
+    [<Fact>]
+    let updateH1 () =
+        let d1 =
+            mkDoc "ocaml.md" [| "# OCaml"; "[[#Multicore]]"; "## Multicore" |]
+
+        let d1' =
+            mkDoc "ocaml.md" [| "# OCaml L"; "[[#Multicore]]"; "## Multicore" |]
+
+        let d2 = mkDoc "test.md" [| "# Test"; "[[OCaml#Multicore]]" |]
+
+        let incr =
+            mkFolder [ d1 ]
+            |> Folder.withDoc d2
+            |> Folder.withDoc d1'
+            |> Folder.conn
+
+        let fromScratch = mkFolder [ d1'; d2 ] |> Folder.conn
+        let connDiff = Conn.difference fromScratch incr
+        checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]

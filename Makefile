@@ -141,7 +141,7 @@ install: publish
 else
 install: publish
 	mkdir -p $(PREFIX)/bin
-	install -m755 Marksman/bin/Release/net8.0/$(RID)/publish/marksman $(PREFIX)/bin
+	install -m755 Marksman/bin/Release/net9.0/$(RID)/publish/marksman $(PREFIX)/bin
 endif
 
 .PHONY: uninstall

@@ -24,6 +24,7 @@ module Folder =
     val docs: Folder -> seq<Doc>
     val docCount: Folder -> int
 
+    val checkWorkspaceFolderWithWarn: FolderId -> bool
     val tryLoad: userConfig: option<Config> -> name: string -> FolderId -> option<Folder>
 
     val singleFile: doc: Doc -> config: option<Config> -> Folder

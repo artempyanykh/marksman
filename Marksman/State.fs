@@ -180,7 +180,11 @@ module State =
                 for f in added do
                     let rootUri = UriWith.mkRoot f.Uri
 
-                    let folder = Folder.tryLoad userConfig f.Name rootUri
+                    let folder =
+                        if Folder.checkWorkspaceFolderWithWarn rootUri then
+                            Folder.tryLoad userConfig f.Name rootUri
+                        else
+                            None
 
                     match folder with
                     | Some folder -> yield folder

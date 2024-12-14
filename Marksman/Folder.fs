@@ -249,6 +249,37 @@ module Folder =
 
     let private ignoreFiles = [ ".ignore"; ".gitignore"; ".hgignore" ]
 
+    let private isRealWorkspaceFolder (root: RootPath) : bool =
+        let root = RootPath.toSystem root
+
+        if Directory.Exists(root) then
+            let markerFiles = [| ".marksman.toml" |]
+            let markerDirs = [| ".git"; ".hg"; ".svn" |]
+
+            let hasMarkerFile () =
+                Array.exists (fun marker -> File.Exists(Path.Join(root, marker))) markerFiles
+
+            let hasMarkerDir () =
+                Array.exists (fun marker -> Directory.Exists(Path.Join(root, marker))) markerDirs
+
+            hasMarkerDir () || hasMarkerFile ()
+        else
+            false
+
+    // Context is in
+    // * https://github.com/helix-editor/helix/issues/4436
+    // * https://github.com/artempyanykh/marksman/discussions/377
+    let checkWorkspaceFolderWithWarn (folderId: FolderId) : bool =
+        if isRealWorkspaceFolder folderId.data then
+            true
+        else
+            logger.warn (
+                Log.setMessage "Workspace folder is bogus"
+                >> Log.addContext "root" folderId.data
+            )
+
+            false
+
     let isSingleFile folder =
         match folder.data with
         | SingleFile _ -> true

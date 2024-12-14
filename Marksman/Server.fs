@@ -28,41 +28,12 @@ open Newtonsoft.Json.Linq
 module ServerUtil =
     let logger = LogProvider.getLoggerByName "ServerUtil"
 
-    let private isRealWorkspaceFolder (root: RootPath) : bool =
-        let root = RootPath.toSystem root
-
-        if Directory.Exists(root) then
-            let markerFiles = [| ".marksman.toml" |]
-            let markerDirs = [| ".git"; ".hg"; ".svn" |]
-
-            let hasMarkerFile () =
-                Array.exists (fun marker -> File.Exists(Path.Join(root, marker))) markerFiles
-
-            let hasMarkerDir () =
-                Array.exists (fun marker -> Directory.Exists(Path.Join(root, marker))) markerDirs
-
-            hasMarkerDir () || hasMarkerFile ()
-        else
-            false
-
-    // Remove this and related logic when https://github.com/helix-editor/helix/issues/4436 is resolved.
-    let checkWorkspaceFolderWithWarn (folderId: FolderId) : bool =
-        if isRealWorkspaceFolder folderId.data then
-            true
-        else
-            logger.warn (
-                Log.setMessage "Workspace folder is bogus"
-                >> Log.addContext "root" folderId.data
-            )
-
-            false
-
     let extractWorkspaceFolders (par: InitializeParams) : Map<string, FolderId> =
         match par.WorkspaceFolders with
         | Some folders ->
             folders
             |> Array.map (fun { Name = name; Uri = uri } -> name, UriWith.mkRoot uri)
-            |> Array.filter (fun (_, folderId) -> checkWorkspaceFolderWithWarn folderId)
+            |> Array.filter (fun (_, folderId) -> Folder.checkWorkspaceFolderWithWarn folderId)
             |> Map.ofArray
         | _ ->
             let rootUri =
@@ -75,7 +46,7 @@ module ServerUtil =
                 // No folders are configured. The client can still add folders later using a notification.
                 Map.empty
             | Some rootUri ->
-                if checkWorkspaceFolderWithWarn rootUri then
+                if Folder.checkWorkspaceFolderWithWarn rootUri then
                     let rootName = RootPath.filename rootUri.data
 
                     Map.ofList [ rootName, rootUri ]

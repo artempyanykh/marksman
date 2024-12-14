@@ -489,7 +489,7 @@ module Folder =
             | MultiFile folder -> MultiFile { folder with config = config } |> mk
 
     let tryLoad (userConfig: option<Config>) (name: string) (folderId: FolderId) : option<Folder> =
-        logger.trace (
+        logger.info (
             Log.setMessage "Loading folder documents"
             >> Log.addContext "uri" folderId.uri
         )

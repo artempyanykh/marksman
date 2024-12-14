@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-TOP_DIR="$SCRIPT_DIR/.."
+set -x
+
+RESOLVED_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR=$(cd -- "$(dirname -- "$RESOLVED_PATH")" &>/dev/null && pwd)
+TOP_DIR="$(realpath "$SCRIPT_DIR/..")"
 make -C "$TOP_DIR" build </dev/null 1>&2
 
-exec "$TOP_DIR/Marksman/bin/Debug/net8.0/marksman" "${@:1}" server -v=4
+exec "$TOP_DIR/Marksman/bin/Debug/net8.0/marksman" "${@:1}"

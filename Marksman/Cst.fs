@@ -252,7 +252,13 @@ type Element =
         | T n -> n.range
         | YML n -> n.range
 
-and Heading = { level: int; isTitle: bool; title: TextNode; scope: Range }
+and Heading = {
+    level: int
+    isTitle: bool
+    title: TextNode
+    disambiguation: option<string>
+    scope: Range
+}
 
 let rec private fmtElement =
     function
@@ -296,7 +302,11 @@ module Heading =
 
     let name (heading: Heading) : string = Node.text heading.title
 
-    let slug (heading: Heading) : Slug = name heading |> Slug.ofString
+    let slug (heading: Heading) : Slug =
+        match heading.disambiguation with
+        | None -> name heading
+        | Some d -> $"{name heading}-{d}"
+        |> Slug.ofString
 
     let isTitle (heading: Heading) = heading.isTitle
 

@@ -222,6 +222,8 @@ module Markdown =
 
         let elements = ResizeArray()
 
+        let lastHeadingNo = new Dictionary<Slug, int>()
+
         for b in parsed.Descendants() do
             match b with
             | :? YamlFrontMatterBlock as y ->
@@ -248,13 +250,30 @@ module Markdown =
 
                 let range = sourceSpanToRange text h.Span
 
+                let heading = {
+                    level = level
+                    isTitle = parserSettings.titleFromHeading && level <= 1
+                    title = Node.mkText title titleRange
+                    disambiguation = None
+                    scope = range
+                }
+
+                let slugAmbiguous = Heading.slug heading
+
+                let headingNum =
+                    match lastHeadingNo.TryGetValue(slugAmbiguous) with
+                    | true, value -> value + 1
+                    | false, _ -> 0
+
+                lastHeadingNo.[slugAmbiguous] <- headingNum
+
+                let disambiguation =
+                    match headingNum with
+                    | 0 -> None
+                    | num -> Some $"{num}"
+
                 let heading =
-                    Node.mk fullText range {
-                        level = level
-                        isTitle = parserSettings.titleFromHeading && level <= 1
-                        title = Node.mkText title titleRange
-                        scope = range
-                    }
+                    Node.mk fullText range { heading with disambiguation = disambiguation }
 
                 elements.Add(H heading)
             | :? WikiLinkInline as link ->

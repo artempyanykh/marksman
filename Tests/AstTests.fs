@@ -89,6 +89,60 @@ And this?
     ]
 
 [<Fact>]
+let testSymsWhenRepeatedHeadingsGlfm () =
+    let doc =
+        """
+# X^
+# A
+# A
+# X
+# Z
+## A
+"""
+
+    let strukt =
+        Parser.parse { ParserSettings.Default with titleFromHeading = false } (Text.mkText doc)
+
+    Helpers.checkInlineSnapshot _.ToString() strukt.Symbols [
+        "Doc"
+        "H1 {a}"
+        "H1 {a-1}"
+        "H1 {x}"
+        "H1 {x-1}"
+        "H1 {z}"
+        "H2 {a-2}"
+    ]
+
+[<Fact>]
+let testSymsWhenRepeatedHeadingsNoGlfm () =
+    let doc =
+        """
+# X^
+# A
+# A
+# X
+# Z
+## A
+"""
+
+    let strukt =
+        Parser.parse
+            {
+                ParserSettings.Default with
+                    titleFromHeading = false
+                    glfmHeadingIds = false
+            }
+            (Text.mkText doc)
+
+    Helpers.checkInlineSnapshot _.ToString() strukt.Symbols [
+        "Doc"
+        "H1 {a}"
+        "H1 {x}"
+        "H1 {z}"
+        "H2 {a}"
+    ]
+
+[<Fact>]
 let testSymsWhenTitleFromHeadingIsOn () =
     let doc =
         """

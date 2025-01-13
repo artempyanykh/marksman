@@ -116,6 +116,20 @@ candidates = 100
     Assert.Equal(Some expected, actual)
 
 [<Fact>]
+let testParse_8 () =
+    let content =
+        """
+[core]
+markdown.glfm_heading_ids.enable = true
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with coreMarkdownGlfmHeadingIdsEnable = Some true }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
 let testParse_broken_0 () =
     let content =
         """
@@ -175,6 +189,17 @@ let testParse_broken_5 () =
         """
 [completion]
 candidates = -1
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
+
+[<Fact>]
+let testParse_broken_6 () =
+    let content =
+        """
+[core]
+markdown.glfm_heading_ids.enable = -1
 """
 
     let actual = Config.tryParse content

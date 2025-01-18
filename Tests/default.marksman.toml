@@ -4,6 +4,12 @@
 
 [core]
 markdown.file_extensions = ["md", "markdown"]
+# Enable GitLab Flavored Markdown heading ID disambiguation method described
+# in https://docs.gitlab.com/ee/user/markdown.html#heading-ids-and-links.
+# This enables multiple headings with equal IDs to be deterministically
+# referenced by links and impacts ID generation in "Table of Contents"
+# code action.
+markdown.glfm_heading_ids.enable = true
 # Configures text sync protocol between the editor (LSP client)
 # and Marksman (LSP server). 
 # Can be either 'full' or `incremental`:

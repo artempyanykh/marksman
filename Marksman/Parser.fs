@@ -268,9 +268,10 @@ module Markdown =
                 lastHeadingNo.[slugAmbiguous] <- headingNum
 
                 let disambiguation =
-                    match headingNum with
-                    | 0 -> None
-                    | num -> Some $"{num}"
+                    match parserSettings.glfmHeadingIds, headingNum with
+                    | false, _ -> None
+                    | true, 0 -> None
+                    | true, num -> Some $"{num}"
 
                 let heading =
                     Node.mk fullText range { heading with disambiguation = disambiguation }

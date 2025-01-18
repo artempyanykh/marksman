@@ -127,6 +127,7 @@ type Config = {
     caTocEnable: option<bool>
     caCreateMissingFileEnable: option<bool>
     coreMarkdownFileExtensions: option<array<string>>
+    coreMarkdownGlfmHeadingIdsEnable: option<bool>
     coreTextSync: option<TextSync>
     coreTitleFromHeading: option<bool>
     coreIncrementalReferences: option<bool>
@@ -139,6 +140,7 @@ type Config = {
         caTocEnable = Some true
         caCreateMissingFileEnable = Some true
         coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
+        coreMarkdownGlfmHeadingIdsEnable = Some true
         coreTextSync = Some Full
         coreTitleFromHeading = Some true
         coreIncrementalReferences = Some false
@@ -151,6 +153,7 @@ type Config = {
         caTocEnable = None
         caCreateMissingFileEnable = None
         coreMarkdownFileExtensions = None
+        coreMarkdownGlfmHeadingIdsEnable = None
         coreTextSync = None
         coreTitleFromHeading = None
         coreIncrementalReferences = None
@@ -172,6 +175,11 @@ type Config = {
     member this.CoreMarkdownFileExtensions() =
         this.coreMarkdownFileExtensions
         |> Option.orElse Config.Default.coreMarkdownFileExtensions
+        |> Option.get
+
+    member this.CoreMarkdownGlfmHeadingIdsEnable() =
+        this.coreMarkdownGlfmHeadingIdsEnable
+        |> Option.orElse Config.Default.coreMarkdownGlfmHeadingIdsEnable
         |> Option.get
 
     member this.CoreTextSync() =
@@ -218,6 +226,10 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         let! coreMarkdownFileExtensions =
             getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "file_extensions" ]
 
+        let! coreMarkdownGlfmHeadingIdsEnable =
+            getFromTableOpt<bool> table [] [ "core"; "markdown"; "glfm_heading_ids"; "enable" ]
+
+
         let! coreTextSync = getFromTableOpt<string> table [] [ "core"; "text_sync" ]
         let coreTextSync = coreTextSync |> Option.bind TextSync.ofStringOpt
 
@@ -252,6 +264,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
             caTocEnable = caTocEnable
             caCreateMissingFileEnable = caCreateMissingFileEnable
             coreMarkdownFileExtensions = coreMarkdownFileExtensions
+            coreMarkdownGlfmHeadingIdsEnable = coreMarkdownGlfmHeadingIdsEnable
             coreTextSync = coreTextSync
             coreTitleFromHeading = coreTitleFromHeading
             coreIncrementalReferences = coreIncrementalReferences
@@ -272,6 +285,9 @@ module Config =
         coreMarkdownFileExtensions =
             hi.coreMarkdownFileExtensions
             |> Option.orElse low.coreMarkdownFileExtensions
+        coreMarkdownGlfmHeadingIdsEnable =
+            hi.coreMarkdownGlfmHeadingIdsEnable
+            |> Option.orElse low.coreMarkdownGlfmHeadingIdsEnable
         coreTextSync = hi.coreTextSync |> Option.orElse low.coreTextSync
         coreTitleFromHeading = hi.coreTitleFromHeading |> Option.orElse low.coreTitleFromHeading
         coreIncrementalReferences =
@@ -335,11 +351,13 @@ let defaultMarkdownExtensions =
 type ParserSettings = {
     mdFileExt: string[]
     titleFromHeading: bool
+    glfmHeadingIds: bool
 } with
 
     static member OfConfig(config: Config) = {
         mdFileExt = config.CoreMarkdownFileExtensions()
         titleFromHeading = config.CoreTitleFromHeading()
+        glfmHeadingIds = config.CoreMarkdownGlfmHeadingIdsEnable()
     }
 
     static member Default = ParserSettings.OfConfig(Config.Default)

@@ -92,6 +92,8 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
       ```
 * [Helix](https://helix-editor.com/) supports Marksman out of the box. However, you need add `marksman` binary to
   your `PATH` manually.
+* [Kakoune](https://kakoune.org/) can be used with [kakoune-lsp](https://github.com/kakoune-lsp/kakoune-lsp) with
+  no other configuration.
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
   installation).
 * BBEdit [can be configured](https://github.com/artempyanykh/marksman/discussions/206#discussioncomment-5906423) to use Marksman as an LSP server for Markdown files.

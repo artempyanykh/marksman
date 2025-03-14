@@ -97,6 +97,21 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
 * Sublime Text via [LSP-marksman][sublime-marksman] (automatic server
   installation).
 * BBEdit [can be configured](https://github.com/artempyanykh/marksman/discussions/206#discussioncomment-5906423) to use Marksman as an LSP server for Markdown files.
+* [Zed](https://zed.dev/) supports Marksman through it's integrated LSP support,
+  by addinging it as an available LSP for Markdown in Zed's `settings.json`:
+  
+  ```jsonc
+  // Zed settings
+  {
+    // ...
+    "languages": {
+      "Markdown": {
+        "language_servers": ["marksman"]
+      }
+    }
+  }
+
+  ```
 
 ## How to install
 

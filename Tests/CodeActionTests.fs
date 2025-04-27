@@ -5,6 +5,7 @@ open Xunit
 
 open Marksman.Helpers
 open Marksman.Misc
+open Marksman.Doc
 
 module CreateMissingFileTests =
     [<Fact>]
@@ -34,3 +35,44 @@ module CreateMissingFileTests =
             CodeActions.createMissingFile (Range.Mk(0, 3, 0, 3)) caCtx doc2 folder
 
         Assert.Equal(None, ca)
+
+module LinkToReferenceTests =
+    [<Fact>]
+    let shouldConvertWhenReferenceExits () =
+        let doc =
+            FakeDoc.Mk(
+                [|
+                    "[link][ref]"
+                    "[inline](https://link/)"
+                    ""
+                    "[ref]: https://link/"
+                |],
+                path = "doc.md"
+            )
+
+        let caCtx = { Diagnostics = [||]; Only = None; TriggerKind = None }
+
+        let ca = CodeActions.linkToReference (Range.Mk(1, 4, 1, 4)) caCtx doc
+
+        let expected =
+            Some {
+                Title = "Replace link with reference `ref`"
+                Kind = Some CodeActionKind.RefactorRewrite
+                Command = None
+                Data = None
+                Diagnostics = None
+                Disabled = None
+                IsPreferred = None
+                Edit =
+                    Some {
+                        DocumentChanges = None
+                        Changes =
+                            Some
+                                Map[Doc.uri doc,
+                                    [|
+                                        { Range = Range.Mk(1, 0, 1, 23); NewText = "[inline][ref]" }
+                                    |]]
+                    }
+            }
+
+        Assert.Equivalent(expected, ca)

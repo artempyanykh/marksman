@@ -26,6 +26,7 @@
         <Compile Include="StateTests.fs" />
         <Compile Include="ServerTests.fs" />
         <Compile Include="PathsTests.fs" />
+        <Compile Include="AstTests.fs" />
         <Compile Include="ConnTest.fs" />
         <Compile Include="MMapTests.fs" />
         <Compile Include="LensesTests.fs" />

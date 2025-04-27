@@ -76,3 +76,51 @@ module LinkToReferenceTests =
             }
 
         Assert.Equivalent(expected, ca)
+
+    [<Fact>]
+    let shouldCreateWhenReferenceDoesNotExist () =
+        let doc =
+            FakeDoc.Mk(
+                [|
+                    "[link][ref]"
+                    "[inline Link_Thing](https://link/)"
+                    ""
+                    "[ref]: https://other/"
+                |],
+                path = "doc.md"
+            )
+
+        let caCtx = { Diagnostics = [||]; Only = None; TriggerKind = None }
+
+        let ca = CodeActions.linkToReference (Range.Mk(1, 4, 1, 4)) caCtx doc
+
+        let expected =
+            Some {
+                Title = "Convert link to new reference `inline-link-thing`"
+                Kind = Some CodeActionKind.RefactorRewrite
+                Command = None
+                Data = None
+                Diagnostics = None
+                Disabled = None
+                IsPreferred = None
+                Edit =
+                    Some {
+                        DocumentChanges = None
+                        Changes =
+                            Some
+                                Map[Doc.uri doc,
+                                    [|
+                                        {
+                                            Range = Range.Mk(1, 0,
+                                            1, 34)
+                                            NewText = "[inline Link_Thing][inline-link-thing]"
+                                        }
+                                        {
+                                            Range = Range.Mk(5, 0, 6, 34)
+                                            NewText = "[inline-link-thing]: https://link/"
+                                        }
+                                    |]]
+                    }
+            }
+
+        Assert.Equivalent(expected, ca)

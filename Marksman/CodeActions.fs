@@ -189,48 +189,45 @@ let linkToReference (range: Range) (context: CodeActionContext) (doc: Doc) : Cod
 
     let getNonExistingRefAction (link: Node<MdLink>) : CodeAction option =
         match link.data with
-        | MdLink.IL(_, url, title) ->
-            match title with
-            | Some(Value = t) ->
-                let label =
-                    t.text
-                    |> String.toLower
-                    |> String.replace " " "-"
-                    |> String.replace "_" "-"
-                    |> String.replace "." "-"
+        | MdLink.IL(text, url, title) ->
+            let label =
+                text.text
+                |> String.toLower
+                |> String.replace " " "-"
+                |> String.replace "_" "-"
+                |> String.replace "." "-"
 
-                let refText = $"[{label}]: {url.Value.text}"
-                (* a new line at the end of the doc's text *)
-                let refRange =
-                    let text = Doc.text doc
-                    let line = text.lineMap.NumLines + 1
-                    Range.Mk(line, 0, line + 1, refText.Length)
+            let refText = $"[{label}]: {url.Value.text}"
 
-                Some {
-                    Data = None
-                    Disabled = None
-                    IsPreferred = None
-                    Command = None
-                    Title = $"Convert link to new reference {label}"
-                    Kind = Some CodeActionKind.RefactorRewrite
-                    Diagnostics = None
-                    Edit =
-                        Some {
-                            DocumentChanges = None
-                            Changes =
-                                Some
-                                    Map[Doc.uri doc,
-                                        [|
-                                            {
-                                                NewText = $"[{title.Value.text}][{label}]"
-                                                Range = Node.range link
-                                            }
-                                            { NewText = refText; Range = refRange }
-                                        |]]
-                        }
-                }
-            | None -> None
+            (* a new line at the end of the doc's text *)
+            let refRange =
+                let text = Doc.text doc
+                let line = text.lineMap.NumLines + 1
+                Range.Mk(line, 0, line + 1, refText.Length)
 
+            Some {
+                Data = None
+                Disabled = None
+                IsPreferred = None
+                Command = None
+                Title = $"Convert link to new reference `{label}`"
+                Kind = Some CodeActionKind.RefactorRewrite
+                Diagnostics = None
+                Edit =
+                    Some {
+                        DocumentChanges = None
+                        Changes =
+                            Some
+                                Map[Doc.uri doc,
+                                    [|
+                                        {
+                                            Range = Node.range link
+                                            NewText = $"[{text.text}][{label}]"
+                                        }
+                                        { Range = refRange; NewText = refText }
+                                    |]]
+                    }
+            }
         | _ -> None
 
     let hasUrl (url: UrlEncodedNode) (x: Node<MdLinkDef>) = url.text.Equals(x.data.url.text)

@@ -224,7 +224,6 @@ let linkToReference (range: Range) (context: CodeActionContext) (doc: Doc) : Cod
 
     (* get the markdown link at the given range *)
     doc.Index.mdLinks
-    |> Seq.filter (fun x -> x.data.IsIL)
     |> Seq.tryFind (fun x ->
         let range = Node.range x
         range.Start <= range.Start && range.End >= range.End)

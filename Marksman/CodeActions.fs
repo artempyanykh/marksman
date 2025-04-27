@@ -9,6 +9,7 @@ open Ionide.LanguageServerProtocol.Logging
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
+open Marksman.Cst
 open Marksman.Doc
 open Marksman.Index
 open Marksman.Folder
@@ -107,7 +108,6 @@ let tableOfContentsInner (doc: Doc) : DocumentAction option =
 
     | _ -> None
 
-
 let tableOfContents
     (_range: Range)
     (_context: CodeActionContext)
@@ -158,3 +158,97 @@ let createMissingFile
         // create the file
         { name = $"Create `{filename}`"; newFileUri = uri }
     }
+
+let linkToReference
+    (range: Range)
+    (context: CodeActionContext)
+    (doc: Doc)
+    : CodeAction option =
+        let getExistingRefAction
+            (link: Node<MdLink>, linkDef: Node<MdLinkDef>)
+            : CodeAction option =
+            let title =  "Replace link with reference #{label}"
+            let newText = linkDef.data.url.text
+            let edit = Node.range link
+
+            Some {
+                Data = None;
+                Disabled = None;
+                IsPreferred = None
+                Command = None;
+                Title =title;
+                Kind = Some CodeActionKind.RefactorRewrite;
+                Diagnostics = None;
+                Edit = Some {
+                    DocumentChanges = None;
+                    Changes = Some Map[Doc.uri doc, [|
+                        {
+                            NewText = newText;
+                            Range = edit
+                        }
+                    |]];
+                }
+            }
+
+        let getNonExistingRefAction (link: Node<MdLink>) : CodeAction option =
+            match link.data with
+                | MdLink.IL(_, url,title) ->
+                    let label = (* convert text to dash case *)
+                        title.Value.text
+                        |> String.toLower
+                        |> String.replace " " "-"
+                        |> String.replace "_" "-"
+                        |> String.replace "." "-"
+                    let refText = $"[{label}]: {url.Value.text}";
+                    (* a new line at the end of the doc's text *)
+                    let refRange =
+                        let text = Doc.text doc
+                        let line = text.lineMap.NumLines + 1
+                        Range.Mk(line, 0, line + 1, refText.Length)
+                    Some {
+                        Data = None;
+                        Disabled = None;
+                        IsPreferred = None
+                        Command = None;
+                        Title = $"Convert link to new reference {label}";
+                        Kind = Some CodeActionKind.RefactorRewrite;
+                        Diagnostics = None;
+                        Edit = Some {
+                            DocumentChanges = None;
+                            Changes = Some Map[Doc.uri doc, [|
+                                {
+                                    NewText = $"[{title.Value.text}][{label}]";
+                                    Range = Node.range link
+                                };
+                                {
+                                    NewText = refText;
+                                    Range = refRange
+                                }
+                            |]];
+                        }
+                    }
+                | _ -> None
+
+        (* get the markdown link at the given range *)
+        doc.Index.mdLinks
+        |> Seq.filter(fun x -> x.data.IsIL)
+        |> Seq.tryFind (fun x ->
+            let range = Node.range x
+            range.Start <= range.Start && range.End >= range.End
+        )
+        |> Option.bind (fun link ->
+            let linkDef =
+                doc.Index.linkDefs
+               |> Seq.tryFind (
+               fun x ->
+                   match link.data with
+                       | MdLink.IL(url = u) ->
+                           u.Value.text.Equals(x.data.url.text)
+                       | (_) -> false)
+            match linkDef with
+                | Some (def) -> getExistingRefAction (link, def)
+                | None -> getNonExistingRefAction link
+            )
+
+
+

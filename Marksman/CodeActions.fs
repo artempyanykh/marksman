@@ -222,12 +222,7 @@ let linkToReference (range: Range) (context: CodeActionContext) (doc: Doc) : Cod
             }
         | _ -> None
 
-    (* get the markdown link at the given range *)
-    doc.Index.mdLinks
-    |> Seq.tryFind (fun x ->
-        let range = Node.range x
-        range.Start <= range.Start && range.End >= range.End)
-    |> Option.bind (fun link ->
+    let getAction (link: Node<MdLink>) : CodeAction option =
         let linkDef =
             doc.Index.linkDefs
             |> Seq.tryFind (fun x ->
@@ -237,4 +232,12 @@ let linkToReference (range: Range) (context: CodeActionContext) (doc: Doc) : Cod
 
         match linkDef with
         | Some(def) -> getExistingRefAction (link, def)
-        | None -> getNonExistingRefAction link)
+        | None -> getNonExistingRefAction link
+
+    let isInRange (range: Range) token =
+        token.range.Start >= range.Start && token.range.End <= range.End
+
+    (* get the markdown link at the given range *)
+    doc.Index.mdLinks
+    |> Seq.tryFind (isInRange range)
+    |> Option.bind getAction

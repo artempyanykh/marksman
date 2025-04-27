@@ -126,6 +126,7 @@ module TextSync =
 type Config = {
     caTocEnable: option<bool>
     caCreateMissingFileEnable: option<bool>
+    caLinkToReferenceEnable: option<bool>
     coreMarkdownFileExtensions: option<array<string>>
     coreMarkdownGlfmHeadingIdsEnable: option<bool>
     coreTextSync: option<TextSync>
@@ -139,6 +140,7 @@ type Config = {
     static member Default = {
         caTocEnable = Some true
         caCreateMissingFileEnable = Some true
+        caLinkToReferenceEnable = Some true
         coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
         coreMarkdownGlfmHeadingIdsEnable = Some true
         coreTextSync = Some Full
@@ -152,6 +154,7 @@ type Config = {
     static member Empty = {
         caTocEnable = None
         caCreateMissingFileEnable = None
+        caLinkToReferenceEnable = None
         coreMarkdownFileExtensions = None
         coreMarkdownGlfmHeadingIdsEnable = None
         coreTextSync = None
@@ -165,6 +168,11 @@ type Config = {
     member this.CaTocEnable() =
         this.caTocEnable
         |> Option.orElse Config.Default.caTocEnable
+        |> Option.get
+
+    member this.CaLinkToReferenceEnable() =
+        this.caLinkToReferenceEnable
+        |> Option.orElse Config.Default.caLinkToReferenceEnable
         |> Option.get
 
     member this.CaCreateMissingFileEnable() =
@@ -223,6 +231,9 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         let! caCreateMissingFileEnable =
             getFromTableOpt<bool> table [] [ "code_action"; "create_missing_file"; "enable" ]
 
+        let! caLinkToReferenceEnable =
+            getFromTableOpt<bool> table [] [ "code_action"; "link_to_reference"; "enable" ]
+
         let! coreMarkdownFileExtensions =
             getFromTableOpt<array<string>> table [] [ "core"; "markdown"; "file_extensions" ]
 
@@ -263,6 +274,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         {
             caTocEnable = caTocEnable
             caCreateMissingFileEnable = caCreateMissingFileEnable
+            caLinkToReferenceEnable = caLinkToReferenceEnable
             coreMarkdownFileExtensions = coreMarkdownFileExtensions
             coreMarkdownGlfmHeadingIdsEnable = coreMarkdownGlfmHeadingIdsEnable
             coreTextSync = coreTextSync
@@ -279,6 +291,9 @@ module Config =
 
     let merge hi low = {
         caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
+        caLinkToReferenceEnable =
+            hi.caLinkToReferenceEnable
+            |> Option.orElse low.caLinkToReferenceEnable
         caCreateMissingFileEnable =
             hi.caCreateMissingFileEnable
             |> Option.orElse low.caCreateMissingFileEnable

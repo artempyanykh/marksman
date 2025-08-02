@@ -51,15 +51,7 @@ for wiki-links to detect broken references and duplicate/ambiguous headings.
     * via [nvim-lspconfig][nvim-marksman],
     * via [CoC-marksman][coc-marksman].
 * Vim:
-    * via [ale](ale) - will support Marksman out-of-the-box once [PR](https://github.com/dense-analysis/ale/pull/4565) is merged; in the meantime...
-
-      Example config (add the following to your `~/.vim/after/ftplugin/markdown.vim`):
-
-      ```viml
-      if exists('g:loaded_ale')
-        call ale#linter#Define('markdown', { 'name': 'marksman', 'lsp': 'stdio', 'executable': 'marksman', 'command': '%e server', 'initialization_options': {} })
-      end
-      ```
+    * via [ale](ale) - Ale has built-in support for Marksman
 
     * via [lsp](lsp)
 

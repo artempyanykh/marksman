@@ -134,3 +134,24 @@ let issue_218 () =
         GlobMatcher.ignores glob "zap.fooo" |> Assert.False
         // TN
         GlobMatcher.ignores glob "zap.foos" |> Assert.False
+
+[<Fact>]
+let issue_428 () =
+    let root = "/Users/john/notes"
+    let patterns =
+        [| "a/**"
+           "!a/b/"
+           "!a/b/c/"
+           "!a/b/c/**"
+           "d/**" |]
+    let glob = GlobMatcher.mk root patterns
+    let ignored_1 = "/Users/john/notes/a/private/file.md"
+    let ignored_2 = "/Users/john/notes/a/file.md"
+    let ignored_3 = "/Users/john/notes/a/b/file.md"
+    let ignored_4 = "/Users/john/notes/d/file.md"
+    let notIgnored = "/Users/john/notes/a/b/c/file.md"
+    Assert.True(GlobMatcher.ignores glob ignored_1)
+    Assert.True(GlobMatcher.ignores glob ignored_2)
+    Assert.True(GlobMatcher.ignores glob ignored_3)
+    Assert.True(GlobMatcher.ignores glob ignored_4)
+    Assert.False(GlobMatcher.ignores glob notIgnored)

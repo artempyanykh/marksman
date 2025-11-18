@@ -254,7 +254,7 @@ module Folder =
 
         if Directory.Exists(root) then
             let markerFiles = [| ".marksman.toml" |]
-            let markerDirs = [| ".git"; ".hg"; ".svn" |]
+            let markerDirs = [| ".git"; ".hg"; ".svn"; ".jj" |]
 
             let hasMarkerFile () =
                 Array.exists (fun marker -> File.Exists(Path.Join(root, marker))) markerFiles

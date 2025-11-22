@@ -77,20 +77,19 @@ let main _ =
     // ReferenceResolution().findRefsTime()
     BenchmarkRunner.Run<ReferenceResolution>() |> ignore
     0
-// $ dotnet run -c Release --project Benchmarks/Benchmarks.fsproj
-// BenchmarkDotNet=v0.13.5, OS=macOS Ventura 13.3.1 (22E261) [Darwin 22.4.0]
-// BenchmarkDotNet v0.14.0, macOS Sonoma 14.6.1 (23G93) [Darwin 23.6.0]
+// $ make bench
+// BenchmarkDotNet v0.14.0, macOS Sequoia 15.6.1 (24G90) [Darwin 24.6.0]
 // Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores
-// .NET SDK 8.0.402
-//   [Host]     : .NET 8.0.8 (8.0.824.36612), Arm64 RyuJIT AdvSIMD DEBUG
-//   DefaultJob : .NET 8.0.8 (8.0.824.36612), Arm64 RyuJIT AdvSIMD
-//
-//
-// | Method       | FolderSize | Mean       | Error     | StdDev     |
-// |------------- |----------- |-----------:|----------:|-----------:|
-// | gotoDefTime  | 10         |   1.683 us | 0.0171 us |  0.0160 us |
-// | findRefsTime | 10         |  10.410 us | 0.1307 us |  0.1223 us |
-// | gotoDefTime  | 50         |   2.428 us | 0.0377 us |  0.0334 us |
-// | findRefsTime | 50         |  58.423 us | 1.0584 us |  0.9901 us |
-// | gotoDefTime  | 250        |   3.247 us | 0.0379 us |  0.0355 us |
-// | findRefsTime | 250        | 388.914 us | 7.6202 us | 11.1697 us |
+// .NET SDK 9.0.100
+//   [Host]     : .NET 9.0.0 (9.0.24.52809), Arm64 RyuJIT AdvSIMD DEBUG
+//   DefaultJob : .NET 9.0.0 (9.0.24.52809), Arm64 RyuJIT AdvSIMD
+
+
+// | Method       | FolderSize | Mean       | Error     | StdDev    |
+// |------------- |----------- |-----------:|----------:|----------:|
+// | gotoDefTime  | 10         |   1.565 us | 0.0179 us | 0.0150 us |
+// | findRefsTime | 10         |   9.587 us | 0.1863 us | 0.2788 us |
+// | gotoDefTime  | 50         |   2.455 us | 0.0243 us | 0.0203 us |
+// | findRefsTime | 50         |  50.685 us | 0.9987 us | 0.8854 us |
+// | gotoDefTime  | 250        |   2.925 us | 0.0109 us | 0.0097 us |
+// | findRefsTime | 250        | 339.520 us | 6.7119 us | 5.9500 us |

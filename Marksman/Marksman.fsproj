@@ -65,7 +65,7 @@
         <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->
         <PackageReference Include="Serilog" Version="2.11.0"/>
         <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
-        <PackageReference Include="Tomlyn" Version="0.17.0"/>
+        <PackageReference Include="Tomlyn" Version="0.19.0" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\LanguageServerProtocol\LanguageServerProtocol.fsproj"/>

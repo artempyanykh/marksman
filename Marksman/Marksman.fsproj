@@ -59,7 +59,7 @@
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="FSharp.SystemCommandLine" Version="0.13.0-beta4"/>
-        <PackageReference Include="FSharpPlus" Version="1.6.1"/>
+        <PackageReference Include="FSharpPlus" Version="1.8.0" />
         <PackageReference Include="Glob" Version="1.1.9"/>
         <PackageReference Include="Markdig" Version="0.43.0" />
         <!--        <PackageReference Include="Ionide.LanguageServerProtocol" Version="0.3.1" />-->

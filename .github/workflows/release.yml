@@ -7,7 +7,7 @@ on:
         required: true
 jobs:
   build:
-    name: Build the release for ${{ matrix.os.runner }}
+    name: Build the release for ${{ matrix.os.runner }} (${{ matrix.os.exe }})
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
@@ -19,8 +19,14 @@ jobs:
             exe: marksman-linux-x64
             task: publishTo RID=linux-x64
           - runner: ubuntu-latest
+            exe: marksman-linux-musl-x64
+            task: publishTo RID=linux-musl-x64
+          - runner: ubuntu-latest
             exe: marksman-linux-arm64
             task: publishTo RID=linux-arm64
+          - runner: ubuntu-latest
+            exe: marksman-linux-musl-arm64
+            task: publishTo RID=linux-musl-arm64
           - runner: macos-latest
             exe: marksman
             task: macosUniversalBinary
@@ -38,11 +44,12 @@ jobs:
         shell: python
         run: |
           import os
-          if ("${{ matrix.os.exe }}" == "marksman-linux-x64" or
-             "${{ matrix.os.exe }}" == "marksman-linux-arm64"):
+          if ("${{ matrix.os.exe }}" != "marksman" and
+             "${{ matrix.os.exe }}" != "marksman.exe"
+          ):
             os.rename("out/marksman", "out/${{ matrix.os.exe }}")
       - name: Upload the binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os.exe }}
           path: out/${{ matrix.os.exe }}
@@ -69,7 +76,7 @@ jobs:
     steps:
       - id: download
         name: Download the release binary
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.os.exe }}
       - name: Rename the binary

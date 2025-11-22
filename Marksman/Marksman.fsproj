@@ -4,7 +4,7 @@
         <OutputType>Exe</OutputType>
         <AssemblyName>marksman</AssemblyName>
         <VersionPrefix>1.0.0</VersionPrefix>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net9.0</TargetFramework>
     </PropertyGroup>
     <Target Name="Version" BeforeTargets="BeforeBuild">
         <Exec Command="git describe --always --dirty" ConsoleToMSBuild="true" Condition="'$(VersionString)'==''">

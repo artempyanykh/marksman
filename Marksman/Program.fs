@@ -70,24 +70,25 @@ let startLSP (args: int * bool) : int =
 [<EntryPoint>]
 let main args =
     let verbosity =
-        Input.Option([ "--verbose"; "-v" ], 2, "Set logging verbosity level")
+        Input.option "--verbose"
+        |> Input.alias "-v"
+        |> Input.defaultValue 2
+        |> Input.desc "Set logging verbosity level"
 
     let waitForDebugger =
-        Input.Option(
-            [ "--wait-for-debugger" ],
-            false,
-            "Wait for debugger to attach before running the program"
-        )
+        Input.option "--wait-for-debugger"
+        |> Input.defaultValue false
+        |> Input.desc "Wait for debugger to attach before running the program"
 
     let lspCommand =
         command "server" {
             description "Start LSP server on stdin/stdout"
             inputs (verbosity, waitForDebugger)
-            setHandler startLSP
+            setAction startLSP
         }
 
     rootCommand args {
         description "Marksman is a language server for Markdown"
-        setHandler (fun () -> startLSP (2, false))
+        setAction (fun () -> startLSP (2, false))
         addCommand lspCommand
     }

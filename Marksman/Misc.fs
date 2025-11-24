@@ -68,7 +68,7 @@ type String with
 
                 chunkState <- 1
 
-                sb <- sb.Append(Char.ToLower(char))
+                sb <- sb.Append(char)
             else if chunkState = 1 then
                 chunkState <- 2
 

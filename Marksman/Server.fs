@@ -955,8 +955,15 @@ type MarksmanServer(client: MarksmanClient) =
                     else
                         [||]
 
+                let linkToReferenceAction =
+                    if config.CaLinkToReferenceEnable() then
+                        CodeActions.linkToReference opts.Range opts.Context doc
+                        |> Option.toArray
+                    else
+                        [||]
+
                 let codeActions: TextDocumentCodeActionResult =
-                    Array.concat [| tocAction; createMissingFileAction |]
+                    Array.concat [| tocAction; createMissingFileAction; linkToReferenceAction |]
                     |> Array.map U2.Second
 
                 Mutation.output (LspResult.success (Some codeActions))

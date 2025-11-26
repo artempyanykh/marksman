@@ -9,6 +9,7 @@ open Ionide.LanguageServerProtocol.Logging
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
+open Marksman.Cst
 open Marksman.Doc
 open Marksman.Index
 open Marksman.Folder
@@ -107,7 +108,6 @@ let tableOfContentsInner (doc: Doc) : DocumentAction option =
 
     | _ -> None
 
-
 let tableOfContents
     (_range: Range)
     (_context: CodeActionContext)
@@ -158,3 +158,101 @@ let createMissingFile
         // create the file
         { name = $"Create `{filename}`"; newFileUri = uri }
     }
+
+let linkToReference (range: Range) (context: CodeActionContext) (doc: Doc) : CodeAction option =
+    let getExistingRefAction (link: Node<MdLink>, linkDef: Node<MdLinkDef>) : CodeAction option =
+        match link.data with
+        | MdLink.IL(text, _, _) ->
+            Some {
+                Title = $"Replace link with reference `{linkDef.data.label.text}`"
+                Kind = Some CodeActionKind.RefactorRewrite
+                Command = None
+                Data = None
+                Diagnostics = None
+                Disabled = None
+                IsPreferred = None
+                Edit =
+                    Some {
+                        DocumentChanges = None
+                        Changes =
+                            Some
+                                Map[Doc.uri doc,
+                                    [|
+                                        {
+                                            Range = Node.range link
+                                            NewText = $"[{text.text}][{linkDef.data.label.text}]"
+                                        }
+                                    |]]
+                    }
+            }
+        | _ -> None
+
+    let getNonExistingRefAction (link: Node<MdLink>) : CodeAction option =
+        match link.data with
+        | MdLink.IL(text, url, title) ->
+            let label =
+                text.text
+                |> String.toLower
+                |> String.replace " " "-"
+                |> String.replace "_" "-"
+                |> String.replace "." "-"
+
+            let refText = $"[{label}]: {url.Value.text}"
+
+            (* a new line at the end of the doc's text *)
+            let refRange =
+                let text = Doc.text doc
+                let line = text.lineMap.NumLines + 1
+                Range.Mk(line, 0, line + 1, refText.Length)
+
+            Some {
+                Data = None
+                Disabled = None
+                IsPreferred = None
+                Command = None
+                Title = $"Convert link to new reference `{label}`"
+                Kind = Some CodeActionKind.RefactorRewrite
+                Diagnostics = None
+                Edit =
+                    Some {
+                        DocumentChanges = None
+                        Changes =
+                            Some
+                                Map[Doc.uri doc,
+                                    [|
+                                        {
+                                            Range = Node.range link
+                                            NewText = $"[{text.text}][{label}]"
+                                        }
+                                        { Range = refRange; NewText = refText }
+                                    |]]
+                    }
+            }
+        | _ -> None
+
+    let hasUrl (url: UrlEncodedNode) (x: Node<MdLinkDef>) = url.text.Equals(x.data.url.text)
+
+    let getAction (link: Node<MdLink>) : CodeAction option =
+        match link.data with
+        | MdLink.IL(_, Some(url), _) ->
+            let linkDef = doc.Index.linkDefs |> Seq.tryFind (hasUrl url)
+
+            match linkDef with
+            | Some(def) -> getExistingRefAction (link, def)
+            | None -> getNonExistingRefAction link
+        | _ -> None
+
+    let isInRange (range: Range) (node: Node<MdLink>) =
+        range.Start.Line >= node.range.Start.Line
+        && range.End.Line <= node.range.End.Line
+
+    let isInlineLink (node: Node<MdLink>) =
+        match node.data with
+        | MdLink.IL(_, _, _) -> true
+        | _ -> false
+
+    (* get the markdown link at the given range *)
+    doc.Index.mdLinks
+    |> Seq.filter (isInRange range)
+    |> Seq.tryFind isInlineLink
+    |> Option.bind getAction

@@ -68,8 +68,14 @@ jobs:
             exe: marksman-linux-x64
             release_exe: marksman-linux-x64
           - runner: ubuntu-latest
+            exe: marksman-linux-musl-x64
+            release_exe: marksman-linux-musl-x64
+          - runner: ubuntu-latest
             exe: marksman-linux-arm64
             release_exe: marksman-linux-arm64
+          - runner: ubuntu-latest
+            exe: marksman-linux-musl-arm64
+            release_exe: marksman-linux-musl-arm64
           - runner: macos-latest
             exe: marksman
             release_exe: marksman-macos

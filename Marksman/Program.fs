@@ -52,7 +52,9 @@ let startLSP (args: int * bool) : int =
 
 
     let version = getAssemblyVersion ()
-    logger.info (Log.setMessage $"Starting Marksman LSP server (version: {version})")
+    let os = System.Runtime.InteropServices.RuntimeInformation.OSDescription
+    let arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture
+    logger.info (Log.setMessage $"Starting Marksman LSP server (version: {version}, OS: {os}, Arch: {arch})")
 
     let requestHandlings = Server.defaultRequestHandlings ()
 

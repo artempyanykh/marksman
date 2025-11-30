@@ -329,6 +329,7 @@ type FullDifference<'A> when 'A: comparison = {
 
 let getAssemblyVersion () : string =
     let assembly = Assembly.GetExecutingAssembly()
+
     assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
     |> Option.ofObj
     |> Option.map (fun attr -> attr.InformationalVersion)

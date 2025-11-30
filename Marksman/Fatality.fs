@@ -1,6 +1,5 @@
 module Marksman.Fatality
 
-open System.Reflection
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
@@ -8,13 +7,7 @@ open Marksman.State
 open Marksman.Workspace
 
 let abort (stateOpt: Option<State>) (ex: exn) =
-    let marksmanAssembly = typeof<State>.Assembly
-
-    let marksmanVersion =
-        marksmanAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-        |> Option.ofObj
-        |> Option.map (fun attr -> attr.InformationalVersion)
-        |> Option.defaultValue (marksmanAssembly.GetName().Version.ToString())
+    let marksmanVersion = getAssemblyVersion ()
 
     let clientDebugOut ({ Name = name; Version = versionOpt }: ClientInfo) =
         eprintf $"Client: {name}"

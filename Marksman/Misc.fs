@@ -2,6 +2,7 @@ module Marksman.Misc
 
 open System
 open System.IO
+open System.Reflection
 open System.Runtime.InteropServices
 open System.Text
 open System.Text.RegularExpressions
@@ -325,3 +326,10 @@ type FullDifference<'A> when 'A: comparison = {
     changed: Set<'A>
     unchanged: Set<'A>
 }
+
+let getAssemblyVersion () : string =
+    let assembly = Assembly.GetExecutingAssembly()
+    assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+    |> Option.ofObj
+    |> Option.map (fun attr -> attr.InformationalVersion)
+    |> Option.defaultValue (assembly.GetName().Version.ToString())

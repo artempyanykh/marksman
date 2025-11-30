@@ -10,6 +10,7 @@ open Serilog
 module MS = Marksman.Server
 
 open FSharp.SystemCommandLine
+open Marksman.Misc
 
 let configureLogging (verbosity: int) : unit =
     let loggerConfig = LoggerConfiguration()
@@ -50,7 +51,8 @@ let startLSP (args: int * bool) : int =
             Thread.Sleep(1000)
 
 
-    logger.info (Log.setMessage "Starting Marksman LSP server")
+    let version = getAssemblyVersion ()
+    logger.info (Log.setMessage $"Starting Marksman LSP server (version: {version})")
 
     let requestHandlings = Server.defaultRequestHandlings ()
 

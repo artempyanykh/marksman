@@ -1,5 +1,6 @@
 module Marksman.Fatality
 
+open System.Reflection
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
@@ -7,7 +8,13 @@ open Marksman.State
 open Marksman.Workspace
 
 let abort (stateOpt: Option<State>) (ex: exn) =
-    let marksmanAssembly = typeof<State>.Assembly.GetName()
+    let marksmanAssembly = typeof<State>.Assembly
+
+    let marksmanVersion =
+        marksmanAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        |> Option.ofObj
+        |> Option.map (fun attr -> attr.InformationalVersion)
+        |> Option.defaultValue (marksmanAssembly.GetName().Version.ToString())
 
     let clientDebugOut ({ Name = name; Version = versionOpt }: ClientInfo) =
         eprintf $"Client: {name}"
@@ -35,7 +42,7 @@ let abort (stateOpt: Option<State>) (ex: exn) =
     eprintfn "Marksman encountered a fatal error"
     eprintfn "Please, report the error at https://github.com/artempyanykh/marksman/issues"
     eprintfn "---------------------------------------------------------------------------"
-    eprintfn $"Marksman version: {marksmanAssembly.Version}"
+    eprintfn $"Marksman version: {marksmanVersion}"
     eprintfn $"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}"
     eprintfn $"Arch: {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}"
     Option.iter stateDebugOut stateOpt

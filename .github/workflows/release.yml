@@ -35,6 +35,9 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Create release tag
+        run: |
+          git tag ${{ github.event.inputs.name }}
       - name: Setup dotnet
         uses: actions/setup-dotnet@v3
         with:

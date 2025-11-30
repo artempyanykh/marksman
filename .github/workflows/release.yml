@@ -32,6 +32,8 @@ jobs:
             task: macosUniversalBinary
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-tags: true
       - name: Setup dotnet
         uses: actions/setup-dotnet@v3
         with:

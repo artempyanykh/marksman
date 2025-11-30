@@ -56,6 +56,10 @@ type Doc = {
             | :? Doc as other -> (this :> IComparable<_>).CompareTo(other)
             | _ -> failwith $"Comparison with non-Doc type: {obj}"
 
+exception DocumentError of doc: RootedRelPath * cause: exn with
+    override this.Message =
+        $"Error while processing {RootedRelPath.filename this.doc}{Environment.NewLine}{this.cause.Message}"
+
 
 module Doc =
     open Marksman.Syms
@@ -63,16 +67,19 @@ module Doc =
     let logger = LogProvider.getLoggerByName "Doc"
 
     let mk parserSettings id version text =
-        let structure = Parser.parse parserSettings text
-        let index = Index.ofCst (Structure.concreteElements structure)
+        try
+            let structure = Parser.parse parserSettings text
+            let index = Index.ofCst (Structure.concreteElements structure)
 
-        {
-            id = id
-            version = version
-            text = text
-            structure = structure
-            index = index
-        }
+            {
+                id = id
+                version = version
+                text = text
+                structure = structure
+                index = index
+            }
+        with exn ->
+            raise (DocumentError(id.Path, exn))
 
     let id { id = id } = id
     let text doc = doc.text

@@ -83,6 +83,26 @@ let private lookupAsOpt =
 let private getFromTableOpt<'R> table revSeenPath remPath : Result<option<'R>, LookupError> =
     getFromTable table revSeenPath remPath |> lookupAsOpt
 
+let private nonNegativeIntArrayFromTableOpt
+    (table: TomlTable)
+    (revSeenPath: list<string>)
+    (path: list<string>)
+    : LookupResult<option<array<int>>> =
+    monad {
+        let! raw = getFromTableOpt<array<int64>> table revSeenPath path
+
+        match raw with
+        | None -> return None
+        | Some arr ->
+            let values = arr |> Array.map int
+
+            if values |> Array.exists (fun v -> v < 0) then
+                return! Error(WrongValue(path, arr, "expected non-negative integers"))
+            else
+                return Some values
+    }
+
+
 type ComplWikiStyle =
     /// Document title's slug, e.g. "A B C" -> "a-b-c"
     | TitleSlug
@@ -125,6 +145,7 @@ module TextSync =
 /// without lenses manageable.
 type Config = {
     caTocEnable: option<bool>
+    caTocInclude: option<array<int>>
     caCreateMissingFileEnable: option<bool>
     coreMarkdownFileExtensions: option<array<string>>
     coreMarkdownGlfmHeadingIdsEnable: option<bool>
@@ -138,6 +159,7 @@ type Config = {
 
     static member Default = {
         caTocEnable = Some true
+        caTocInclude = Some [| 1; 2; 3; 4; 5; 6 |]
         caCreateMissingFileEnable = Some true
         coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
         coreMarkdownGlfmHeadingIdsEnable = Some true
@@ -151,6 +173,7 @@ type Config = {
 
     static member Empty = {
         caTocEnable = None
+        caTocInclude = None
         caCreateMissingFileEnable = None
         coreMarkdownFileExtensions = None
         coreMarkdownGlfmHeadingIdsEnable = None
@@ -165,6 +188,11 @@ type Config = {
     member this.CaTocEnable() =
         this.caTocEnable
         |> Option.orElse Config.Default.caTocEnable
+        |> Option.get
+
+    member this.CaTocInclude() =
+        this.caTocInclude
+        |> Option.orElse Config.Default.caTocInclude
         |> Option.get
 
     member this.CaCreateMissingFileEnable() =
@@ -220,6 +248,10 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
 
+        let! caTocInclude =
+            nonNegativeIntArrayFromTableOpt table [] [ "code_action"; "toc"; "include" ]
+
+
         let! caCreateMissingFileEnable =
             getFromTableOpt<bool> table [] [ "code_action"; "create_missing_file"; "enable" ]
 
@@ -262,6 +294,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
 
         {
             caTocEnable = caTocEnable
+            caTocInclude = caTocInclude
             caCreateMissingFileEnable = caCreateMissingFileEnable
             coreMarkdownFileExtensions = coreMarkdownFileExtensions
             coreMarkdownGlfmHeadingIdsEnable = coreMarkdownGlfmHeadingIdsEnable
@@ -279,6 +312,7 @@ module Config =
 
     let merge hi low = {
         caTocEnable = hi.caTocEnable |> Option.orElse low.caTocEnable
+        caTocInclude = hi.caTocInclude |> Option.orElse low.caTocInclude
         caCreateMissingFileEnable =
             hi.caCreateMissingFileEnable
             |> Option.orElse low.caCreateMissingFileEnable

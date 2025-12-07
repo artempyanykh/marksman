@@ -44,6 +44,20 @@ toc.enable = false
 
     Assert.Equal(Some expected, actual)
 
+[<Fact>]
+let testParse_tocInclude () =
+    let content =
+        """
+[code_action]
+toc.include = [2, 3, 4]
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with caTocInclude = Some [| 2; 3; 4 |] }
+
+    Assert.Equal(Some expected, actual)
+
 
 [<Fact>]
 let testParse_3 () =
@@ -200,6 +214,17 @@ let testParse_broken_6 () =
         """
 [core]
 markdown.glfm_heading_ids.enable = -1
+"""
+
+    let actual = Config.tryParse content
+    Assert.Equal(None, actual)
+
+[<Fact>]
+let testParse_broken_tocInclude () =
+    let content =
+        """
+[code_action]
+toc.include = [1, -1]
 """
 
     let actual = Config.tryParse content

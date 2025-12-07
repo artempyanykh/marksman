@@ -5,8 +5,12 @@ open Xunit
 open Marksman.Helpers
 open Marksman.Toc
 open Marksman.Doc
+open Marksman.Config
 
 open type System.Environment
+
+// the option is guaranteed to be Some by construction, so we can use Option.get safely
+let includeAllLevels = Config.Default.caTocInclude |> Option.get
 
 module DetectToc =
     [<Fact>]
@@ -56,7 +60,8 @@ module CreateToc =
     let createToc () =
         let doc = FakeDoc.Mk [| "# T1"; "## T2" |]
 
-        let titles = TableOfContents.mk (Doc.index doc) |> Option.get
+        let titles =
+            TableOfContents.mk includeAllLevels (Doc.index doc) |> Option.get
 
         let expected = { entries = [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
 
@@ -75,7 +80,8 @@ module CreateToc =
                 "## T2"
             |]
 
-        let titles = TableOfContents.mk (Doc.index doc) |> Option.get
+        let titles =
+            TableOfContents.mk includeAllLevels (Doc.index doc) |> Option.get
 
         let expected = { entries = [| Entry.Mk(1, "T1"); Entry.Mk(2, "T2") |] }
 
@@ -148,7 +154,7 @@ module RenderToc =
         let doc = FakeDoc.Mk [| "# T1"; "## T2"; "### T3"; "## T4"; "### T5" |]
 
         let titles =
-            TableOfContents.mk (Doc.index doc)
+            TableOfContents.mk includeAllLevels (Doc.index doc)
             |> Option.get
             |> TableOfContents.render
 
@@ -161,6 +167,21 @@ module RenderToc =
             "    - [T5](#t5)"
             EndMarker
         |]
+
+        let expected = String.concat NewLine expectedLines
+
+        Assert.Equal(expected, titles)
+
+    [<Fact>]
+    let createToc_filteredLevels () =
+        let doc = FakeDoc.Mk [| "# T1"; "## T2"; "### T3"; "#### T4" |]
+
+        let titles =
+            TableOfContents.mk [| 2; 3 |] (Doc.index doc)
+            |> Option.get
+            |> TableOfContents.render
+
+        let expectedLines = [| StartMarker; "- [T2](#t2)"; "  - [T3](#t3)"; EndMarker |]
 
         let expected = String.concat NewLine expectedLines
 
@@ -185,7 +206,8 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContentsInner doc |> Option.get
+        let action =
+            CodeActions.tableOfContentsInner includeAllLevels doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
@@ -226,7 +248,8 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContentsInner doc |> Option.get
+        let action =
+            CodeActions.tableOfContentsInner includeAllLevels doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
@@ -266,7 +289,8 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContentsInner doc |> Option.get
+        let action =
+            CodeActions.tableOfContentsInner includeAllLevels doc |> Option.get
 
         let modifiedText = applyDocumentAction doc action
 
@@ -304,7 +328,9 @@ module DocumentEdit =
                     |# T2"
             )
 
-        let action = CodeActions.tableOfContentsInner doc |> Option.get
+        let action =
+            CodeActions.tableOfContentsInner includeAllLevels doc |> Option.get
+
         let modifiedText = applyDocumentAction doc action
 
         let expected =
@@ -332,7 +358,7 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContentsInner doc
+        let action = CodeActions.tableOfContentsInner includeAllLevels doc
 
         Assert.Equal(None, action)
 
@@ -350,6 +376,6 @@ module DocumentEdit =
 
         let doc = FakeDoc.Mk text
 
-        let action = CodeActions.tableOfContentsInner doc
+        let action = CodeActions.tableOfContentsInner includeAllLevels doc
 
         Assert.Equal(None, action)

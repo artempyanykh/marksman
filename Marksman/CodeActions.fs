@@ -16,6 +16,7 @@ open Marksman.Refs
 open Marksman.Toc
 open Marksman.Structure
 open Marksman.Syms
+open Marksman.Config
 
 let private logger = LogProvider.getLoggerByName "CodeActions"
 
@@ -35,8 +36,8 @@ let createFile newFileUri : WorkspaceEdit =
 
     { Changes = None; DocumentChanges = Some documentChanges }
 
-let tableOfContentsInner (doc: Doc) : DocumentAction option =
-    match TableOfContents.mk (Doc.index doc) with
+let tableOfContentsInner (includeLevels: array<int>) (doc: Doc) : DocumentAction option =
+    match TableOfContents.mk includeLevels (Doc.index doc) with
     | Some toc ->
         let rendered = TableOfContents.render toc
         let existingRange = TableOfContents.detect (Doc.text doc)
@@ -111,9 +112,11 @@ let tableOfContentsInner (doc: Doc) : DocumentAction option =
 let tableOfContents
     (_range: Range)
     (_context: CodeActionContext)
+    (config: Config)
     (doc: Doc)
     : DocumentAction option =
-    tableOfContentsInner doc
+    let includeLevels = config.CaTocInclude()
+    tableOfContentsInner includeLevels doc
 
 let createMissingFile
     (range: Range)

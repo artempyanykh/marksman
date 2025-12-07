@@ -932,7 +932,7 @@ type MarksmanServer(client: MarksmanClient) =
 
                 let tocAction =
                     if config.CaTocEnable() then
-                        CodeActions.tableOfContents opts.Range opts.Context doc
+                        CodeActions.tableOfContents opts.Range opts.Context config doc
                         |> Option.toArray
                         |> Array.map (fun ca ->
                             let wsEdit =

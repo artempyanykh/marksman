@@ -38,6 +38,8 @@ paranoid = false
 [code_action]
 # Enable/disable "Table of Contents" code action
 toc.enable = true
+# Heading levels to include when generating a Table of Contents
+toc.include = [1, 2, 3, 4, 5, 6]
 
 # Enable/disable "Create missing linked file" code action
 create_missing_file.enable = true

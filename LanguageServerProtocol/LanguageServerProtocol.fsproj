@@ -9,7 +9,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/ionide/LanguageServerProtocol</PackageProjectUrl>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <!-- FsLibLog.fs comes verbatim from

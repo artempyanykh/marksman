@@ -465,3 +465,36 @@ module RegressionTests =
         let content = "[][][]"
         let actual = scrapeString content
         checkInlineSnapshot actual []
+
+module MathBlockTests =
+    [<Fact>]
+    let math_block_should_not_parse_wikilinks () =
+        let content = """$$
+\begin{verbatim}
+[[nodiscard]]
+\end{verbatim}
+$$"""
+        let actual = scrapeString content
+        // Math block should not produce any wikilink elements
+        checkInlineSnapshot actual []
+
+    [<Fact>]
+    let inline_math_should_not_parse_wikilinks () =
+        let content = "Inline math: $[[x]]$ in text"
+        let actual = scrapeString content
+        // Inline math should not produce any wikilink elements
+        checkInlineSnapshot actual []
+
+    [<Fact>]
+    let math_and_regular_wikilink () =
+        let content = """$$
+[[in-math]]
+$$
+
+Regular [[valid-link]]"""
+        let actual = scrapeString content
+        // Only the regular wikilink should be detected, not the one in math block
+        checkInlineSnapshot actual [
+            "WL: [[valid-link]]; (4,8)-(4,22)"
+            "  doc=valid-link; (4,10)-(4,20)"
+        ]

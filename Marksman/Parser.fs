@@ -196,6 +196,7 @@ module Markdown =
             MarkdownPipelineBuilder()
                 .UsePreciseSourceLocation()
                 .UseYamlFrontMatter()
+                .UseMathematics()
 
         pipelineBuilder.InlineParsers.Insert(0, MarkdigPatches.PatchedLinkInlineParser())
         pipelineBuilder.InlineParsers.Insert(0, WikiLinkParser())

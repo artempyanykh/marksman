@@ -210,7 +210,9 @@ module Markdown =
             { Start = start; End = start }
         else
             let endInclusive = text.lineMap.FindPosition(span.End)
-            let endOffset = if Char.IsSurrogate(text.content, span.End) then 2 else 1
+
+            let endOffset =
+                if Char.IsHighSurrogate(text.content, span.End) then 2 else 1
 
             {
                 Start = start

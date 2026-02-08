@@ -466,14 +466,31 @@ module RegressionTests =
         let actual = scrapeString content
         checkInlineSnapshot actual []
 
+    [<Fact>]
+    let no453 () =
+        // Off-by-one in heading range when heading ends with emoji (surrogate pair)
+        let content = "## 45\n## 🚀"
+        let actual = scrapeString content
+
+        checkInlineSnapshot actual [
+            "H2: range=(0,0)-(0,5); scope=(0,0)-(1,0)"
+            "  text=`## 45`"
+            "  title=`45` @ (0,3)-(0,5)"
+            "H2: range=(1,0)-(1,5); scope=(1,0)-(2,0)"
+            "  text=`## 🚀`"
+            "  title=`🚀` @ (1,3)-(1,5)"
+        ]
+
 module MathBlockTests =
     [<Fact>]
     let math_block_should_not_parse_wikilinks () =
-        let content = """$$
+        let content =
+            """$$
 \begin{verbatim}
 [[nodiscard]]
 \end{verbatim}
 $$"""
+
         let actual = scrapeString content
         // Math block should not produce any wikilink elements
         checkInlineSnapshot actual []
@@ -487,11 +504,13 @@ $$"""
 
     [<Fact>]
     let math_and_regular_wikilink () =
-        let content = """$$
+        let content =
+            """$$
 [[in-math]]
 $$
 
 Regular [[valid-link]]"""
+
         let actual = scrapeString content
         // Only the regular wikilink should be detected, not the one in math block
         checkInlineSnapshot actual [

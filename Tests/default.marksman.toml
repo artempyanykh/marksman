@@ -34,6 +34,8 @@ incremental_references = false
 # For debugging only! Enables extra validation checks around
 # incremental state updates. SIGNIFICANTLY IMPACTS PERFORMANCE
 paranoid = false
+# Extra folders to include in link resolution (supports absolute and relative paths)
+# extra_folders = []
 
 [code_action]
 # Enable/disable "Table of Contents" code action

@@ -43,6 +43,9 @@ module Folder =
     val filterDocsByInternPath: InternPath -> Folder -> seq<Doc>
     val filterDocsByName: InternName -> Folder -> seq<Doc>
 
+    val extraFolderRoots: Folder -> AbsPath[]
+    val withExtraFolderRoots: AbsPath[] -> Folder -> Folder
+
     val oracle: Folder -> Conn.Oracle
     val conn: Folder -> Conn.Conn
     val syms: Folder -> MMap<DocId, Sym>

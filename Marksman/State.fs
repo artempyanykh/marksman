@@ -86,6 +86,14 @@ type ClientDescription = {
         }
         |> Option.defaultValue false
 
+    member this.SupportsDidChangeWatchedFiles: bool =
+        monad' {
+            let! ws = this.caps.Workspace
+            let! wf = ws.DidChangeWatchedFiles
+            return! wf.DynamicRegistration
+        }
+        |> Option.defaultValue false
+
     member this.PreferredTextSyncKind: Option<TextSync> =
         this.opts.preferredTextSyncKind
 

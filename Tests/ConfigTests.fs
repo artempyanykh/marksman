@@ -242,6 +242,55 @@ let testDefault () =
     Assert.Equal(Some Config.Default, parsed)
 
 [<Fact>]
+let testParse_extraFolders_empty () =
+    let content =
+        """
+[core]
+extra_folders = []
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with coreExtraFolders = Some [||] }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
+let testParse_extraFolders_values () =
+    let content =
+        """
+[core]
+extra_folders = ["/abs/path", "../rel/path"]
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = {
+        Config.Empty with
+            coreExtraFolders = Some [| "/abs/path"; "../rel/path" |]
+    }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
+let testMerge_extraFolders_priority () =
+    // folder-level takes priority over user-level
+    let folderConfig = { Config.Empty with coreExtraFolders = Some [| "/folder/extra" |] }
+    let userConfig = { Config.Empty with coreExtraFolders = Some [| "/user/extra" |] }
+    let merged = Config.merge folderConfig userConfig
+
+    Assert.Equal(Some [| "/folder/extra" |], merged.coreExtraFolders)
+
+[<Fact>]
+let testMerge_extraFolders_fallback () =
+    // if folder doesn't specify, fall through to user config
+    let folderConfig = Config.Empty
+    let userConfig = { Config.Empty with coreExtraFolders = Some [| "/user/extra" |] }
+    let merged = Config.merge folderConfig userConfig
+
+    Assert.Equal(Some [| "/user/extra" |], merged.coreExtraFolders)
+
+[<Fact>]
 let testDefault_titleVsCompletionStyle () =
     let content =
         """

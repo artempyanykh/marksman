@@ -161,7 +161,67 @@ module Dest =
         | Some(IntraRef(IntraSection _)) -> Implicit destDoc
         | _ -> failwith $"Link kind cannot be determined for {srcSym} symbol"
 
-    let tryResolveSym (folder: Folder) (doc: Doc) (srcSym: Sym) : seq<Dest> =
+    let private tryResolveSymInExtraFolder
+        (complStyle: ComplWikiStyle)
+        (srcDocId: DocId)
+        (srcSym: Sym)
+        (extraFolder: Folder)
+        : seq<Dest> =
+        match srcSym |> Sym.asRef with
+        | None -> Seq.empty
+        | Some(IntraRef _) -> Seq.empty
+        | Some(CrossRef crossRef) ->
+            let internName = InternName.mkUnchecked srcDocId crossRef.Doc
+            let detectFileLink = detectFileLink complStyle srcDocId srcSym
+            let detectDocLink = detectDocLink complStyle srcDocId srcSym
+
+            seq {
+                for destDoc in Folder.filterDocsByName internName extraFolder do
+                    match crossRef with
+                    | CrossDoc _ ->
+                        // Mirror Oracle.resolveInDoc logic for CrossDoc:
+                        // if there are titles, yield them; else yield Doc
+                        let defs =
+                            destDoc.Structure.Symbols
+                            |> Seq.choose Sym.asDef
+                            |> Seq.filter Def.isTitle
+                            |> Array.ofSeq
+
+                        let defs = if Array.isEmpty defs then [| Def.Doc |] else defs
+
+                        for def in defs do
+                            match def with
+                            | Def.Doc -> yield Dest.Doc(detectFileLink destDoc)
+                            | Def.Title _
+                            | Def.Header _ ->
+                                let docLink = detectDocLink destDoc
+
+                                yield!
+                                    destDoc.Structure
+                                    |> Structure.findConcreteForSymbol (Sym.Def def)
+                                    |> Seq.choose Cst.Element.asHeading
+                                    |> Seq.map (fun node -> Dest.Heading(docLink, node))
+                            | Def.LinkDef _ -> ()
+                    | CrossSection(_, section) ->
+                        let docLink = detectDocLink destDoc
+
+                        yield!
+                            destDoc.Structure.Symbols
+                            |> Seq.choose Sym.asDef
+                            |> Seq.filter (Def.isHeaderOrTitleWithId (Slug.toString section))
+                            |> Seq.collect (fun def ->
+                                destDoc.Structure
+                                |> Structure.findConcreteForSymbol (Sym.Def def)
+                                |> Seq.choose Cst.Element.asHeading
+                                |> Seq.map (fun node -> Dest.Heading(docLink, node)))
+            }
+
+    let tryResolveSym
+        (folder: Folder)
+        (extraFolders: seq<Folder>)
+        (doc: Doc)
+        (srcSym: Sym)
+        : seq<Dest> =
         let complStyle = (Folder.configOrDefault folder).ComplWikiStyle()
 
         let scopedSym = Sym.scopedToDoc doc.Id srcSym
@@ -170,38 +230,52 @@ module Dest =
         let detectFileLink = detectFileLink complStyle doc.Id srcSym
         let detectDocLink = detectDocLink complStyle doc.Id srcSym
 
-        seq {
-            for destScope, destSym in destSyms do
-                match destScope with
-                | Scope.Global -> ()
-                | Scope.Doc destDocId ->
-                    let destDoc = Folder.findDocById destDocId folder
+        let primaryResults =
+            seq {
+                for destScope, destSym in destSyms do
+                    match destScope with
+                    | Scope.Global -> ()
+                    | Scope.Doc destDocId ->
+                        let destDoc = Folder.findDocById destDocId folder
 
-                    match destSym with
-                    | Sym.Def Doc -> Dest.Doc(detectFileLink destDoc)
-                    | Sym.Def(Title _)
-                    | Sym.Def(Header _) ->
-                        let docLink = detectDocLink destDoc
+                        match destSym with
+                        | Sym.Def Doc -> Dest.Doc(detectFileLink destDoc)
+                        | Sym.Def(Title _)
+                        | Sym.Def(Header _) ->
+                            let docLink = detectDocLink destDoc
 
-                        yield!
-                            destDoc.Structure
-                            |> Structure.findConcreteForSymbol destSym
-                            |> Seq.choose Cst.Element.asHeading
-                            |> Seq.map (fun node -> Dest.Heading(docLink, node))
-                    | Sym.Def(LinkDef _) ->
-                        yield!
-                            destDoc.Structure
-                            |> Structure.findConcreteForSymbol destSym
-                            |> Seq.choose Cst.Element.asLinkDef
-                            |> Seq.map (fun node -> Dest.LinkDef(destDoc, node))
-                    | Sym.Ref _
-                    | Sym.Tag _ -> ()
-        }
+                            yield!
+                                destDoc.Structure
+                                |> Structure.findConcreteForSymbol destSym
+                                |> Seq.choose Cst.Element.asHeading
+                                |> Seq.map (fun node -> Dest.Heading(docLink, node))
+                        | Sym.Def(LinkDef _) ->
+                            yield!
+                                destDoc.Structure
+                                |> Structure.findConcreteForSymbol destSym
+                                |> Seq.choose Cst.Element.asLinkDef
+                                |> Seq.map (fun node -> Dest.LinkDef(destDoc, node))
+                        | Sym.Ref _
+                        | Sym.Tag _ -> ()
+            }
+            |> Array.ofSeq
 
-    let tryResolveElement (folder: Folder) (doc: Doc) (element: Cst.Element) : seq<Dest> =
+        if Array.isEmpty primaryResults then
+            // Fall back to cross-folder resolution
+            extraFolders
+            |> Seq.collect (tryResolveSymInExtraFolder complStyle doc.Id srcSym)
+        else
+            Seq.ofArray primaryResults
+
+    let tryResolveElement
+        (folder: Folder)
+        (extraFolders: seq<Folder>)
+        (doc: Doc)
+        (element: Cst.Element)
+        : seq<Dest> =
         match Doc.structure doc |> Structure.tryFindSymbolForConcrete element with
         | None -> Seq.empty
-        | Some sym -> tryResolveSym folder doc sym
+        | Some sym -> tryResolveSym folder extraFolders doc sym
 
     let private findTagRefs includeDecl folder srcDocId srcEl tag =
         let srcDoc = Folder.findDocById srcDocId folder
@@ -224,7 +298,7 @@ module Dest =
         let refs = refs |> Seq.filter (fun (d, e) -> d <> srcDoc || e <> srcEl)
         if includeDecl then Seq.append [ srcDoc, srcEl ] refs else refs
 
-    let private findDefRefs includeDecl folder inDocId srcEl def =
+    let private findDefRefs includeDecl folder (referencingFolders: seq<Folder>) inDocId srcEl def =
         let inDoc = Folder.findDocById inDocId folder
 
         let decls =
@@ -268,6 +342,19 @@ module Dest =
 
                 Seq.append [ Def.Doc ] headers, filter
 
+        // Determine the doc name (and optional section slug) for cross-folder reference matching.
+        // Doc/Title: match any CrossRef whose .Doc slug equals this document's slug.
+        // Header:    match only CrossSection refs whose .Doc slug equals this document's slug
+        //            AND whose .Section slug equals the heading's id.
+        let docSlug = Doc.slug inDoc
+
+        let crossFolderMatch =
+            match def with
+            | Doc
+            | Title _ -> Some(docSlug, None)
+            | Header(_, headingId) -> Some(docSlug, Some(Slug.ofString headingId))
+            | LinkDef _ -> None
+
         seq {
             for decl in decls do
                 yield inDoc, decl
@@ -288,9 +375,35 @@ module Dest =
                             destDoc.Structure
                             |> Structure.findConcreteForSymbol ref
                             |> Seq.map (fun el -> destDoc, el)
+
+            // Search referencing folders for cross-folder links to this element.
+            match crossFolderMatch with
+            | None -> ()
+            | Some(slug, sectionSlug) ->
+                for refFolder in referencingFolders do
+                    for refDoc in Folder.docs refFolder do
+                        for sym in Structure.symbols refDoc.Structure do
+                            let isMatch =
+                                match Sym.asRef sym, sectionSlug with
+                                // Doc/Title rename: match any CrossRef to this doc
+                                | Some(CrossRef crossRef), None ->
+                                    Slug.ofString crossRef.Doc = slug
+                                    || (match def with
+                                        | Title id -> Slug.equalStrings id crossRef.Doc
+                                        | _ -> false)
+                                // Header rename: match only CrossSection refs to this doc+section
+                                | Some(CrossRef(CrossSection(docName, secName))), Some secSlug ->
+                                    Slug.ofString docName = slug && secName = secSlug
+                                | _ -> false
+
+                            if isMatch then
+                                yield!
+                                    refDoc.Structure
+                                    |> Structure.findConcreteForSymbol sym
+                                    |> Seq.map (fun el -> refDoc, el)
         }
 
-    let private findRefRefs includeDecl folder inDocId ref =
+    let private findRefRefs includeDecl folder (referencingFolders: seq<Folder>) inDocId ref =
         let extractDef (scope, sym) =
             match scope, Sym.asDef sym with
             | Scope.Doc docId, Some def -> Some(docId, def)
@@ -303,7 +416,7 @@ module Dest =
 
         seq {
             for doc, def in defs do
-                yield! findDefRefs includeDecl folder doc None def
+                yield! findDefRefs includeDecl folder referencingFolders doc None def
         }
 
     /// Finds elements referencing `el`.
@@ -312,6 +425,7 @@ module Dest =
     let findElementRefs
         (includeDecl: bool)
         (folder: Folder)
+        (referencingFolders: seq<Folder>)
         (srcDoc: Doc)
         (srcEl: Cst.Element)
         : seq<Doc * Cst.Element> =
@@ -321,7 +435,8 @@ module Dest =
             let refs =
                 match sym with
                 | Sym.Tag tag -> findTagRefs includeDecl folder srcDoc.Id srcEl tag
-                | Sym.Def def -> findDefRefs includeDecl folder srcDoc.Id (Some srcEl) def
-                | Sym.Ref ref -> findRefRefs includeDecl folder srcDoc.Id ref
+                | Sym.Def def ->
+                    findDefRefs includeDecl folder referencingFolders srcDoc.Id (Some srcEl) def
+                | Sym.Ref ref -> findRefRefs includeDecl folder referencingFolders srcDoc.Id ref
 
             refs |> Seq.sortBy (fun (d, e) -> d.Id, e.Range)

@@ -23,7 +23,7 @@ let basicHeaderLenses () =
     let f = FakeFolder.Mk([ d1; d2 ])
 
     let lenses =
-        Lenses.forDoc ClientDescription.empty f d1
+        Lenses.forDoc ClientDescription.empty f Seq.empty d1
         |> Array.map (fun lens -> $"{lens.Command.Value}, {lens.Range}")
 
     checkInlineSnapshot id lenses [
@@ -57,7 +57,7 @@ let basicHeaderLenses_withCommandArguments () =
     }
 
     let lensesData =
-        Lenses.forDoc client f d1
+        Lenses.forDoc client f Seq.empty d1
         |> Array.map (fun lens ->
             let data =
                 lens.Command.Value.Arguments.Value[0]
@@ -83,7 +83,7 @@ let basicLinkDefLenses () =
     let f = FakeFolder.Mk([ d1 ])
 
     let lenses =
-        Lenses.forDoc ClientDescription.empty f d1
+        Lenses.forDoc ClientDescription.empty f Seq.empty d1
         |> Array.map (fun lens -> $"{lens.Command.Value}, {lens.Range}")
 
     checkInlineSnapshot id lenses [

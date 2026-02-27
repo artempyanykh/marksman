@@ -153,6 +153,7 @@ type Config = {
     coreTitleFromHeading: option<bool>
     coreIncrementalReferences: option<bool>
     coreParanoid: option<bool>
+    coreExtraFolders: option<array<string>>
     complWikiStyle: option<ComplWikiStyle>
     complCandidates: option<int>
 } with
@@ -167,6 +168,7 @@ type Config = {
         coreTitleFromHeading = Some true
         coreIncrementalReferences = Some false
         coreParanoid = Some false
+        coreExtraFolders = None
         complWikiStyle = Some TitleSlug
         complCandidates = Some 50
     }
@@ -181,6 +183,7 @@ type Config = {
         coreTitleFromHeading = None
         coreIncrementalReferences = None
         coreParanoid = None
+        coreExtraFolders = None
         complWikiStyle = None
         complCandidates = None
     }
@@ -230,6 +233,8 @@ type Config = {
         |> Option.orElse Config.Default.coreParanoid
         |> Option.get
 
+    member this.CoreExtraFolders() = this.coreExtraFolders |> Option.defaultValue [||]
+
     member this.ComplWikiStyle() =
         match this.complWikiStyle with
         | Some x -> x
@@ -272,6 +277,8 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
 
         let! coreParanoid = getFromTableOpt<bool> table [] [ "core"; "paranoid" ]
 
+        let! coreExtraFolders = getFromTableOpt<array<string>> table [] [ "core"; "extra_folders" ]
+
         let! complWikiStyle = getFromTableOpt<string> table [] [ "completion"; "wiki"; "style" ]
 
         let complWikiStyle =
@@ -302,6 +309,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
             coreTitleFromHeading = coreTitleFromHeading
             coreIncrementalReferences = coreIncrementalReferences
             coreParanoid = coreParanoid
+            coreExtraFolders = coreExtraFolders
             complWikiStyle = complWikiStyle
             complCandidates = complCandidates
         }
@@ -328,6 +336,7 @@ module Config =
             hi.coreIncrementalReferences
             |> Option.orElse low.coreIncrementalReferences
         coreParanoid = hi.coreParanoid |> Option.orElse low.coreParanoid
+        coreExtraFolders = hi.coreExtraFolders |> Option.orElse low.coreExtraFolders
         complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle
         complCandidates = hi.complCandidates |> Option.orElse low.complCandidates
     }
@@ -378,6 +387,17 @@ module Config =
     let userConfigFile = Path.Join(userConfigDir, "config.toml")
 
     let orDefault configOpt = Option.defaultValue Config.Default configOpt
+
+    /// Resolve a raw extra-folder path relative to a config file's directory.
+    /// Returns None if the resolved path doesn't exist.
+    let resolveExtraFolderPath (configFileDir: string) (raw: string) : option<string> =
+        let resolved =
+            if Path.IsPathRooted(raw) then
+                raw
+            else
+                Path.GetFullPath(Path.Join(configFileDir, raw))
+
+        if Directory.Exists(resolved) then Some resolved else None
 
 let defaultMarkdownExtensions =
     Config.Default.CoreMarkdownFileExtensions() |> Seq.ofArray

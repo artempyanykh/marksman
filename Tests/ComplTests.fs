@@ -8,10 +8,12 @@ open Snapper
 open Marksman.Helpers
 open Marksman.Compl
 open Marksman.Misc
+open Marksman.Paths
+open Marksman.Folder
 
 let tryParsePartialElement text line col = PartialElement.inText text (Position.Mk(line, col))
 let parsePartialElement text line col = tryParsePartialElement text line col |> Option.get
-let findCandidatesInDoc folder doc pos = findCandidatesInDoc folder doc pos |> Array.ofSeq
+let findCandidatesInDoc folder doc pos = findCandidatesInDoc folder Seq.empty doc pos |> Array.ofSeq
 
 [<StoreSnapshotsPerClass>]
 module PartialElementWiki =
@@ -627,3 +629,53 @@ module Candidates =
 
         [<Fact>]
         let tagWithName () = checkSnapshot (findCandidatesInDoc folder doc1 (Position.Mk(2, 15)))
+
+module ExtraFolderCompletion =
+    let private extraRoot = dummyRootPath [ "extra" ]
+    let private extraRootUri = pathToUri extraRoot
+
+    let private mkExtraDoc path content = FakeDoc.Mk(content, path = path, root = "extra")
+
+    let private mkExtraFolder docs =
+        let folderId = UriWith.mkRoot extraRootUri
+        Folder.multiFile "extra" folderId docs None
+
+    [<Fact>]
+    let extraFolderDocAppearsInCompletion () =
+        // Primary folder has doc1 with a wiki link typed as [[brett
+        let doc1 = FakeDoc.Mk([| "# Primary"; "[[brett" |], path = "doc1.md")
+        let primaryFolder = FakeFolder.Mk([ doc1 ])
+
+        // Extra folder has brett-scorza.md
+        let extraDoc = mkExtraDoc "brett-scorza.md" "# Brett Scorza"
+        let extraFolder = mkExtraFolder [ extraDoc ]
+
+        let candidates =
+            Compl.findCandidatesInDoc primaryFolder [ extraFolder ] doc1 (Position.Mk(1, 3))
+            |> Array.ofSeq
+
+        let hasExtraDoc =
+            candidates
+            |> Array.exists (fun c ->
+                c.Label.Contains("Brett Scorza") || c.Label.Contains("brett-scorza"))
+
+        Assert.True(hasExtraDoc, "Expected candidate from extra folder to appear in completion")
+
+    [<Fact>]
+    let extraFolderTagAppearsInCompletion () =
+        let doc1 =
+            FakeDoc.Mk([| "# Primary"; "And partial #extra" |], path = "doc1.md")
+
+        let primaryFolder = FakeFolder.Mk([ doc1 ])
+
+        let extraDoc = mkExtraDoc "extra-doc.md" "# Extra Doc\n#extraTag"
+        let extraFolder = mkExtraFolder [ extraDoc ]
+
+        let candidates =
+            Compl.findCandidatesInDoc primaryFolder [ extraFolder ] doc1 (Position.Mk(1, 18))
+            |> Array.ofSeq
+
+        let hasExtraTag =
+            candidates |> Array.exists (fun c -> c.Label = "extraTag")
+
+        Assert.True(hasExtraTag, "Expected tag from extra folder to appear in completion")

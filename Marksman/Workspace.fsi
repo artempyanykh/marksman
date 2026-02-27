@@ -22,3 +22,8 @@ module Workspace =
     val withoutFolders: seq<FolderId> -> Workspace -> Workspace
 
     val tryFindFolderEnclosing: AbsPath -> Workspace -> option<Folder>
+
+    val isExtraFolder: Workspace -> FolderId -> bool
+    val primaryFolders: Workspace -> seq<Folder>
+    val extraFoldersFor: Folder -> Workspace -> seq<Folder>
+    val primaryFoldersReferencing: FolderId -> Workspace -> seq<Folder>

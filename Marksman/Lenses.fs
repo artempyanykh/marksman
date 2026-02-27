@@ -15,8 +15,17 @@ type FindReferencesData = { Uri: DocumentUri; Position: Position; Locations: Loc
 
 let private humanRefCount cnt = if cnt = 1 then "1 reference" else $"{cnt} references"
 
-let buildReferenceLens (client: ClientDescription) (folder: Folder) (doc: Doc) (el: Cst.Element) =
-    let refs = Dest.findElementRefs false folder doc el |> Array.ofSeq
+let buildReferenceLens
+    (client: ClientDescription)
+    (folder: Folder)
+    (referencingFolders: seq<Folder>)
+    (doc: Doc)
+    (el: Cst.Element)
+    =
+    let refs =
+        Dest.findElementRefs false folder referencingFolders doc el
+        |> Array.ofSeq
+
     let refCount = Array.length refs
 
     if refCount > 0 then
@@ -45,15 +54,20 @@ let buildReferenceLens (client: ClientDescription) (folder: Folder) (doc: Doc) (
     else
         None
 
-let forDoc (client: ClientDescription) (folder: Folder) (doc: Doc) =
+let forDoc
+    (client: ClientDescription)
+    (folder: Folder)
+    (referencingFolders: seq<Folder>)
+    (doc: Doc)
+    =
     let headingLenses =
         doc.Index.headings
         |> Seq.map Cst.H
-        |> Seq.choose (buildReferenceLens client folder doc)
+        |> Seq.choose (buildReferenceLens client folder referencingFolders doc)
 
     let linkDefLenses =
         doc.Index.linkDefs
         |> Seq.map Cst.MLD
-        |> Seq.choose (buildReferenceLens client folder doc)
+        |> Seq.choose (buildReferenceLens client folder referencingFolders doc)
 
     Seq.append headingLenses linkDefLenses |> Array.ofSeq

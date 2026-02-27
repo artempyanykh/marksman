@@ -54,7 +54,9 @@ type ReferenceResolution() =
         let link =
             Doc.index doc |> Index.linkAtPos (Position.Mk(1, 3)) |> Option.get
 
-        let refs = Dest.tryResolveElement this.Folder doc link |> Seq.toArray
+        let refs =
+            Dest.tryResolveElement this.Folder Seq.empty doc link |> Seq.toArray
+
         refs |> ignore
 
     [<Benchmark>]
@@ -66,7 +68,10 @@ type ReferenceResolution() =
         let header =
             Cst.elementAtPos (Position.Mk(0, 3)) (Doc.cst doc) |> Option.get
 
-        let refs = Dest.findElementRefs true this.Folder doc header |> Seq.toArray
+        let refs =
+            Dest.findElementRefs true this.Folder Seq.empty doc header
+            |> Seq.toArray
+
         refs |> ignore
 
 

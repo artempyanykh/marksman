@@ -680,30 +680,53 @@ module Completions =
             }
 
 module Candidates =
-    let findDocCandidates (folder: Folder) (srcDoc: Doc) (destPart: option<InternName>) : seq<Doc> =
-        let candidates =
+    let findDocCandidates
+        (folder: Folder)
+        (extraFolders: seq<Folder>)
+        (srcDoc: Doc)
+        (destPart: option<InternName>)
+        : seq<Doc> =
+        let primaryCands =
             match destPart with
             | None -> Folder.docs folder
             | Some name -> FileLink.filterFuzzyMatchingDocs folder name
 
-        candidates |> Seq.filter (fun d -> d <> srcDoc)
+        let primaryIds = primaryCands |> Seq.map Doc.id |> Set.ofSeq
+
+        let extraCands =
+            extraFolders
+            |> Seq.collect (fun ef ->
+                match destPart with
+                | None -> Folder.docs ef
+                | Some name -> FileLink.filterFuzzyMatchingDocs ef name)
+            |> Seq.filter (fun d -> not (Set.contains (Doc.id d) primaryIds))
+
+        Seq.append primaryCands extraCands
+        |> Seq.filter (fun d -> d <> srcDoc)
 
     let findHeadingCandidates
         (folder: Folder)
+        (extraFolders: seq<Folder>)
         (srcDoc: Doc)
         (destPart: option<InternName>)
         (headingPart: string)
         : seq<Doc * string> =
         let targetDocs =
-            destPart
-            |> Option.map (FileLink.filterFuzzyMatchingDocs folder)
-            |> Option.defaultValue [ srcDoc ]
+            match destPart with
+            | None -> [ srcDoc ] :> seq<Doc>
+            | Some name ->
+                let primaryDocs =
+                    FileLink.filterFuzzyMatchingDocs folder name
+                    |> Seq.filter (fun d -> d <> srcDoc)
 
-        let targetDocs =
-            if destPart.IsSome then
-                targetDocs |> Seq.filter (fun d -> d <> srcDoc)
-            else
-                targetDocs
+                let primaryIds = primaryDocs |> Seq.map Doc.id |> Set.ofSeq
+
+                let extraDocs =
+                    extraFolders
+                    |> Seq.collect (fun ef -> FileLink.filterFuzzyMatchingDocs ef name)
+                    |> Seq.filter (fun d -> d <> srcDoc && not (Set.contains (Doc.id d) primaryIds))
+
+                Seq.append primaryDocs extraDocs
 
         let inputSlug = Slug.ofString headingPart
 
@@ -730,10 +753,25 @@ module Candidates =
             (Doc.index srcDoc)
         |> Seq.map Node.data
 
-    let findTagCandidates (folder: Folder) (_srcDoc: Doc) (input: string) : seq<string * int> =
+    let findTagCandidates
+        (folder: Folder)
+        (extraFolders: seq<Folder>)
+        (_srcDoc: Doc)
+        (input: string)
+        : seq<string * int> =
+        let primaryDocs = Folder.docs folder
+        let primaryIds = primaryDocs |> Seq.map Doc.id |> Set.ofSeq
+
+        let allDocs =
+            Seq.append
+                primaryDocs
+                (extraFolders
+                 |> Seq.collect Folder.docs
+                 |> Seq.filter (fun d -> not (Set.contains (Doc.id d) primaryIds)))
+
         let matchingTags =
             seq {
-                for doc in Folder.docs folder do
+                for doc in allDocs do
                     for tag in Index.tags (Doc.index doc) do
                         let tagName = tag.data.name.text
 
@@ -775,6 +813,7 @@ let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
 
 let findCandidatesForCompl
     (folder: Folder)
+    (extraFolders: seq<Folder>)
     (srcDoc: Doc)
     (pos: Position)
     (compl: Completable)
@@ -785,11 +824,14 @@ let findCandidatesForCompl
     | None -> [||]
     | Some(WikiDoc input) ->
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) input)
-        let cand = Candidates.findDocCandidates folder srcDoc destPart
+
+        let cand =
+            Candidates.findDocCandidates folder extraFolders srcDoc destPart
 
         cand |> Seq.choose (Completions.wikiDoc config pos compl)
     | Some(WikiHeadingInSrcDoc input) ->
-        let cand = Candidates.findHeadingCandidates folder srcDoc None input
+        let cand =
+            Candidates.findHeadingCandidates folder extraFolders srcDoc None input
 
         cand
         |> Seq.map snd
@@ -798,7 +840,7 @@ let findCandidatesForCompl
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) destPart)
 
         let cand =
-            Candidates.findHeadingCandidates folder srcDoc destPart headingPart
+            Candidates.findHeadingCandidates folder extraFolders srcDoc destPart headingPart
 
         cand
         |> Seq.choose (Completions.wikiHeadingInOtherDoc config pos compl)
@@ -810,13 +852,16 @@ let findCandidatesForCompl
             match
                 InternName.mkChecked (config.CoreMarkdownFileExtensions()) (Doc.id srcDoc) input
             with
-            | None when input.IsEmpty() -> Candidates.findDocCandidates folder srcDoc None
+            | None when input.IsEmpty() ->
+                Candidates.findDocCandidates folder extraFolders srcDoc None
             | None -> [||]
-            | Some destPart -> Candidates.findDocCandidates folder srcDoc (Some destPart)
+            | Some destPart ->
+                Candidates.findDocCandidates folder extraFolders srcDoc (Some destPart)
 
         cand |> Seq.choose (Completions.inlineDoc pos compl)
     | Some(InlineAnchorInSrcDoc input) ->
-        let cand = Candidates.findHeadingCandidates folder srcDoc None input
+        let cand =
+            Candidates.findHeadingCandidates folder extraFolders srcDoc None input
 
         cand
         |> Seq.map snd
@@ -828,18 +873,28 @@ let findCandidatesForCompl
             with
             | None -> Seq.empty
             | Some destPart ->
-                Candidates.findHeadingCandidates folder srcDoc (Some destPart) anchorPart
+                Candidates.findHeadingCandidates
+                    folder
+                    extraFolders
+                    srcDoc
+                    (Some destPart)
+                    anchorPart
 
         cand |> Seq.choose (Completions.inlineAnchorInOtherDoc pos compl)
     | Some(Tag input) ->
-        let cand = Candidates.findTagCandidates folder srcDoc input
+        let cand = Candidates.findTagCandidates folder extraFolders srcDoc input
         cand |> Seq.choose (Completions.tag pos compl input)
 
-let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) : seq<CompletionItem> =
+let findCandidatesInDoc
+    (folder: Folder)
+    (extraFolders: seq<Folder>)
+    (doc: Doc)
+    (pos: Position)
+    : seq<CompletionItem> =
     match findCompletableAtPos doc pos with
     | None ->
         logger.trace (Log.setMessage "No completion point found")
         [||]
     | Some compl ->
         logger.trace (Log.setMessage "Found completion point" >> Log.addContext "comp" compl)
-        findCandidatesForCompl folder doc pos compl
+        findCandidatesForCompl folder extraFolders doc pos compl

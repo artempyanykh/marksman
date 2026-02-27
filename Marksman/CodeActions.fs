@@ -123,6 +123,7 @@ let createMissingFile
     (_context: CodeActionContext)
     (doc: Doc)
     (folder: Folder)
+    (extraFolders: seq<Folder>)
     : CreateFileAction option =
     let configuredExts = (Folder.configuredMarkdownExts folder)
 
@@ -141,7 +142,7 @@ let createMissingFile
             | _ -> None
 
         let docRefAtPos = Sym.Ref(CrossRef(CrossDoc docAtPos))
-        let refs = Dest.tryResolveSym folder doc docRefAtPos
+        let refs = Dest.tryResolveSym folder extraFolders doc docRefAtPos
 
         // Early return if the file exists
         do! guard (Seq.isEmpty refs)

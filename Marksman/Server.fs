@@ -175,11 +175,14 @@ module ServerUtil =
 
 type MarksmanStatusParams = { state: string; docCount: int }
 
-type MarksmanClient(notiSender: ClientNotificationSender, _reqSender: ClientRequestSender) =
+type MarksmanClient(notiSender: ClientNotificationSender, reqSender: ClientRequestSender) =
     inherit LspClient()
 
     override this.TextDocumentPublishDiagnostics(par: PublishDiagnosticsParams) =
         notiSender "textDocument/publishDiagnostics" (box par) |> Async.Ignore
+
+    override this.ClientRegisterCapability(par: RegistrationParams) =
+        reqSender.Send<unit> "client/registerCapability" (box par)
 
     member this.MarksmanUpdateStatus(par: MarksmanStatusParams) =
         notiSender "marksman/status" (box par) |> Async.Ignore
@@ -588,6 +591,72 @@ type MarksmanServer(client: MarksmanClient) =
                         "Client doesn't support status notifications. Agent won't be initialized."
                 )
 
+            // Register file watchers for extra folder paths so we get notified when
+            // files in extra folders are modified by another LSP client session.
+            if (State.client state).SupportsDidChangeWatchedFiles then
+                let extraRoots =
+                    Workspace.folders (State.workspace state)
+                    |> Seq.collect (fun f -> Folder.extraFolderRoots f)
+                    |> Seq.distinctBy id
+                    |> Array.ofSeq
+
+                if extraRoots.Length > 0 then
+                    let watchers =
+                        extraRoots
+                        |> Array.map (fun root ->
+                            // Use RelativePattern { baseUri, pattern } rather than a plain
+                            // absolute-path string glob. Neovim's _watchfiles resolves string
+                            // globs relative to the client's own workspace folders, so an
+                            // absolute path outside those folders would never match. The
+                            // RelativePattern form names the base directory explicitly and is
+                            // picked up correctly regardless of the client's root.
+                            let baseUri = AbsPath.toUri root |> string
+
+                            JObject(
+                                JProperty(
+                                    "globPattern",
+                                    JObject(
+                                        JProperty("baseUri", baseUri),
+                                        JProperty("pattern", "**/*.md")
+                                    )
+                                ),
+                                JProperty("kind", 7) // Create | Change | Delete
+                            ))
+
+                    let regParams = {
+                        Registrations = [|
+                            {
+                                Id = "marksman-extra-folder-watcher"
+                                Method = "workspace/didChangeWatchedFiles"
+                                RegisterOptions =
+                                    Some(JObject(JProperty("watchers", JArray(watchers))) :> JToken)
+                            }
+                        |]
+                    }
+
+                    logger.debug (
+                        Log.setMessage "Registering file watchers for extra folders"
+                        >> Log.addContext "count" extraRoots.Length
+                    )
+
+                    Async.Start(
+                        async {
+                            let! result = client.ClientRegisterCapability(regParams)
+
+                            match result with
+                            | Error e ->
+                                logger.warn (
+                                    Log.setMessage "Failed to register extra folder watchers"
+                                    >> Log.addContext "error" e.Message
+                                )
+                            | Ok _ ->
+                                logger.debug (
+                                    Log.setMessage
+                                        "Extra folder file watchers registered successfully"
+                                )
+                        }
+                    )
+
             logger.debug (Log.setMessage "Initialization complete.")
 
             Mutation.hooks newHooks
@@ -742,6 +811,53 @@ type MarksmanServer(client: MarksmanClient) =
             Mutation.state newState
 
 
+    override this.WorkspaceDidChangeWatchedFiles(par: DidChangeWatchedFilesParams) =
+        withStateExclusive
+        <| fun state ->
+            let mutable newState = state
+
+            for event in par.Changes do
+                let docUri = UriWith.mkAbs event.Uri
+
+                logger.trace (
+                    Log.setMessage "Processing watched file change in extra folder"
+                    >> Log.addContext "uri" docUri
+                    >> Log.addContext "type" (event.Type.ToString())
+                )
+
+                match event.Type with
+                | FileChangeType.Deleted ->
+                    match State.tryFindFolderAndDoc docUri newState with
+                    | None -> ()
+                    | Some(folder, doc) ->
+                        match Folder.withoutDoc (Doc.id doc) folder with
+                        | None -> newState <- State.removeFolder (Folder.id folder) newState
+                        | Some newFolder -> newState <- State.updateFolder newFolder newState
+                | FileChangeType.Created
+                | FileChangeType.Changed ->
+                    match State.tryFindFolderEnclosing docUri newState with
+                    | None -> ()
+                    | Some folder ->
+                        let parserSettings = Folder.parserSettings folder
+
+                        if
+                            isMarkdownFile parserSettings.mdFileExt (AbsPath.toSystem docUri.data)
+                        then
+                            match
+                                Doc.tryLoad parserSettings (Folder.id folder) (Abs docUri.data)
+                            with
+                            | Some doc ->
+                                let newFolder = Folder.withDoc doc folder
+                                newState <- State.updateFolder newFolder newState
+                            | None ->
+                                logger.warn (
+                                    Log.setMessage "Couldn't reload watched file"
+                                    >> Log.addContext "uri" docUri
+                                )
+                | _ -> ()
+
+            Mutation.state newState
+
     override this.WorkspaceSymbol(pars) =
         withState
         <| fun state ->
@@ -774,10 +890,13 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder, doc = State.tryFindFolderAndDoc docUri state
 
+                    let extraFolders =
+                        Workspace.extraFoldersFor folder (State.workspace state)
+
                     let maxCompletions = (Folder.configOrDefault folder).ComplCandidates()
 
                     match
-                        Compl.findCandidatesInDoc folder doc pos
+                        Compl.findCandidatesInDoc folder extraFolders doc pos
                         |> Seq.truncate maxCompletions
                         |> Array.ofSeq
                     with
@@ -803,8 +922,11 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docUri state
 
+                    let extraFolders =
+                        Workspace.extraFoldersFor folder (State.workspace state)
+
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
-                    let refs = Dest.tryResolveElement folder srcDoc atPos
+                    let refs = Dest.tryResolveElement folder extraFolders srcDoc atPos
 
                     let locs =
                         refs
@@ -830,11 +952,15 @@ type MarksmanServer(client: MarksmanClient) =
                 monad {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docUri state
 
+                    let extraFolders =
+                        Workspace.extraFoldersFor folder (State.workspace state)
+
                     let! atPos = Doc.index srcDoc |> Index.linkAtPos par.Position
                     // NOTE: Due to ambiguity there may be several sources for hover. Since hover
                     // request requires a single result we return the first. When links are not
                     // ambiguous this is OK, otherwise the author is to blame for ambiguity anyway.
-                    let! ref = Dest.tryResolveElement folder srcDoc atPos |> Seq.tryHead
+                    let! ref =
+                        Dest.tryResolveElement folder extraFolders srcDoc atPos |> Seq.tryHead
 
                     let destScope = Dest.scope ref
 
@@ -859,6 +985,9 @@ type MarksmanServer(client: MarksmanClient) =
 
             match State.tryFindFolderAndDoc docUri state with
             | Some(folder, curDoc) ->
+                let referencingFolders =
+                    Workspace.primaryFoldersReferencing (Folder.id folder) (State.workspace state)
+
                 let locs =
                     match Cst.elementAtPos par.Position (Doc.cst curDoc) with
                     | None ->
@@ -871,7 +1000,12 @@ type MarksmanServer(client: MarksmanClient) =
                         None
                     | Some atPos ->
                         let referencingEls =
-                            Dest.findElementRefs par.Context.IncludeDeclaration folder curDoc atPos
+                            Dest.findElementRefs
+                                par.Context.IncludeDeclaration
+                                folder
+                                referencingFolders
+                                curDoc
+                                atPos
 
                         let toLoc (doc, el) = { Uri = Doc.uri doc; Range = Element.range el }
 
@@ -930,6 +1064,9 @@ type MarksmanServer(client: MarksmanClient) =
             | Some(folder, doc) ->
                 let config = Folder.configOrDefault folder
 
+                let extraFolders =
+                    Workspace.extraFoldersFor folder (State.workspace state)
+
                 let tocAction =
                     if config.CaTocEnable() then
                         CodeActions.tableOfContents opts.Range opts.Context config doc
@@ -946,7 +1083,12 @@ type MarksmanServer(client: MarksmanClient) =
 
                 let createMissingFileAction =
                     if config.CaCreateMissingFileEnable() then
-                        CodeActions.createMissingFile opts.Range opts.Context doc folder
+                        CodeActions.createMissingFile
+                            opts.Range
+                            opts.Context
+                            doc
+                            folder
+                            extraFolders
                         |> Option.toArray
                         |> Array.map (fun ca ->
                             let wsEdit = CodeActions.createFile ca.newFileUri
@@ -971,10 +1113,16 @@ type MarksmanServer(client: MarksmanClient) =
                 monad' {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docPath state
 
+                    let referencingFolders =
+                        Workspace.primaryFoldersReferencing
+                            (Folder.id folder)
+                            (State.workspace state)
+
                     let renameResult =
                         Refactor.rename
                             (State.client state).SupportsDocumentEdit
                             folder
+                            referencingFolders
                             srcDoc
                             pars.Position
                             pars.NewName
@@ -1008,7 +1156,13 @@ type MarksmanServer(client: MarksmanClient) =
             let lenses =
                 monad' {
                     let! folder, srcDoc = State.tryFindFolderAndDoc docPath state
-                    Lenses.forDoc (State.client state) folder srcDoc
+
+                    let referencingFolders =
+                        Workspace.primaryFoldersReferencing
+                            (Folder.id folder)
+                            (State.workspace state)
+
+                    Lenses.forDoc (State.client state) folder referencingFolders srcDoc
                 }
 
             LspResult.success lenses

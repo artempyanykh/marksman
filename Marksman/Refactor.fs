@@ -184,6 +184,7 @@ let combineDocumentEdits (e1s: array<TextDocumentEdit>) (e2s: array<TextDocument
 let rename
     (supportsDocumentEdit: bool)
     (folder: Folder)
+    (referencingFolders: seq<Folder>)
     (srcDoc: Doc)
     (pos: Position)
     (newName: string)
@@ -198,7 +199,7 @@ let rename
             if not (isValidLabel newName) then
                 Error $"Not a valid label name: {newName}"
             else if label.range.ContainsInclusive pos then
-                let refs = Dest.findElementRefs true folder srcDoc el
+                let refs = Dest.findElementRefs true folder referencingFolders srcDoc el
                 // With reference link labels, there's no ambiguity about the destination, so we
                 // can skip inspecting element's destination for the purposes of renaming.
                 let byDoc = refs |> groupByFirst
@@ -214,7 +215,7 @@ let rename
         if not (isValidLabel newName) then
             Error $"Not a valid label name: {newName}"
         else if (MdLinkDef.label def).range.ContainsInclusive pos then
-            let refs = Dest.findElementRefs true folder srcDoc el
+            let refs = Dest.findElementRefs true folder referencingFolders srcDoc el
             // Similar to the reference links above
             let byDoc = refs |> groupByFirst
 
@@ -234,7 +235,7 @@ let rename
                 let edit = { Range = heading.title.range; NewText = newName }
                 { TextDocument = lspDoc; Edits = [| edit |] }
 
-            let refs = Dest.findElementRefs false folder srcDoc el
+            let refs = Dest.findElementRefs false folder referencingFolders srcDoc el
             let byDoc = refs |> groupByFirst
 
             let complStyle = (Folder.configOrDefault folder).ComplWikiStyle()

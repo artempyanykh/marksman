@@ -47,7 +47,12 @@ let checkNonBreakingWhitespace (doc: Doc) =
 
             [ NonBreakableWhitespace(whitespaceRange) ])
 
-let checkLink (folder: Folder) (doc: Doc) (linkEl: Element) : seq<Entry> =
+let checkLink
+    (folder: Folder)
+    (extraFolders: seq<Folder>)
+    (doc: Doc)
+    (linkEl: Element)
+    : seq<Entry> =
     let exts = Folder.configuredMarkdownExts folder
 
     let ref =
@@ -58,7 +63,8 @@ let checkLink (folder: Folder) (doc: Doc) (linkEl: Element) : seq<Entry> =
     match ref with
     | None -> []
     | Some ref ->
-        let refs = Dest.tryResolveElement folder doc linkEl |> Array.ofSeq
+        let refs =
+            Dest.tryResolveElement folder extraFolders doc linkEl |> Array.ofSeq
 
         if Folder.isSingleFile folder && Syms.Ref.isCross ref then
             []
@@ -83,16 +89,16 @@ let checkLink (folder: Folder) (doc: Doc) (linkEl: Element) : seq<Entry> =
         else
             [ AmbiguousLink(linkEl, ref, refs) ]
 
-let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
+let checkLinks (folder: Folder) (extraFolders: seq<Folder>) (doc: Doc) : seq<Entry> =
     let links = Doc.index >> Index.links <| doc
-    links |> Seq.collect (checkLink folder doc)
+    links |> Seq.collect (checkLink folder extraFolders doc)
 
-let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
+let checkFolder (folder: Folder) (extraFolders: seq<Folder>) : seq<DocId * list<Entry>> =
     seq {
         for doc in Folder.docs folder do
             let docDiag =
                 seq {
-                    yield! checkLinks folder doc
+                    yield! checkLinks folder extraFolders doc
                     yield! checkNonBreakingWhitespace doc
                 }
                 |> List.ofSeq
@@ -188,8 +194,8 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
 type FolderDiag = array<DocId * array<Lsp.Diagnostic>>
 
 module FolderDiag =
-    let mk (folder: Folder) : FolderDiag =
-        checkFolder folder
+    let mk (folder: Folder) (extraFolders: seq<Folder>) : FolderDiag =
+        checkFolder folder extraFolders
         |> Seq.map (fun (uri, diags) ->
             let lspDiags = List.map diagToLsp diags |> Array.ofList
 
@@ -200,8 +206,10 @@ type WorkspaceDiag = Map<FolderId, FolderDiag>
 
 module WorkspaceDiag =
     let mk (ws: Workspace) : WorkspaceDiag =
-        Workspace.folders ws
-        |> Seq.map (fun folder -> (Folder.id folder), FolderDiag.mk folder)
+        Workspace.primaryFolders ws
+        |> Seq.map (fun folder ->
+            let extraFolders = Workspace.extraFoldersFor folder ws
+            (Folder.id folder), FolderDiag.mk folder extraFolders)
         |> Map.ofSeq
 
     let empty = Map.empty

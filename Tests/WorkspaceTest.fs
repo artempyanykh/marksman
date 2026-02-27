@@ -105,6 +105,87 @@ module DocTest =
         Assert.Equal("file:///a/b/doc.md", (Doc.uri doc).ToString())
         Assert.Equal("AbsPath \"/a/b/doc.md\"", (Doc.path doc).ToString())
 
+module ExtraFolderTest =
+    // Helper to build a workspace with manually designated extra folders.
+    // We achieve this by using Workspace.withFolder for extra folders and
+    // directly calling the workspace helpers.
+    let mkPrimaryAndExtraFolders () =
+        let primaryDoc =
+            FakeDoc.Mk(content = "[[extra-doc]]", path = "primary.md")
+
+        let primaryFolder = FakeFolder.Mk([ primaryDoc ])
+
+        let extraDoc = FakeDoc.Mk(content = "# Extra Doc", path = "extra-doc.md")
+        let extraFolder = FakeFolder.Mk([ extraDoc ])
+
+        primaryFolder, extraFolder, primaryDoc, extraDoc
+
+    [<Fact>]
+    let primaryFolders_withNoExtra () =
+        let d = FakeDoc.Mk(content = "", path = "doc.md")
+        let f = FakeFolder.Mk([ d ])
+        let ws = Workspace.ofFolders None [ f ]
+
+        // With no extra folders configured, all folders are primary
+        let primaries = Workspace.primaryFolders ws |> List.ofSeq
+        Assert.Equal(1, primaries.Length)
+        Assert.Equal(Folder.id f, Folder.id primaries[0])
+
+    [<Fact>]
+    let isExtraFolder_noExtra () =
+        let d = FakeDoc.Mk(content = "", path = "doc.md")
+        let f = FakeFolder.Mk([ d ])
+        let ws = Workspace.ofFolders None [ f ]
+
+        // Nothing is marked as extra
+        Assert.False(Workspace.isExtraFolder ws (Folder.id f))
+
+    [<Fact>]
+    let extraFoldersFor_noExtra () =
+        let d = FakeDoc.Mk(content = "", path = "doc.md")
+        let f = FakeFolder.Mk([ d ])
+        let ws = Workspace.ofFolders None [ f ]
+
+        // No extra folders configured
+        let extras = Workspace.extraFoldersFor f ws |> List.ofSeq
+        Assert.Equal(0, extras.Length)
+
+    // Regression test: when an extra folder declares the primary folder as its own
+    // extra_folder (mutual reference), rename in the primary must propagate to the
+    // extra folder's docs. primaryFoldersReferencing must search all workspace folders,
+    // not just primary folders.
+    [<Fact>]
+    let primaryFoldersReferencing_mutualExtraFolder () =
+        // primary folder at dummyRoot
+        let primaryDoc =
+            FakeDoc.Mk(content = "# Meeting\nSome content.", path = "meeting.md")
+
+        let primaryFolder = FakeFolder.Mk([ primaryDoc ])
+
+        // people folder at dummyRoot/people — declares primary as its extra folder
+        let peopleRootUri = pathToUri (dummyRootPath [ "people" ])
+
+        let peopleDoc =
+            FakeDoc.Mk(content = "# Jon Doe\n[[meeting]].", path = "jon-doe.md", root = "people")
+
+        let peopleFolder =
+            Folder.multiFile "people" (UriWith.mkRoot peopleRootUri) [ peopleDoc ] None
+            |> Folder.withExtraFolderRoots [| AbsPath.ofSystem dummyRoot |]
+
+        // Build workspace: primary is the declared workspace root; people is injected
+        let ws =
+            Workspace.ofFolders None [ primaryFolder ]
+            |> Workspace.withFolder peopleFolder
+
+        // people declares primary as its extra folder, so primary should appear as a
+        // folder that references people (i.e. people is a "referencing folder" for primary)
+        let referencingPrimary =
+            Workspace.primaryFoldersReferencing (Folder.id primaryFolder) ws
+            |> List.ofSeq
+
+        Assert.Equal(1, referencingPrimary.Length)
+        Assert.Equal(Folder.id peopleFolder, Folder.id referencingPrimary[0])
+
 module WorkspaceTest =
     [<Fact>]
     let folderFind_singleFile () =

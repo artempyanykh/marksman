@@ -21,6 +21,7 @@ type MultiFile = {
     root: FolderId
     docs: Map<CanonDocPath, Doc>
     config: option<Config>
+    extraFolderRoots: AbsPath[]
 } with
 
     member this.RootPath = this.root.data
@@ -507,7 +508,15 @@ module Folder =
             |> Map.ofSeq
 
         let data =
-            MultiFile({ name = name; root = root; docs = byCanonPath; config = config })
+            MultiFile(
+                {
+                    name = name
+                    root = root
+                    docs = byCanonPath
+                    config = config
+                    extraFolderRoots = [||]
+                }
+            )
 
         mk data
 
@@ -537,7 +546,37 @@ module Folder =
 
             let documents = loadDocs parserSettings folderId
 
-            multiFile name folderId documents folderConfig |> Some
+            let folder = multiFile name folderId documents folderConfig
+
+            // Resolve extra folder paths from the merged config
+            let extraFolderRoots =
+                match folderConfig with
+                | None -> [||]
+                | Some config ->
+                    let configFileDir = RootPath.toSystem root
+
+                    config.CoreExtraFolders()
+                    |> Array.choose (fun raw ->
+                        match Config.resolveExtraFolderPath configFileDir raw with
+                        | Some resolved -> Some resolved
+                        | None ->
+                            logger.warn (
+                                Log.setMessage "Extra folder path does not exist, skipping"
+                                >> Log.addContext "path" raw
+                                >> Log.addContext "folder" (RootPath.toSystem root)
+                            )
+
+                            None)
+                    |> Array.map AbsPath.ofSystem
+
+            let folder =
+                match folder.data with
+                | MultiFile mf ->
+                    let data = MultiFile { mf with extraFolderRoots = extraFolderRoots }
+                    { folder with data = data }
+                | SingleFile _ -> folder
+
+            Some folder
         else
             logger.warn (
                 Log.setMessage "Folder path doesn't exist"
@@ -681,6 +720,16 @@ module Folder =
     let filterDocsByName (name: InternName) (folder: Folder) : seq<Doc> =
         Oracle.filterDocsByName folder.data folder.lookup name
         |> Seq.map (flip findDocById folder)
+
+    let extraFolderRoots (folder: Folder) : AbsPath[] =
+        match folder.data with
+        | MultiFile { extraFolderRoots = roots } -> roots
+        | SingleFile _ -> [||]
+
+    let withExtraFolderRoots (roots: AbsPath[]) (folder: Folder) : Folder =
+        match folder.data with
+        | MultiFile mf -> mk (MultiFile { mf with extraFolderRoots = roots })
+        | SingleFile _ -> folder
 
     let configuredMarkdownExts folder =
         (configOrDefault folder).CoreMarkdownFileExtensions() |> Seq.ofArray

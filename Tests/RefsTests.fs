@@ -13,6 +13,7 @@ open Marksman.Paths
 open Marksman.Refs
 open Marksman.Doc
 open Marksman.Folder
+open Marksman.Refactor
 
 module InternNameTests =
     let internAsPath docId name =
@@ -276,7 +277,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(21, 1)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [ "(doc1.md, (16,0)-(16,5))" ]
 
@@ -286,7 +288,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(21, 1)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
+        let refs =
+            Dest.findElementRefs true folder Seq.empty doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc1.md, (16,0)-(16,5))"
@@ -299,7 +302,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(17, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc2.md, (4,0)-(4,11))"
@@ -312,7 +316,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(17, 3)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
+        let refs =
+            Dest.findElementRefs true folder Seq.empty doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc2.md, (4,0)-(4,11))"
@@ -326,7 +331,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(8, 4)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs false folder doc2 def |> formatRefs
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc2.md, (4,0)-(4,11))"
@@ -339,7 +345,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(8, 4)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 def |> formatRefs
+        let refs =
+            Dest.findElementRefs true folder Seq.empty doc2 def |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc2.md, (4,0)-(4,11))"
@@ -353,7 +360,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(15, 2)) (Doc.cst doc2)
             |> Option.defaultWith (fun _ -> failwith "No def")
 
-        let refs = Dest.findElementRefs true folder doc2 fnLink |> formatRefs
+        let refs =
+            Dest.findElementRefs true folder Seq.empty doc2 fnLink |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc2.md, (19,0)-(19,16))"
@@ -366,7 +374,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(0, 2)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs false folder doc1 title |> formatRefs
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc1 title |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc2.md, (12,0)-(12,9))"
@@ -380,7 +389,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(0, 2)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs true folder doc1 title |> formatRefs
+        let refs =
+            Dest.findElementRefs true folder Seq.empty doc1 title |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(doc1.md, (0,0)-(0,7))"
@@ -395,7 +405,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(4, 4)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs false folder doc1 wl |> formatRefs
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc1 wl |> formatRefs
 
         checkInlineSnapshot (_.ToString()) refs [
             "(doc1.md, (4,0)-(4,16))"
@@ -408,7 +419,8 @@ module BasicRefsTests =
             Cst.elementAtPos (Position.Mk(4, 4)) (Doc.cst doc1)
             |> Option.defaultWith (fun _ -> failwith "No title")
 
-        let refs = Dest.findElementRefs true folder doc1 wl |> formatRefs
+        let refs =
+            Dest.findElementRefs true folder Seq.empty doc1 wl |> formatRefs
 
         checkInlineSnapshot (_.ToString()) refs [
             "(doc1.md, (4,0)-(4,16))"
@@ -447,7 +459,9 @@ module LinkKindRefsTests =
     [<Fact>]
     let atWiki_VariousFilenames () =
         let link = requireElementAtPos doc1 1 2
-        let refs = Dest.findElementRefs false folder doc1 link |> formatRefs
+
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc1 link |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(file1.md, (1,0)-(1,9))"
@@ -461,7 +475,9 @@ module LinkKindRefsTests =
     [<Fact>]
     let atWiki_Filenames_Subfolder () =
         let link = requireElementAtPos doc2 2 3
-        let refs = Dest.findElementRefs false folder doc2 link |> formatRefs
+
+        let refs =
+            Dest.findElementRefs false folder Seq.empty doc2 link |> formatRefs
 
         checkInlineSnapshot (fun x -> x.ToString()) refs [
             "(file1.md, (6,0)-(6,9))"
@@ -530,7 +546,7 @@ module EncodingTests =
 
     let resolveAtPos doc line col =
         let el = requireElementAtPos doc line col
-        Dest.tryResolveElement folder doc el |> Seq.map simplifyDest
+        Dest.tryResolveElement folder Seq.empty doc el |> Seq.map simplifyDest
 
     [<Fact>]
     let headingNotEncoding () =
@@ -600,13 +616,156 @@ module TitleLess =
             mkFolder { baseConfig with coreTitleFromHeading = Some false }
 
         let el = requireElementAtPos d2 0 2
-        Assert.Empty(Dest.tryResolveElement folder d2 el)
+        Assert.Empty(Dest.tryResolveElement folder Seq.empty d2 el)
 
         // In title-full mode headings *are* referenceable cross-doc
         let _, d2, folder =
             mkFolder { baseConfig with coreTitleFromHeading = Some true }
 
-        Assert.NotEmpty(Dest.tryResolveElement folder d2 el)
+        Assert.NotEmpty(Dest.tryResolveElement folder Seq.empty d2 el)
+
+module CrossFolderResolutionTests =
+    [<Fact>]
+    let crossFolderWikiLink_resolvesToExtraFolder () =
+        // Primary folder has a wiki link to a doc only in the extra folder
+        let srcDoc =
+            FakeDoc.Mk(path = "primary.md", contentLines = [| "[[extra-doc]]" |])
+
+        let primaryFolder = FakeFolder.Mk([ srcDoc ])
+
+        let extraDoc =
+            FakeDoc.Mk(path = "extra-doc.md", contentLines = [| "# Extra Doc" |])
+
+        let extraFolder = FakeFolder.Mk([ extraDoc ])
+
+        let link = requireElementAtPos srcDoc 0 2
+
+        // Without extra folder: no resolution
+        Assert.Empty(Dest.tryResolveElement primaryFolder Seq.empty srcDoc link)
+
+        // With extra folder: resolves to extra doc
+        let resolved =
+            Dest.tryResolveElement primaryFolder [ extraFolder ] srcDoc link
+            |> Array.ofSeq
+
+        Assert.NotEmpty(resolved)
+
+    [<Fact>]
+    let crossFolderWikiLink_sectionRef () =
+        let srcDoc =
+            FakeDoc.Mk(path = "primary.md", contentLines = [| "[[extra-doc#section]]" |])
+
+        let primaryFolder = FakeFolder.Mk([ srcDoc ])
+
+        let extraDoc =
+            FakeDoc.Mk(path = "extra-doc.md", contentLines = [| "# Extra Doc"; "## Section" |])
+
+        let extraFolder = FakeFolder.Mk([ extraDoc ])
+
+        let link = requireElementAtPos srcDoc 0 2
+
+        let resolved =
+            Dest.tryResolveElement primaryFolder [ extraFolder ] srcDoc link
+            |> Array.ofSeq
+
+        Assert.NotEmpty(resolved)
+
+    [<Fact>]
+    let crossFolderNotAmbiguous_primaryTakesPrecedence () =
+        // When the primary folder has the doc, extra folder should not add duplicates
+        let srcDoc =
+            FakeDoc.Mk(path = "primary.md", contentLines = [| "[[local-doc]]" |])
+
+        let localDoc =
+            FakeDoc.Mk(path = "local-doc.md", contentLines = [| "# Local" |])
+
+        let primaryFolder = FakeFolder.Mk([ srcDoc; localDoc ])
+
+        let extraDoc =
+            FakeDoc.Mk(path = "local-doc.md", contentLines = [| "# Extra Local" |])
+
+        let extraFolder = FakeFolder.Mk([ extraDoc ])
+
+        let link = requireElementAtPos srcDoc 0 2
+
+        // Primary resolution should succeed without involving extra folder
+        let primaryResolved =
+            Dest.tryResolveElement primaryFolder Seq.empty srcDoc link
+            |> Array.ofSeq
+
+        Assert.NotEmpty(primaryResolved)
+
+        // With extra folder, result should still be from primary (not duplicated)
+        let withExtraResolved =
+            Dest.tryResolveElement primaryFolder [ extraFolder ] srcDoc link
+            |> Array.ofSeq
+
+        Assert.Equal(primaryResolved.Length, withExtraResolved.Length)
+
+module CrossFolderSectionRenameTests =
+    // extra folder has doc-b.md with a subsection; primary has a CrossSection link to it.
+    // Renaming the subsection in extra folder must propagate the edit to primary.
+
+    let extraDoc =
+        FakeDoc.Mk(path = "doc-b.md", contentLines = [| "# Doc B"; "## Action Items" |])
+
+    let primaryDoc =
+        FakeDoc.Mk(path = "primary.md", contentLines = [| "[[doc-b#action-items]]" |])
+
+    let extraFolder = FakeFolder.Mk([ extraDoc ])
+    let primaryFolder = FakeFolder.Mk([ primaryDoc ])
+
+    // The heading element in the extra doc at line 1 (## Action Items)
+    let sectionHeading =
+        Cst.elementAtPos (Position.Mk(1, 3)) (Doc.cst extraDoc)
+        |> Option.defaultWith (fun _ -> failwith "No heading at (1,3)")
+
+    [<Fact>]
+    let crossFolderSectionRef_findRefs () =
+        // Without referencingFolders: no cross-folder refs
+        let refsWithout =
+            Dest.findElementRefs false extraFolder Seq.empty extraDoc sectionHeading
+            |> Array.ofSeq
+
+        Assert.Empty(refsWithout)
+
+        // With primary as a referencing folder: the [[doc-b#action-items]] link is found
+        let refsWith =
+            Dest.findElementRefs false extraFolder [ primaryFolder ] extraDoc sectionHeading
+            |> Array.ofSeq
+
+        Assert.Equal(1, refsWith.Length)
+        let refDoc, _ = refsWith[0]
+        Assert.Equal(Doc.id primaryDoc, Doc.id refDoc)
+
+    [<Fact>]
+    let crossFolderSectionRef_renamePropagatesToPrimary () =
+        let result =
+            Refactor.rename
+                true
+                extraFolder
+                [ primaryFolder ]
+                extraDoc
+                (Position.Mk(1, 3))
+                "Next Steps"
+
+        match result with
+        | Edit workspaceEdit ->
+            let changes = workspaceEdit.DocumentChanges |> Option.defaultValue [||]
+            // Expect edits in two docs: the heading itself + the link in primary
+            Assert.Equal(2, changes.Length)
+
+            let editedUris =
+                changes
+                |> Array.choose (fun c ->
+                    match c with
+                    | TextDocumentEdit e -> Some e.TextDocument.Uri
+                    | _ -> None)
+                |> Array.map (fun u -> System.IO.Path.GetFileName(u: string))
+                |> Array.sort
+
+            Assert.Equal<string[]>([| "doc-b.md"; "primary.md" |], editedUris)
+        | other -> Assert.Fail($"Expected Edit but got: {other}")
 
 module RegressionTests =
     [<Fact>]
@@ -614,4 +773,4 @@ module RegressionTests =
         let doc = FakeDoc.Mk(path = "doc.md", contentLines = [| "[](/)" |])
         let folder = FakeFolder.Mk([ doc ])
         let el = requireElementAtPos doc 0 4
-        Assert.Empty(Dest.tryResolveElement folder doc el)
+        Assert.Empty(Dest.tryResolveElement folder Seq.empty doc el)

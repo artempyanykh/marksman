@@ -51,6 +51,6 @@ module Dest =
     val scope: Dest -> Range
     val location: Dest -> Location
 
-    val tryResolveSym: Folder -> Doc -> Syms.Sym -> seq<Dest>
-    val tryResolveElement: Folder -> Doc -> Element -> seq<Dest>
-    val findElementRefs: bool -> Folder -> Doc -> Element -> seq<Doc * Element>
+    val tryResolveSym: Folder -> seq<Folder> -> Doc -> Syms.Sym -> seq<Dest>
+    val tryResolveElement: Folder -> seq<Folder> -> Doc -> Element -> seq<Dest>
+    val findElementRefs: bool -> Folder -> seq<Folder> -> Doc -> Element -> seq<Doc * Element>

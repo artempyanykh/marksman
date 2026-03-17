@@ -44,6 +44,9 @@ toc.include = [1, 2, 3, 4, 5, 6]
 # Enable/disable "Create missing linked file" code action
 create_missing_file.enable = true
 
+# Enable/disable "Convert inline link to reference" code action
+link_to_reference.enable = true
+
 [completion]
 # The maximum number of candidates returned for a completion 
 candidates = 50

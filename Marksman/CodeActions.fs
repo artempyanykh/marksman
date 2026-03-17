@@ -9,6 +9,7 @@ open Ionide.LanguageServerProtocol.Logging
 open Marksman.Misc
 open Marksman.Paths
 open Marksman.Names
+open Marksman.Cst
 open Marksman.Doc
 open Marksman.Index
 open Marksman.Folder
@@ -35,6 +36,16 @@ let createFile newFileUri : WorkspaceEdit =
     let documentChanges = [| DocumentChange.createFile newFileUri |]
 
     { Changes = None; DocumentChanges = Some documentChanges }
+
+type MultiEditAction = { name: string; edits: list<Range * string> }
+
+let multiDocumentEdit (edits: list<Range * string>) (documentUri: DocumentUri) : WorkspaceEdit =
+    let textEdits =
+        edits
+        |> List.map (fun (range, text) -> { NewText = text; Range = range })
+        |> Array.ofList
+
+    { Changes = Some(Map.ofList [ documentUri, textEdits ]); DocumentChanges = None }
 
 let tableOfContentsInner (includeLevels: array<int>) (doc: Doc) : DocumentAction option =
     match TableOfContents.mk includeLevels (Doc.index doc) with
@@ -108,7 +119,6 @@ let tableOfContentsInner (includeLevels: array<int>) (doc: Doc) : DocumentAction
 
     | _ -> None
 
-
 let tableOfContents
     (_range: Range)
     (_context: CodeActionContext)
@@ -161,3 +171,50 @@ let createMissingFile
         // create the file
         { name = $"Create `{filename}`"; newFileUri = uri }
     }
+
+let linkToReference (range: Range) (_context: CodeActionContext) (doc: Doc) : MultiEditAction option =
+    let mkLabel (text: string) =
+        text
+        |> String.toLower
+        |> String.replace " " "-"
+        |> String.replace "_" "-"
+        |> String.replace "." "-"
+
+    let hasUrl (url: UrlEncodedNode) (def: Node<MdLinkDef>) = url.text.Equals(def.data.url.text)
+
+    let getAction (link: Node<MdLink>) : MultiEditAction option =
+        match link.data with
+        | MdLink.IL(text, Some url, title) ->
+            let existingDef = (Doc.index doc).linkDefs |> Seq.tryFind (hasUrl url)
+
+            match existingDef with
+            | Some def ->
+                Some {
+                    name = $"Replace link with reference `{def.data.label.text}`"
+                    edits = [ Node.range link, $"[{text.text}][{def.data.label.text}]" ]
+                }
+            | None ->
+                let label = mkLabel text.text
+
+                let titleSuffix =
+                    match title with
+                    | Some t -> $" \"{t.text}\""
+                    | None -> ""
+
+                let refDefText = $"[{label}]: {url.text}{titleSuffix}"
+
+                let numLines = (Doc.text doc).lineMap.NumLines
+                let refRange = Range.Mk(numLines, 0, numLines, 0)
+
+                Some {
+                    name = $"Convert link to new reference `{label}`"
+                    edits = [
+                        Node.range link, $"[{text.text}][{label}]"
+                        refRange, $"{NewLine}{refDefText}"
+                    ]
+                }
+        | _ -> None
+
+    (Doc.index doc).mdLinks
+    |> Seq.tryFind (fun node -> node.range.ContainsInclusive(range.Start))
+    |> Option.bind getAction

@@ -87,18 +87,15 @@ let checkLinks (folder: Folder) (doc: Doc) : seq<Entry> =
     let links = Doc.index >> Index.links <| doc
     links |> Seq.collect (checkLink folder doc)
 
-let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
+let checkDoc (folder: Folder) (doc: Doc) : list<Entry> =
     seq {
-        for doc in Folder.docs folder do
-            let docDiag =
-                seq {
-                    yield! checkLinks folder doc
-                    yield! checkNonBreakingWhitespace doc
-                }
-                |> List.ofSeq
-
-            Doc.id doc, docDiag
+        yield! checkLinks folder doc
+        yield! checkNonBreakingWhitespace doc
     }
+    |> List.ofSeq
+
+let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
+    Folder.docs folder |> Seq.map (fun doc -> Doc.id doc, checkDoc folder doc)
 
 let destToHuman (ref: Dest) : string =
     match ref with
@@ -185,7 +182,7 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
         Data = None
       }
 
-type FolderDiag = array<DocId * array<Lsp.Diagnostic>>
+type FolderDiag = Map<DocId, array<Lsp.Diagnostic>>
 
 module FolderDiag =
     let mk (folder: Folder) : FolderDiag =
@@ -194,7 +191,7 @@ module FolderDiag =
             let lspDiags = List.map diagToLsp diags |> Array.ofList
 
             uri, lspDiags)
-        |> Array.ofSeq
+        |> Map.ofSeq
 
 type WorkspaceDiag = Map<FolderId, FolderDiag>
 

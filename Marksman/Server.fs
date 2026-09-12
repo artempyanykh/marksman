@@ -184,6 +184,28 @@ type MarksmanClient(notiSender: ClientNotificationSender, _reqSender: ClientRequ
     member this.MarksmanUpdateStatus(par: MarksmanStatusParams) =
         notiSender "marksman/status" (box par) |> Async.Ignore
 
+let private diagnosticPublication
+    (docUri: DocId)
+    (existingDocVersion: option<int>)
+    (newDocVersion: option<int>)
+    (existingDocDiag: array<Diagnostic>)
+    (newDocDiag: array<Diagnostic>)
+    : option<PublishDiagnosticsParams> =
+    let reopenedWithDiagnostics =
+        existingDocVersion = None
+        && Option.isSome newDocVersion
+        && not (Array.isEmpty newDocDiag)
+
+    if newDocDiag <> existingDocDiag || reopenedWithDiagnostics then
+        // TODO: check how the behavior changes when we supply the document version here
+        Some {
+            Uri = docUri.Uri
+            Diagnostics = newDocDiag
+            Version = None
+        }
+    else
+        None
+
 let calcDiagnosticsUpdate
     (prevState: Option<State>)
     (newState: State)
@@ -201,15 +223,15 @@ let calcDiagnosticsUpdate
     seq {
         for folderPath in allFolders do
             let existingFolderDiag =
-                Map.tryFind folderPath existingDiag |> Option.defaultValue [||]
+                Map.tryFind folderPath existingDiag |> Option.defaultValue Map.empty
 
             let newFolderDiag =
-                Map.tryFind folderPath newDiag |> Option.defaultValue [||]
+                Map.tryFind folderPath newDiag |> Option.defaultValue Map.empty
 
             let allDocs =
                 Set.union
-                    (Array.map fst newFolderDiag |> Set.ofArray)
-                    (Array.map fst existingFolderDiag |> Set.ofArray)
+                    (Map.keys newFolderDiag |> Set.ofSeq)
+                    (Map.keys existingFolderDiag |> Set.ofSeq)
 
             logger.trace (
                 Log.setMessage "Updating folder diag"
@@ -223,41 +245,30 @@ let calcDiagnosticsUpdate
                 let existingDocVersion = Option.bind Doc.version existingDoc
 
                 let existingDocDiag =
-                    existingFolderDiag
-                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
-                    |> Option.map snd
-                    |> Option.defaultValue [||]
+                    Map.tryFind docUri existingFolderDiag |> Option.defaultValue [||]
 
                 let newDoc = State.tryFindDoc docPath newState
                 let newDocVersion = Option.bind Doc.version newDoc
 
                 let newDocDiag =
-                    newFolderDiag
-                    |> Array.tryFind (fun (uri, _) -> uri = docUri)
-                    |> Option.map snd
-                    |> Option.defaultValue [||]
+                    Map.tryFind docUri newFolderDiag |> Option.defaultValue [||]
 
-                let shouldUpdate =
-                    newDocDiag <> existingDocDiag
-                    // Diag didn't change but the document was re-opened; re-send the diag
-                    || (existingDocVersion = None
-                        && Option.isSome newDocVersion
-                        && not (Array.isEmpty newDocDiag))
-
-                if shouldUpdate then
+                match
+                    diagnosticPublication
+                        docUri
+                        existingDocVersion
+                        newDocVersion
+                        existingDocDiag
+                        newDocDiag
+                with
+                | Some update ->
                     logger.trace (
                         Log.setMessage "Diagnostic changed, queueing the update"
                         >> Log.addContext "doc" docUri
                     )
 
-                    // TODO: check how the behavior changes when we supply the document version here
-                    let publishParams = {
-                        Uri = docUri.Uri
-                        Diagnostics = newDocDiag
-                        Version = None
-                    }
-
-                    yield publishParams
+                    yield update
+                | None -> ()
     }
 
 type DiagnosticsManager(client: MarksmanClient) =

@@ -20,7 +20,7 @@ Track progress in order. Keep tests passing after each code change.
   Construct and parse fixtures outside the measured call, force diagnostic
   results to be evaluated, and measure time and allocations. Keep generated
   benchmark results out of the repository.
-- [ ] **3. Refactor without changing behavior.** Extract per-document
+- [x] **3. Refactor without changing behavior.** Extract per-document
   diagnostic calculation, represent previous results as a keyed snapshot, and
   make the calculation and publication decision testable apart from the mailbox.
   Check that the behavior tests still pass.

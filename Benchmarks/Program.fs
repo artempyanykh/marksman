@@ -71,11 +71,15 @@ type ReferenceResolution() =
 
 
 [<EntryPoint>]
-let main _ =
+let main args =
     // Uncomment to debug the benchmark routines
     // ReferenceResolution().gotoDefTime()
     // ReferenceResolution().findRefsTime()
-    BenchmarkRunner.Run<ReferenceResolution>() |> ignore
+    BenchmarkSwitcher
+        .FromAssembly(typeof<ReferenceResolution>.Assembly)
+        .Run(args)
+    |> ignore
+
     0
 // $ make bench
 // BenchmarkDotNet v0.14.0, macOS Sequoia 15.6.1 (24G90) [Darwin 24.6.0]

@@ -58,3 +58,15 @@ module InternName =
     val src: InternName -> DocId
     val tryAsPath: InternName -> option<InternPath>
     val asPath: InternName -> InternPath
+
+/// Names by which references can address a document. A reference depends on
+/// every alias through which a matching document could become visible.
+[<RequireQualifiedAccess>]
+type DocumentAlias =
+    | TitleSlug of Slug
+    | CanonicalPath of CanonDocPath
+    | PathSuffix of string list
+
+module DocumentAlias =
+    val ofReferenceName: exts: seq<string> -> InternName -> Set<DocumentAlias>
+    val ofDocument: exts: seq<string> -> Slug -> RelPath -> Set<DocumentAlias>

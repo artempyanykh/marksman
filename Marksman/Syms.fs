@@ -169,24 +169,6 @@ module ScopedSym =
         | scope, Sym.Ref ref -> Some(scope, ref)
         | _ -> None
 
-type ScopeSlug = ScopeSlug of Slug
-
-module ScopeSlug =
-    let private ofDocId (docId: DocId) =
-        docId.Path |> RootedRelPath.filenameStem |> Slug.ofString |> ScopeSlug
-
-    let private ofScopedDefAux (docId: DocId) (def: Def) =
-        match def with
-        | LinkDef _ -> None
-        | Doc
-        | Header _ -> Some(ofDocId docId)
-        | Title id -> Some(ScopeSlug(Slug.ofString id))
-
-    let ofScopedDef (scope: Scope, def: Def) =
-        match Scope.asDoc scope with
-        | Some docId -> ofScopedDefAux docId def
-        | None -> None
-
 module Sym =
     let asRef =
         function

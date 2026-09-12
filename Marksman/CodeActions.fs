@@ -131,8 +131,8 @@ let createMissingFile
     monad' {
         let! atPos = Doc.index doc |> Index.linkAtPos pos
 
-        // Extract a potential xref to another doc. We should extract only the doc part to ensure
-        // that empty list of references means that the file doesn't exist
+        // Check only the document part: a missing section still belongs to an
+        // existing file and must not offer a create-file action.
         let! symAtPos = doc.Structure |> Structure.tryFindSymbolForConcrete atPos
 
         let! docAtPos =
@@ -140,11 +140,11 @@ let createMissingFile
             | Sym.Ref(CrossRef r) -> Some(r.Doc)
             | _ -> None
 
-        let docRefAtPos = Sym.Ref(CrossRef(CrossDoc docAtPos))
-        let refs = Dest.tryResolveSym folder doc docRefAtPos
+        let matchingDocuments =
+            Folder.filterDocsByName (InternName.mkUnchecked doc.Id docAtPos) folder
 
         // Early return if the file exists
-        do! guard (Seq.isEmpty refs)
+        do! guard (Seq.isEmpty matchingDocuments)
 
         let! internPath = InternName.tryAsPath { name = docAtPos; src = doc.Id }
 

@@ -141,3 +141,42 @@ module InternName =
     let asPath name =
         tryAsPath name
         |> Option.defaultWith (fun () -> failwith $"Can't convert InternName {name} to a path")
+
+/// Names by which references can address a document. A reference depends on
+/// every alias through which a matching document could become visible.
+[<RequireQualifiedAccess>]
+type DocumentAlias =
+    | TitleSlug of Slug
+    | CanonicalPath of CanonDocPath
+    | PathSuffix of string list
+
+module DocumentAlias =
+    let ofReferenceName exts (name: InternName) =
+        let title = DocumentAlias.TitleSlug(InternName.slug name)
+
+        match InternName.tryAsPath name with
+        | None -> Set.singleton title
+        | Some(ExactAbs path | ExactRel(_, path)) ->
+            Set.ofList [
+                title
+                DocumentAlias.CanonicalPath(CanonDocPath.mk exts (RootedRelPath.relPathForced path))
+            ]
+        | Some(Approx path) ->
+            Set.ofList [
+                title
+                DocumentAlias.PathSuffix(CanonDocPath.mk exts path |> CanonDocPath.components)
+            ]
+
+    let ofDocument exts slug path =
+        let canon = CanonDocPath.mk exts path
+
+        let rec suffixes =
+            function
+            | [] -> [ DocumentAlias.PathSuffix [] ]
+            | (_ :: rest as parts) -> DocumentAlias.PathSuffix parts :: suffixes rest
+
+        Set.ofList (
+            DocumentAlias.TitleSlug slug
+            :: DocumentAlias.CanonicalPath canon
+            :: suffixes (CanonDocPath.components canon)
+        )

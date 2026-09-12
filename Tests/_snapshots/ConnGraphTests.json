@@ -4,8 +4,7 @@
       "Resolved:",
       "  ",
       "Unresolved:",
-      "  ",
-      "Last touched:"
+      "  "
     ]
   },
   "initGraph": {
@@ -63,29 +62,7 @@
       "  FullyUnknown -> [[doc-NA]] @ d1.md",
       "  FullyUnknown -> [[doc-NA2]] @ d2.md",
       "  d1_dup.md -> [[doc-1#d1s1]] @ d2.md",
-      "  d3.md -> [linkx] @ d3.md",
-      "Ref deps:",
-      "  (d2.md, [[doc-1]]) -> (d2.md, [[doc-1#d1s1]])",
-      "  (d2.md, [[doc-1#d1s1]]) -> (d2.md, [[doc-1]])",
-      "Last touched:",
-      "  Doc @ d1.md",
-      "  T {doc-1} @ d1.md",
-      "  H2 {d1s1} @ d1.md",
-      "  [[doc-2]] @ d1.md",
-      "  [[doc-NA]] @ d1.md",
-      "  Doc @ d1_dup.md",
-      "  T {doc-1} @ d1_dup.md",
-      "  [[doc-2]] @ d1_dup.md",
-      "  Doc @ d2.md",
-      "  T {doc-2} @ d2.md",
-      "  [[doc-1]] @ d2.md",
-      "  [[doc-NA2]] @ d2.md",
-      "  [[doc-1#d1s1]] @ d2.md",
-      "  Doc @ d3.md",
-      "  T {doc-3} @ d3.md",
-      "  [link1]: @ d3.md",
-      "  [link1] @ d3.md",
-      "  [linkx] @ d3.md"
+      "  d3.md -> [linkx] @ d3.md"
     ]
   },
   "removeDoc": {
@@ -131,18 +108,7 @@
       "  [linkx] @ d3.md -> d3.md",
       "  FullyUnknown -> [[doc-NA]] @ d1.md",
       "  FullyUnknown -> [[doc-NA2]] @ d2.md",
-      "  d3.md -> [linkx] @ d3.md",
-      "Ref deps:",
-      "  (d2.md, [[doc-1]]) -> (d2.md, [[doc-1#d1s1]])",
-      "  (d2.md, [[doc-1#d1s1]]) -> (d2.md, [[doc-1]])",
-      "Last touched:",
-      "  T {doc-1} @ d1.md",
-      "  H2 {d1s1} @ d1.md",
-      "  Doc @ d1_dup.md",
-      "  T {doc-1} @ d1_dup.md",
-      "  [[doc-2]] @ d1_dup.md",
-      "  [[doc-1]] @ d2.md",
-      "  [[doc-1#d1s1]] @ d2.md"
+      "  d3.md -> [linkx] @ d3.md"
     ]
   },
   "addDoc": {
@@ -192,15 +158,7 @@
       "  [[doc-NA2]] @ d2.md -> FullyUnknown",
       "  [linkx] @ d3.md -> d3.md",
       "  FullyUnknown -> [[doc-NA2]] @ d2.md",
-      "  d3.md -> [linkx] @ d3.md",
-      "Ref deps:",
-      "  (d2.md, [[doc-1]]) -> (d2.md, [[doc-1#d1s1]])",
-      "  (d2.md, [[doc-1#d1s1]]) -> (d2.md, [[doc-1]])",
-      "Last touched:",
-      "  [[doc-NA]] @ d1.md",
-      "  [[doc-NA2]] @ d2.md",
-      "  Doc @ docNA.md",
-      "  T {doc-na} @ docNA.md"
+      "  d3.md -> [linkx] @ d3.md"
     ]
   },
   "addLinkDef": {
@@ -247,15 +205,7 @@
       "  [[doc-NA]] @ d1.md -> FullyUnknown",
       "  [[doc-NA2]] @ d2.md -> FullyUnknown",
       "  FullyUnknown -> [[doc-NA]] @ d1.md",
-      "  FullyUnknown -> [[doc-NA2]] @ d2.md",
-      "Ref deps:",
-      "  (d2.md, [[doc-1]]) -> (d2.md, [[doc-1#d1s1]])",
-      "  (d2.md, [[doc-1#d1s1]]) -> (d2.md, [[doc-1]])",
-      "Last touched:",
-      "  [[doc-NA]] @ d1.md",
-      "  [[doc-NA2]] @ d2.md",
-      "  [linkx]: @ d3.md",
-      "  [linkx] @ d3.md"
+      "  FullyUnknown -> [[doc-NA2]] @ d2.md"
     ]
   },
   "removeHeading": {
@@ -300,15 +250,7 @@
       "  FullyUnknown -> [[doc-NA]] @ d1.md",
       "  FullyUnknown -> [[doc-NA2]] @ d2.md",
       "  d1.md -> [[doc-1#d1s1]] @ d2.md",
-      "  d3.md -> [linkx] @ d3.md",
-      "Ref deps:",
-      "  (d2.md, [[doc-1]]) -> (d2.md, [[doc-1#d1s1]])",
-      "  (d2.md, [[doc-1#d1s1]]) -> (d2.md, [[doc-1]])",
-      "Last touched:",
-      "  T {doc-1} @ d1.md",
-      "  H2 {d1s1} @ d1.md",
-      "  [[doc-1]] @ d2.md",
-      "  [[doc-1#d1s1]] @ d2.md"
+      "  d3.md -> [linkx] @ d3.md"
     ]
   },
   "initGraphWithTags": {
@@ -338,14 +280,7 @@
       "    #tag2 -> #tag2 @ d2.md",
       "    #tag3 -> #tag3 @ d2.md",
       "Unresolved:",
-      "  ",
-      "Last touched:",
-      "  Doc @ d1.md",
-      "  #tag1 @ d1.md",
-      "  #tag2 @ d1.md",
-      "  Doc @ d2.md",
-      "  #tag2 @ d2.md",
-      "  #tag3 @ d2.md"
+      "  "
     ]
   },
   "removingTag": {
@@ -372,9 +307,7 @@
       "    #tag2 -> #tag2 @ d2.md",
       "    #tag3 -> #tag3 @ d2.md",
       "Unresolved:",
-      "  ",
-      "Last touched:",
-      "  #tag2 @ d1.md"
+      "  "
     ]
   }
 }

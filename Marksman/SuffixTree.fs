@@ -95,3 +95,6 @@ module SuffixTree =
     let remove k t = { t with tree = Impl.remove (t.splitFn k) t.tree }
 
     let filterMatchingValues k t = Impl.filterMatchingValues (t.splitFn k) t.tree
+
+    /// Query using key parts that have already been split.
+    let filterMatchingParts parts t = Impl.filterMatchingValues parts t.tree

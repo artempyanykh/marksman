@@ -27,6 +27,14 @@ type MMap<'K, 'V> when 'K: comparison and 'V: comparison =
         |> Option.defaultValue this.Inner
         |> MMap
 
+    member this.SetValues(k: 'K, values: Set<'V>) : MMap<'K, 'V> =
+        if Set.isEmpty values then
+            this.Inner.Remove(k) |> MMap
+        else
+            this.Inner.Add(k, values) |> MMap
+
+    member this.RemoveKey(k: 'K) : MMap<'K, 'V> = this.Inner.Remove(k) |> MMap
+
     member this.IsEmpty = this.Inner.IsEmpty
 
     static member OfSeq(seq: seq<'K * 'V>) : MMap<'K, 'V> =
@@ -104,6 +112,10 @@ module MMap =
     let add k v (mm: MMap<'K, 'V>) = mm.Add(k, v)
 
     let removeValue k v (mm: MMap<'K, 'V>) = mm.RemoveValue(k, v)
+
+    let setValues k values (mm: MMap<'K, 'V>) = mm.SetValues(k, values)
+
+    let removeKey k (mm: MMap<'K, 'V>) = mm.RemoveKey(k)
 
     let isEmpty (mm: MMap<'K, 'V>) = mm.IsEmpty
 

@@ -34,3 +34,15 @@ module CreateMissingFileTests =
             CodeActions.createMissingFile (Range.Mk(0, 3, 0, 3)) caCtx doc2 folder
 
         Assert.Equal(None, ca)
+
+    [<Fact>]
+    let shouldNotCreateWhenTitlelessFileExists () =
+        let doc1 = FakeDoc.Mk([| "Body without a title." |], path = "doc1.md")
+        let doc2 = FakeDoc.Mk([| "[[doc1]]" |], path = "doc2.md")
+        let folder = FakeFolder.Mk([ doc1; doc2 ])
+        let caCtx = { Diagnostics = [||]; Only = None; TriggerKind = None }
+
+        let ca =
+            CodeActions.createMissingFile (Range.Mk(0, 3, 0, 3)) caCtx doc2 folder
+
+        Assert.Equal(None, ca)

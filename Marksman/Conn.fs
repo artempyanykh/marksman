@@ -8,16 +8,24 @@ open Marksman.Names
 open Marksman.Graph
 open Marksman.Syms
 
+[<RequireQualifiedAccess>]
+type DefinitionSelector =
+    | DocumentTarget of Scope
+    | SectionTarget of Scope * string
+    | LinkDefinitionTarget of Scope * LinkLabel
 
+type CandidateDocumentResolution = { documents: Set<DocId>; aliasesRead: Set<DocumentAlias> }
+
+/// The oracle evaluates computations against the current folder snapshot.
 type Oracle = {
-    resolveToScope: Scope -> Ref -> Scope[]
-    resolveInScope: Ref -> Scope -> Def[]
+    resolveCandidateDocuments: InternName -> CandidateDocumentResolution
+    selectDefinitions: DefinitionSelector -> Def[]
 }
 
-module ScopedSym =
-    let asRef (scope, sym) = Sym.asRef sym |> Option.map (fun link -> scope, link)
-    let asDef (scope, sym) = Sym.asDef sym |> Option.map (fun def -> scope, def)
-    let asTag (scope, sym) = Sym.asTag sym |> Option.map (fun tag -> scope, tag)
+type ConnectionChange = {
+    symbolDifference: Difference<ScopedSym>
+    invalidatedDocumentAliases: Set<DocumentAlias>
+}
 
 type UnresolvedScope =
     | FullyUnknown
@@ -34,13 +42,171 @@ type Unresolved =
         | Scope FullyUnknown -> "FullyUnknown"
         | Scope(InScope scope) -> $"{scope}"
 
+// TODO: Separate incremental graph maintenance from the document-reference
+// computations below. Conn currently mixes value caching, dependency tracking,
+// invalidation, and scheduling with the rules for selecting documents and
+// definitions, which obscures both parts. For example, setComputationValue
+// returns a change flag that callers must propagate, while
+// affectedDefinitionSelectors derives invalidation links on demand and other
+// dependencies are recorded during evaluation. A possible next step is a small
+// graph component that owns value comparison, dependency replacement, and
+// propagation. The reference resolver would define computations and their
+// inputs, including definition changes, through one consistent dependency API.
+[<RequireQualifiedAccess>]
+type private ConnectionComputation =
+    | ResolveCandidateDocuments of InternName
+    | SelectDefinitions of DefinitionSelector
+    | ResolveReference of Scope * Ref
+
+[<RequireQualifiedAccess>]
+type private ConnectionDependency =
+    | ExternalInput of DocumentAlias
+    | ComputedValue of ConnectionComputation
+
+type private ReferenceResolution = { resolved: Set<ScopedSym>; unresolved: Set<UnresolvedScope> }
+
+[<RequireQualifiedAccess>]
+type private ConnectionValue =
+    | CandidateDocuments of Set<DocId>
+    | SelectedDefinitions of Set<Def>
+    | ReferenceResolution of ReferenceResolution
+
+/// Source symbols and derived computations form one connection state. The
+/// reverse-reference map is a materialized query index over reference resolutions.
+type Conn = private {
+    symbols: MMap<Scope, Sym>
+    dependencies: MMap<ConnectionComputation, ConnectionDependency>
+    dependents: MMap<ConnectionDependency, ConnectionComputation>
+    computedValues: Map<ConnectionComputation, ConnectionValue>
+    referencesByTarget: MMap<ScopedSym, ScopedSym>
+} with
+
+    member private this.ResolvedCompactFormat() =
+        let graph =
+            seq {
+                for KeyValue(node, value) in this.computedValues do
+                    match node, value with
+                    | ConnectionComputation.ResolveReference(scope, ref),
+                      ConnectionValue.ReferenceResolution result ->
+                        for target in result.resolved do
+                            yield (scope, Sym.Ref ref), target
+                    | _ -> ()
+
+                for scope, sym in MMap.toSeq this.symbols do
+                    match sym with
+                    | Sym.Tag _ -> yield (scope, sym), (Scope.Global, sym)
+                    | _ -> ()
+            }
+            |> Seq.fold
+                (fun graph (source, target) -> Graph.addEdge source target graph)
+                Graph.empty
+
+        let edges =
+            graph.edges
+            |> MMap.toSetSeq
+            |> Seq.groupBy (fun ((scope, _), _) -> scope)
+
+        let lines =
+            seq {
+                for scope, scopedEdges in edges do
+                    yield $"{scope}:"
+
+                    for (_, sym), targets in scopedEdges do
+                        for targetScope, targetSym in targets do
+                            yield Indented(2, $"{sym} -> {targetSym} @ {targetScope}").ToString()
+            }
+
+        concatLines lines
+
+    member private this.UnresolvedCompactFormat() =
+        let graph =
+            seq {
+                for KeyValue(node, value) in this.computedValues do
+                    match node, value with
+                    | ConnectionComputation.ResolveReference(scope, ref),
+                      ConnectionValue.ReferenceResolution result ->
+                        for target in result.unresolved do
+                            yield Unresolved.Ref(scope, ref), Unresolved.Scope target
+                    | _ -> ()
+            }
+            |> Seq.fold
+                (fun graph (source, target) -> Graph.addEdge source target graph)
+                Graph.empty
+
+        let lines =
+            seq {
+                for source, target in MMap.toSeq graph.edges do
+                    yield $"{source.CompactFormat()} -> {target.CompactFormat()}"
+            }
+
+        concatLines lines
+
+    member this.CompactFormat() =
+        let lines =
+            seq {
+                let refs =
+                    this.symbols
+                    |> MMap.toSetSeq
+                    |> Seq.choose (fun (scope, syms) ->
+                        let refs = syms |> Seq.choose Sym.asRef |> Set.ofSeq
+                        if Set.isEmpty refs then None else Some(scope, refs))
+
+                if not (Seq.isEmpty refs) then
+                    yield "Refs:"
+
+                    for scope, refs in refs do
+                        yield $"  {scope}:"
+
+                        for ref in refs do
+                            yield Indented(4, ref).ToString()
+
+                let defs =
+                    this.symbols
+                    |> MMap.toSetSeq
+                    |> Seq.choose (fun (scope, syms) ->
+                        let defs = syms |> Seq.choose Sym.asDef |> Set.ofSeq
+                        if Set.isEmpty defs then None else Some(scope, defs))
+
+                if not (Seq.isEmpty defs) then
+                    yield "Defs:"
+
+                    for scope, defs in defs do
+                        yield $"  {scope}:"
+
+                        for def in defs do
+                            yield Indented(4, def).ToString()
+
+                let tags =
+                    this.symbols
+                    |> MMap.toSetSeq
+                    |> Seq.choose (fun (scope, syms) ->
+                        let tags = syms |> Seq.choose Sym.asTag |> Set.ofSeq
+                        if Set.isEmpty tags then None else Some(scope, tags))
+
+                if not (Seq.isEmpty tags) then
+                    yield "Tags:"
+
+                    for scope, tags in tags do
+                        yield $"  {scope}:"
+
+                        for tag in tags do
+                            yield Indented(4, tag).ToString()
+
+                yield "Resolved:"
+                yield Indented(2, this.ResolvedCompactFormat()).ToString()
+                yield "Unresolved:"
+                yield Indented(2, this.UnresolvedCompactFormat()).ToString()
+            }
+
+        concatLines lines
+
 type ConnDifference = {
     refsDifference: MMapDifference<Scope, Ref>
     defsDifference: MMapDifference<Scope, Def>
     tagsDifference: MMapDifference<Scope, Tag>
     resolvedDifference: GraphDifference<ScopedSym>
     unresolvedDifference: GraphDifference<Unresolved>
-    refDepsDifference: GraphDifference<Scope * CrossRef>
+    stateDifferences: string list
 } with
 
     member this.IsEmpty() =
@@ -49,171 +215,33 @@ type ConnDifference = {
         && this.tagsDifference.IsEmpty()
         && this.resolvedDifference.IsEmpty()
         && this.unresolvedDifference.IsEmpty()
-        && this.refDepsDifference.IsEmpty()
+        && List.isEmpty this.stateDifferences
 
     member this.CompactFormat() =
         let lines =
             seq {
-                if this.refsDifference.IsEmpty() |> not then
+                if not (this.refsDifference.IsEmpty()) then
                     yield "Refs difference:"
                     yield Indented(2, this.refsDifference.CompactFormat()).ToString()
 
-                if this.defsDifference.IsEmpty() |> not then
+                if not (this.defsDifference.IsEmpty()) then
                     yield "Defs difference:"
                     yield Indented(2, this.defsDifference.CompactFormat()).ToString()
 
-                if this.tagsDifference.IsEmpty() |> not then
+                if not (this.tagsDifference.IsEmpty()) then
                     yield "Tags difference:"
                     yield Indented(2, this.tagsDifference.CompactFormat()).ToString()
 
-                if this.resolvedDifference.IsEmpty() |> not then
+                if not (this.resolvedDifference.IsEmpty()) then
                     yield "Resolved difference:"
                     yield Indented(2, this.resolvedDifference.CompactFormat()).ToString()
 
-                if this.unresolvedDifference.IsEmpty() |> not then
+                if not (this.unresolvedDifference.IsEmpty()) then
                     yield "Unresolved difference:"
                     yield Indented(2, this.unresolvedDifference.CompactFormat()).ToString()
 
-                if this.refDepsDifference.IsEmpty() |> not then
-                    yield "Unresolved difference:"
-                    yield Indented(2, this.refDepsDifference.CompactFormat()).ToString()
-            }
-
-        concatLines lines
-
-type Defs = {
-    byScope: MMap<Scope, Def>
-    bySlug: MMap<ScopeSlug, Scope * Def>
-} with
-
-    static member Empty = { byScope = MMap.empty; bySlug = MMap.empty }
-
-    member this.IsEmpty = MMap.isEmpty this.byScope
-
-    member this.AllSeq = MMap.toSeq this.byScope
-
-    member this.AllSetSeq = MMap.toSetSeq this.byScope
-
-    member this.Add(scope: Scope, def: Def) : Defs =
-        let byScope = this.byScope |> MMap.add scope def
-
-        let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
-
-        let bySlug =
-            scopeSlug
-            |> Option.map (fun x -> this.bySlug |> MMap.add x (scope, def))
-            |> Option.defaultValue this.bySlug
-
-        { byScope = byScope; bySlug = bySlug }
-
-    member this.Remove(scope: Scope, def: Def) : Defs =
-        let byScope = this.byScope |> MMap.removeValue scope def
-
-        let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
-
-        let bySlug =
-            scopeSlug
-            |> Option.map (fun x -> this.bySlug |> MMap.removeValue x (scope, def))
-            |> Option.defaultValue this.bySlug
-
-        { byScope = byScope; bySlug = bySlug }
-
-
-type Conn = {
-    refs: MMap<Scope, Ref>
-    defs: Defs
-    tags: MMap<Scope, Tag>
-    resolved: Graph<ScopedSym>
-    unresolved: Graph<Unresolved>
-    refDeps: Graph<Scope * CrossRef>
-    lastTouched: Set<ScopedSym>
-} with
-
-    member private this.ResolvedCompactFormat() =
-        let byScope =
-            this.resolved.edges
-            |> MMap.toSetSeq
-            |> Seq.groupBy (fun ((scope, _), _) -> scope)
-
-        let lines =
-            seq {
-                for scope, edges in byScope do
-                    yield $"{scope}:"
-
-                    for (_, sym), dests in edges do
-                        for destScope, destSym in dests do
-                            yield Indented(2, $"{sym} -> {destSym} @ {destScope}").ToString()
-            }
-
-        concatLines lines
-
-    member private this.UnresolvedCompactFormat() =
-        let edges = this.unresolved.edges |> MMap.toSeq
-
-        let lines =
-            seq {
-                for start, end_ in edges do
-                    yield $"{start.CompactFormat()} -> {end_.CompactFormat()}".ToString()
-            }
-
-        concatLines lines
-
-    member private this.RefDepsCompactFormat() =
-        let edges = this.refDeps.edges |> MMap.toSeq
-
-        let lines =
-            seq {
-                for start, end_ in edges do
-                    yield $"{start} -> {end_}".ToString()
-            }
-
-        concatLines lines
-
-
-    member this.CompactFormat() =
-        let lines =
-            seq {
-                if this.refs |> MMap.isEmpty |> not then
-                    yield "Refs:"
-
-                    for scope, refs in MMap.toSetSeq this.refs do
-                        yield $"  {scope}:"
-
-                        for ref in refs do
-                            yield Indented(4, ref).ToString()
-
-                if not this.defs.IsEmpty then
-                    yield "Defs:"
-
-                    for scope, defs in this.defs.AllSetSeq do
-                        yield $"  {scope}:"
-
-                        for def in defs do
-                            yield Indented(4, def).ToString()
-
-                if this.tags |> MMap.isEmpty |> not then
-                    yield "Tags:"
-
-                    for scope, tags in MMap.toSetSeq this.tags do
-                        yield $"  {scope}:"
-
-                        for tag in tags do
-                            yield Indented(4, tag).ToString()
-
-                yield "Resolved:"
-                yield Indented(2, this.ResolvedCompactFormat()).ToString()
-
-                yield "Unresolved:"
-                yield Indented(2, this.UnresolvedCompactFormat()).ToString()
-
-                if not (Graph.isEmpty this.refDeps) then
-                    yield "Ref deps:"
-                    yield Indented(2, this.RefDepsCompactFormat()).ToString()
-
-                yield "Last touched:"
-
-                for scope, sym in this.lastTouched do
-                    yield Indented(2, $"{sym} @ {scope}").ToString()
+                for state in this.stateDifferences do
+                    yield $"{state} differs"
             }
 
         concatLines lines
@@ -222,302 +250,522 @@ module Conn =
     let private logger = LogProvider.getLoggerByName "Conn"
 
     let empty = {
-        refs = MMap.empty
-        defs = Defs.Empty
-        tags = MMap.empty
-        resolved = Graph.empty
-        unresolved = Graph.empty
-        refDeps = Graph.empty
-        lastTouched = Set.empty
+        symbols = MMap.empty
+        dependencies = MMap.empty
+        dependents = MMap.empty
+        computedValues = Map.empty
+        referencesByTarget = MMap.empty
     }
 
-    let isSameStructure c1 c2 =
-        c1.refs = c2.refs
-        && c1.defs.byScope = c2.defs.byScope
-        && c1.tags = c2.tags
-        && c1.resolved = c2.resolved
-        && c1.unresolved = c2.unresolved
+    let private computationDependencies computation conn =
+        MMap.tryFind computation conn.dependencies
+        |> Option.defaultValue Set.empty
 
-    /// Incrementally update connection graph based on symbol difference.
-    ///
-    /// NOTE:
-    /// The code below is involved. Tests and running in paranoid mode help
-    /// wrt bugs and regressions but not in reducing complexity.
-    /// The main reason why the logic is so complex is that dependencies between
-    /// symbols are mostly implicit.
-    let updateAux
-        (oracle: Oracle)
-        ({ added = added; removed = removed }: Difference<ScopedSym>)
-        (conn: Conn)
-        : Conn =
-        logger.trace (
-            Log.setMessage "update: started"
-            >> Log.addContext "#added" (Set.count added)
-            >> Log.addContext "#removed" (Set.count removed)
-        )
+    let private dependentComputations dependency conn =
+        MMap.tryFind dependency conn.dependents
+        |> Option.defaultValue Set.empty
 
-        let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+    let private symbolsOf choose conn =
+        conn.symbols
+        |> MMap.toSeq
+        |> Seq.choose (fun (scope, sym) -> choose sym |> Option.map (fun value -> scope, value))
+        |> MMap.ofSeq
 
-        let mutable {
-                        refs = refs
-                        defs = defs
-                        tags = tags
-                        resolved = resolved
-                        unresolved = unresolved
-                        refDeps = refDeps
-                    } =
-            conn
+    let private resolutionGraph conn =
+        let referenceEdges =
+            seq {
+                for KeyValue(node, value) in conn.computedValues do
+                    match node, value with
+                    | ConnectionComputation.ResolveReference(scope, ref),
+                      ConnectionValue.ReferenceResolution result ->
+                        for target in result.resolved do
+                            yield (scope, Sym.Ref ref), target
+                    | _ -> ()
+            }
 
-        let mutable lastTouched = Set.empty
-        let mutable toResolveSet = Set.empty
+        let tagEdges =
+            seq {
+                for scope, sym in MMap.toSeq conn.symbols do
+                    match sym with
+                    | Sym.Tag _ -> yield (scope, sym), (Scope.Global, sym)
+                    | _ -> ()
+            }
 
-        let addUnresolvedRefToQueue =
-            function
-            | Unresolved.Ref(scope, ref) -> toResolveSet <- Set.add (scope, ref) toResolveSet
-            | Unresolved.Scope _ -> ()
+        Seq.append referenceEdges tagEdges
+        |> Seq.fold (fun graph (a, b) -> Graph.addEdge a b graph) Graph.empty
 
-        // Start by removing tags as they have little effect on the overall structure
-        // of the graph
-        let removedTags = removed |> Set.toSeq |> Seq.choose ScopedSym.asTag
+    let private unresolvedGraph conn =
+        seq {
+            for KeyValue(node, value) in conn.computedValues do
+                match node, value with
+                | ConnectionComputation.ResolveReference(scope, ref),
+                  ConnectionValue.ReferenceResolution result ->
+                    for target in result.unresolved do
+                        yield Unresolved.Ref(scope, ref), Unresolved.Scope target
+                | _ -> ()
+        }
+        |> Seq.fold (fun graph (a, b) -> Graph.addEdge a b graph) Graph.empty
 
-        for scope, tag in removedTags do
-            let scopedSym = (scope, Syms.Sym.Tag tag)
-            lastTouched <- Set.add scopedSym lastTouched
+    let private tryReferenceName (scope, ref) =
+        match scope, ref with
+        | Scope.Doc src, CrossRef ref -> Some(InternName.mkUnchecked src ref.Doc)
+        | _ -> None
 
-            tags <- MMap.removeValue scope tag tags
-            resolved <- Graph.removeVertex scopedSym resolved
+    let private selectorForReference ref scope =
+        match ref with
+        | CrossRef(CrossDoc _) -> DefinitionSelector.DocumentTarget scope
+        | CrossRef(CrossSection(_, section))
+        | IntraRef(IntraSection section) ->
+            DefinitionSelector.SectionTarget(scope, Slug.toString section)
+        | IntraRef(IntraLinkDef label) -> DefinitionSelector.LinkDefinitionTarget(scope, label)
 
-        // Remove all refs
-        let removedRefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asRef
+    let private affectedDefinitionSelectors (scope, def) =
+        match def with
+        | Def.Doc -> [ DefinitionSelector.DocumentTarget scope ]
+        | Title id -> [
+            DefinitionSelector.DocumentTarget scope
+            DefinitionSelector.SectionTarget(scope, id)
+          ]
+        | Header(_, id) -> [ DefinitionSelector.SectionTarget(scope, id) ]
+        | LinkDef label -> [ DefinitionSelector.LinkDefinitionTarget(scope, label) ]
 
-        for scope, ref in removedRefs do
-            let scopedSym = (scope, Syms.Sym.Ref ref)
-            // Add removed ref to lastTouched because removing a broken link can affect the diagnostic
-            lastTouched <- Set.add scopedSym lastTouched
-            refs <- MMap.removeValue scope ref refs
-            resolved <- Graph.removeVertex scopedSym resolved
-            unresolved <- Graph.removeVertex (Unresolved.Ref(scope, ref)) unresolved
-            // Some refs could have been queued for resolution during the previous step. However,
-            // we don't need to resolve removed refs
-            toResolveSet <- Set.remove (scope, ref) toResolveSet
+    let private removeComputation computation conn =
+        let dependenciesOfComputation = computationDependencies computation conn
+        let computedValue = ConnectionDependency.ComputedValue computation
+        let dependentsOfComputation = dependentComputations computedValue conn
 
-            // Remove reference dependency
-            // TODO: what if we have both [[A]] and [[A#B]] and we remove [[A]]?
-            // It'd be silly to to erase the dependency between [[A#B]] and [[A]]
-            match ref with
-            | CrossRef r -> refDeps <- Graph.removeVertex (scope, r) refDeps
-            | IntraRef _ -> ()
+        let dependents =
+            dependenciesOfComputation
+            |> Set.fold
+                (fun acc dependency -> MMap.removeValue dependency computation acc)
+                conn.dependents
 
-
-        // Remove all defs. When we remove a def:
-        // 1. some previously resolved links could become broken; we need to remember them and
-        //    re-run the resolution,
-        // 2. some links that were previously pointing to 2 defs (=~ ambiguous link diagnostic)
-        //    may start pointing to a single def, and hence affect diagnostics.
-        // This means that we need to collect everything that was pointing to the def, and re-run
-        // link resolution using an oracle.
-        let removedDefs = removed |> Set.toSeq |> Seq.choose ScopedSym.asDef
-
-        for scope, def in removedDefs do
-            let scopedSym = (scope, Syms.Sym.Def def)
-            lastTouched <- Set.add scopedSym lastTouched
-
-            let cb =
-                function
-                | scope, Sym.Ref ref ->
-                    toResolveSet <- Set.add (scope, ref) toResolveSet
-
-                    // In addition to re-resolving the affected reference, we also need to
-                    // invalidate all other references that depend on it
-                    match ref with
-                    | CrossRef cr ->
-                        let deps = Graph.edges (scope, cr) refDeps
-
-                        deps
-                        |> Set.iter (fun (scope, cr) ->
-                            toResolveSet <- Set.add (scope, CrossRef cr) toResolveSet)
-                    | IntraRef _ -> ()
-                | _, Sym.Def _
-                | _, Sym.Tag _ -> ()
-
-            defs <- defs.Remove(scope, def)
-            resolved <- Graph.removeVertexWithCallback cb scopedSym resolved
-
-            // When the doc is removed we need to remove all unresolved links within this doc's scope
-            match def with
-            | Def.Doc ->
-                unresolved <- Graph.removeVertex (Unresolved.Scope(InScope scope)) unresolved
-            | _ -> ()
-
-        // Now process added symbols
-        let mutable defWasAdded = false
-
-        for scope, sym as scopedSym in added do
-            lastTouched <- Set.add scopedSym lastTouched
-
-            match sym with
-            | Sym.Ref ref ->
-                toResolveSet <- Set.add (scope, ref) toResolveSet
-
-                match ref with
-                | CrossRef(CrossSection(doc, _) as sectionRef) ->
-                    // When we get a cross-section ref we need to synthesize a CrossDoc ref
-                    // and record a dependency. This way composite links like [[A#B]] will be
-                    // properly invalidated when title "A" changes
-                    let docRef = CrossDoc doc
-                    toResolveSet <- Set.add (scope, CrossRef docRef) toResolveSet
-                    refDeps <- Graph.addEdge (scope, docRef) (scope, sectionRef) refDeps
-                | CrossRef(CrossDoc _)
-                | IntraRef _ -> ()
-            | Sym.Def def ->
-                defs <- defs.Add(scope, def)
-
-                match def with
-                | Doc
-                | Title _ ->
-                    // Whenever a new title is added, links that were previously pointing at the Doc
-                    // or the other titles need to be invalidated
-                    let affectedDefs =
-                        defs.byScope
-                        |> MMap.tryFind scope
-                        |> Option.defaultValue Set.empty
-                        |> Seq.filter Def.isTitle
-                        |> Seq.map (fun x -> (scope, x))
-                        |> Seq.append [ (scope, Doc) ]
-
-                    // Similarly, other doc/titles could resolve to the same scope group
-                    let scopeSlug = ScopeSlug.ofScopedDef (scope, def)
-
-                    let affectedDefsInOtherScopes =
-                        match scopeSlug with
-                        | None -> Set.empty
-                        | Some scopeSlug ->
-                            MMap.tryFind scopeSlug defs.bySlug |> Option.defaultValue Set.empty
-
-                    let affectedDefs =
-                        affectedDefs |> Seq.append affectedDefsInOtherScopes |> Set.ofSeq
-
-                    let affectedRefs =
-                        Seq.fold
-                            (fun acc (scope, def) ->
-                                acc + Graph.edges (scope, Sym.Def def) resolved)
-                            Set.empty
-                            affectedDefs
-                        |> Seq.choose ScopedSym.asRef
-
-                    resolved <-
-                        Seq.fold
-                            (fun g (scope, def) -> Graph.removeVertex (scope, Sym.Def def) g)
-                            resolved
-                            affectedDefs
-
-                    toResolveSet <- Seq.fold (flip Set.add) toResolveSet affectedRefs
-                | Header _
-                | LinkDef _ -> ()
-
-                defWasAdded <- true
-
-                // When we add a new def, things that were previously unresolved within the scope
-                // could become resolvable
-                unresolved <-
-                    Graph.removeVertexWithCallback
-                        addUnresolvedRefToQueue
-                        (Unresolved.Scope(InScope scope))
-                        unresolved
-            | Sym.Tag tag ->
-                tags <- MMap.add scope tag tags
-                // We can resolve tag right away into the Global scope
-                resolved <- Graph.addEdge scopedSym (Scope.Global, Syms.Sym.Tag tag) resolved
-
-        // Finally, if any new defs were added we need to re-resolve all previously unresolved links
-        // within the FullyUnknown scope
-        //
-        // TODO: Can be more granular here and do this only when Doc and H1 header symbols are added?
-        if defWasAdded then
-            unresolved <-
-                Graph.removeVertexWithCallback
-                    addUnresolvedRefToQueue
-                    (Unresolved.Scope(FullyUnknown))
-                    unresolved
-
-        // Now we run link resolution while updating both resolved and unresolved graphs
-        for scope, ref in toResolveSet do
-            let srcSym = (scope, Syms.Sym.Ref ref)
-            lastTouched <- Set.add srcSym lastTouched
-            resolved <- Graph.removeVertex srcSym resolved
-            refs <- MMap.add scope ref refs
-
-            let targetScopes = oracle.resolveToScope scope ref
-
-            if Array.isEmpty targetScopes then
-                unresolved <-
-                    Graph.addEdge
-                        (Unresolved.Ref(scope, ref))
-                        (Unresolved.Scope(FullyUnknown))
-                        unresolved
-
-            for targetScope in targetScopes do
-                let targetDefs = oracle.resolveInScope ref targetScope
-
-                if Array.isEmpty targetDefs then
-                    unresolved <-
-                        Graph.addEdge
-                            (Unresolved.Ref(scope, ref))
-                            (Unresolved.Scope(InScope targetScope))
-                            unresolved
-
-                for targetDef in targetDefs do
-                    let targetSym = (targetScope, Syms.Sym.Def targetDef)
-                    lastTouched <- Set.add targetSym lastTouched
-                    resolved <- Graph.addEdge srcSym targetSym resolved
-
-        logger.trace (
-            Log.setMessage "Finished updating conn"
-            >> Log.addContext "#touched" (Set.count lastTouched)
-            >> Log.addContext "elapsed_ms" stopwatch.ElapsedMilliseconds
-        )
+        let dependencies =
+            dependentsOfComputation
+            |> Set.fold
+                (fun acc dependent -> MMap.removeValue dependent computedValue acc)
+                conn.dependencies
 
         {
-            refs = refs
-            defs = defs
-            tags = tags
-            resolved = resolved
-            unresolved = unresolved
-            refDeps = refDeps
-            lastTouched = lastTouched
-        }
+            conn with
+                dependencies = MMap.removeKey computation dependencies
+                dependents = MMap.removeKey computedValue dependents
+                computedValues = Map.remove computation conn.computedValues
+        },
+        dependenciesOfComputation
 
-    let update oracle diff conn =
-        if Difference.isEmpty diff then
-            logger.trace (Log.setMessage "update: skipping empty diff")
+    // ResolveReference computations are rooted at actual source symbols, not derived
+    // caches, so they're removed by removeSymbol, never garbage-collected here.
+    let private isCollectableComputation =
+        function
+        | ConnectionComputation.ResolveCandidateDocuments _
+        | ConnectionComputation.SelectDefinitions _ -> true
+        | ConnectionComputation.ResolveReference _ -> false
+
+    let rec private collectIfOrphan computation conn =
+        if
+            isCollectableComputation computation
+            && Set.isEmpty (
+                dependentComputations (ConnectionDependency.ComputedValue computation) conn
+            )
+            && Map.containsKey computation conn.computedValues
+        then
+            let conn, dependencies = removeComputation computation conn
+
+            dependencies
+            |> Set.fold
+                (fun state dependency ->
+                    match dependency with
+                    | ConnectionDependency.ComputedValue dependency ->
+                        collectIfOrphan dependency state
+                    | ConnectionDependency.ExternalInput _ -> state)
+                conn
+        else
+            conn
+
+    let private setComputationDependencies computation dependencies conn =
+        let old = computationDependencies computation conn
+
+        if old = dependencies then
             conn
         else
-            updateAux oracle diff conn
+            let removed = old - dependencies
+            let added = dependencies - old
 
-    let mk (oracle: Oracle) (symMap: MMap<DocId, Sym>) : Conn =
-        // Backtrace can be helpful in tracking down when full rebuilds are requested
-        // let trace = System.Diagnostics.StackTrace()
+            let dependents =
+                removed
+                |> Set.fold
+                    (fun acc dependency -> MMap.removeValue dependency computation acc)
+                    conn.dependents
+                |> fun index ->
+                    added
+                    |> Set.fold (fun acc dependency -> MMap.add dependency computation acc) index
+
+            let conn = {
+                conn with
+                    dependencies = MMap.setValues computation dependencies conn.dependencies
+                    dependents = dependents
+            }
+
+            removed
+            |> Set.fold
+                (fun state dependency ->
+                    match dependency with
+                    | ConnectionDependency.ComputedValue dependency ->
+                        collectIfOrphan dependency state
+                    | ConnectionDependency.ExternalInput _ -> state)
+                conn
+
+    let private setComputationValue computation value conn =
+        let previous = Map.tryFind computation conn.computedValues
+
+        {
+            conn with
+                computedValues = Map.add computation value conn.computedValues
+        },
+        previous <> Some value
+
+    let private evaluateCandidateDocuments oracle name conn =
+        let node = ConnectionComputation.ResolveCandidateDocuments name
+        let resolution = oracle.resolveCandidateDocuments name
+
+        let dependencies =
+            resolution.aliasesRead |> Set.map ConnectionDependency.ExternalInput
+
+        let conn = setComputationDependencies node dependencies conn
+
+        let conn, changed =
+            setComputationValue node (ConnectionValue.CandidateDocuments resolution.documents) conn
+
+        conn, resolution.documents, changed
+
+    let private evaluateDefinitionSelection oracle selector conn =
+        let node = ConnectionComputation.SelectDefinitions selector
+
+        let scope =
+            match selector with
+            | DefinitionSelector.DocumentTarget scope
+            | DefinitionSelector.SectionTarget(scope, _)
+            | DefinitionSelector.LinkDefinitionTarget(scope, _) -> scope
+
+        let definitions =
+            if MMap.containsKey scope conn.symbols then
+                oracle.selectDefinitions selector |> Set.ofArray
+            else
+                Set.empty
+
+        let conn, changed =
+            setComputationValue node (ConnectionValue.SelectedDefinitions definitions) conn
+
+        conn, definitions, changed
+
+    let private ensureCandidateDocuments oracle name conn =
+        match
+            Map.tryFind (ConnectionComputation.ResolveCandidateDocuments name) conn.computedValues
+        with
+        | Some(ConnectionValue.CandidateDocuments documents) -> conn, documents
+        | _ ->
+            let conn, documents, _ = evaluateCandidateDocuments oracle name conn
+            conn, documents
+
+    let private ensureSelectedDefinitions oracle selector conn =
+        match
+            Map.tryFind (ConnectionComputation.SelectDefinitions selector) conn.computedValues
+        with
+        | Some(ConnectionValue.SelectedDefinitions definitions) -> conn, definitions
+        | _ ->
+            let conn, definitions, _ =
+                evaluateDefinitionSelection oracle selector conn
+
+            conn, definitions
+
+    let private replaceReferenceResolution ((scope, ref) as source) resolution conn =
+        let node = ConnectionComputation.ResolveReference source
+        let sourceSymbol = scope, Sym.Ref ref
+
+        let oldTargets =
+            match Map.tryFind node conn.computedValues with
+            | Some(ConnectionValue.ReferenceResolution old) -> old.resolved
+            | _ -> Set.empty
+
+        let referencesByTarget =
+            oldTargets
+            |> Set.fold
+                (fun index target -> MMap.removeValue target sourceSymbol index)
+                conn.referencesByTarget
+            |> fun index ->
+                resolution.resolved
+                |> Set.fold (fun index target -> MMap.add target sourceSymbol index) index
+
+        {
+            conn with
+                computedValues =
+                    Map.add
+                        node
+                        (ConnectionValue.ReferenceResolution resolution)
+                        conn.computedValues
+                referencesByTarget = referencesByTarget
+        }
+
+    let private evaluateReference oracle ((scope, ref) as source) conn =
+        let mutable conn = conn
+        let mutable dependencies = Set.empty
+
+        let scopes =
+            match tryReferenceName source with
+            | None -> Set.singleton scope
+            | Some name ->
+                let candidatesNode = ConnectionComputation.ResolveCandidateDocuments name
+
+                dependencies <-
+                    Set.add (ConnectionDependency.ComputedValue candidatesNode) dependencies
+
+                let next, docs = ensureCandidateDocuments oracle name conn
+                conn <- next
+                Set.map Scope.Doc docs
+
+        let mutable result = {
+            resolved = Set.empty
+            unresolved = if Set.isEmpty scopes then Set.singleton FullyUnknown else Set.empty
+        }
+
+        for targetScope in scopes do
+            let selector = selectorForReference ref targetScope
+            let selection = ConnectionComputation.SelectDefinitions selector
+            dependencies <- Set.add (ConnectionDependency.ComputedValue selection) dependencies
+            let next, definitions = ensureSelectedDefinitions oracle selector conn
+            conn <- next
+
+            if Set.isEmpty definitions then
+                result <- {
+                    result with
+                        unresolved = Set.add (InScope targetScope) result.unresolved
+                }
+
+            let targets = definitions |> Set.map (fun def -> targetScope, Sym.Def def)
+            result <- { result with resolved = result.resolved + targets }
+
+        conn
+        |> setComputationDependencies (ConnectionComputation.ResolveReference source) dependencies
+        |> replaceReferenceResolution source result
+
+    let private removeReference source conn =
+        let node = ConnectionComputation.ResolveReference source
+        let scope, ref = source
+        let sourceSymbol = scope, Sym.Ref ref
+
+        let referencesByTarget =
+            match Map.tryFind node conn.computedValues with
+            | Some(ConnectionValue.ReferenceResolution resolution) ->
+                resolution.resolved
+                |> Set.fold
+                    (fun index target -> MMap.removeValue target sourceSymbol index)
+                    conn.referencesByTarget
+            | _ -> conn.referencesByTarget
+
+        let conn = { conn with referencesByTarget = referencesByTarget }
+        let conn, dependencies = removeComputation node conn
+
+        dependencies
+        |> Set.fold
+            (fun state dependency ->
+                match dependency with
+                | ConnectionDependency.ComputedValue dependency -> collectIfOrphan dependency state
+                | ConnectionDependency.ExternalInput _ -> state)
+            conn
+
+    let private removeSymbol (scope, sym) conn =
+        let conn =
+            match sym with
+            | Sym.Ref ref -> removeReference (scope, ref) conn
+            | Sym.Def _
+            | Sym.Tag _ -> conn
+
+        { conn with symbols = MMap.removeValue scope sym conn.symbols }
+
+    let private addSymbol (scope, sym) conn = {
+        conn with
+            symbols = MMap.add scope sym conn.symbols
+    }
+
+    let private rebuild oracle initialWork conn =
+        let mutable conn = conn
+        let mutable candidateDocumentComputations = Set.empty
+        let mutable definitionComputations = Set.empty
+        let mutable referenceComputations = Set.empty
+
+        let enqueue node =
+            match node with
+            | ConnectionComputation.ResolveCandidateDocuments _ ->
+                candidateDocumentComputations <- Set.add node candidateDocumentComputations
+            | ConnectionComputation.SelectDefinitions _ ->
+                definitionComputations <- Set.add node definitionComputations
+            | ConnectionComputation.ResolveReference _ ->
+                referenceComputations <- Set.add node referenceComputations
+
+        Set.iter enqueue initialWork
+        let mutable evaluatedCandidateDocumentComputations = 0
+        let mutable evaluatedReferences = 0
+
+        // Each round drains candidates, then definitions, then references, in
+        // that dependency order; a value that changes requeues its dependents,
+        // which the next round picks up, so the loop keeps going until nothing
+        // is left dirty.
+        while not (
+            Set.isEmpty candidateDocumentComputations
+            && Set.isEmpty definitionComputations
+            && Set.isEmpty referenceComputations
+        ) do
+            while not (Set.isEmpty candidateDocumentComputations) do
+                let node = Set.minElement candidateDocumentComputations
+
+                candidateDocumentComputations <- Set.remove node candidateDocumentComputations
+
+                match node with
+                | ConnectionComputation.ResolveCandidateDocuments name when
+                    Map.containsKey node conn.computedValues
+                    ->
+                    let next, _, changed = evaluateCandidateDocuments oracle name conn
+                    conn <- next
+
+                    evaluatedCandidateDocumentComputations <-
+                        evaluatedCandidateDocumentComputations + 1
+
+                    if changed then
+                        dependentComputations (ConnectionDependency.ComputedValue node) conn
+                        |> Set.iter enqueue
+                | _ -> ()
+
+            while not (Set.isEmpty definitionComputations) do
+                let node = Set.minElement definitionComputations
+                definitionComputations <- Set.remove node definitionComputations
+
+                match node with
+                | ConnectionComputation.SelectDefinitions selector when
+                    Map.containsKey node conn.computedValues
+                    ->
+                    let next, _, changed = evaluateDefinitionSelection oracle selector conn
+                    conn <- next
+
+                    if changed then
+                        dependentComputations (ConnectionDependency.ComputedValue node) conn
+                        |> Set.iter enqueue
+                | _ -> ()
+
+            while not (Set.isEmpty referenceComputations) do
+                let node = Set.minElement referenceComputations
+                referenceComputations <- Set.remove node referenceComputations
+
+                match node with
+                | ConnectionComputation.ResolveReference(scope, ref) when
+                    MMap.tryFind scope conn.symbols
+                    |> Option.exists (Set.contains (Sym.Ref ref))
+                    ->
+                    conn <- evaluateReference oracle (scope, ref) conn
+                    evaluatedReferences <- evaluatedReferences + 1
+                | _ -> ()
+
         logger.trace (
-            Log.setMessage "mk: full rebuild started"
-        // >> Log.addContext "backtrace" (trace.ToString())
+            Log.setMessage "Updated connection graph"
+            >> Log.addContext
+                "#candidate_document_computations"
+                evaluatedCandidateDocumentComputations
+            >> Log.addContext "#references" evaluatedReferences
         )
 
-        let added =
-            MMap.fold (fun acc docId sym -> Set.add (Scope.Doc docId, sym) acc) Set.empty symMap
+        conn
 
-        update oracle { added = added; removed = Set.empty } empty
+    let update (oracle: Oracle) (change: ConnectionChange) (previous: Conn) : Conn =
+        if
+            Difference.isEmpty change.symbolDifference
+            && Set.isEmpty change.invalidatedDocumentAliases
+        then
+            previous
+        else
+            let mutable conn = previous
+
+            for symbol in change.symbolDifference.removed do
+                conn <- removeSymbol symbol conn
+
+            for symbol in change.symbolDifference.added do
+                conn <- addSymbol symbol conn
+
+            let dirtyDefinitionComputations =
+                change.symbolDifference.added + change.symbolDifference.removed
+                |> Seq.choose (fun (scope, sym) ->
+                    Sym.asDef sym |> Option.map (fun def -> scope, def))
+                |> Seq.collect affectedDefinitionSelectors
+                |> Seq.map ConnectionComputation.SelectDefinitions
+                |> Set.ofSeq
+
+            let dirtyCandidateDocumentComputations =
+                change.invalidatedDocumentAliases
+                |> Seq.collect (fun key ->
+                    dependentComputations (ConnectionDependency.ExternalInput key) conn)
+                |> Set.ofSeq
+
+            let newReferenceComputations =
+                change.symbolDifference.added
+                |> Seq.choose Marksman.Syms.ScopedSym.asScopedRef
+                |> Seq.map ConnectionComputation.ResolveReference
+                |> Set.ofSeq
+
+            rebuild
+                oracle
+                (dirtyDefinitionComputations
+                 + dirtyCandidateDocumentComputations
+                 + newReferenceComputations)
+                conn
+
+    let mk (oracle: Oracle) (symMap: MMap<DocId, Sym>) : Conn =
+        let mutable conn = empty
+
+        for doc, sym in MMap.toSeq symMap do
+            conn <- addSymbol (Scope.Doc doc, sym) conn
+
+        for scope, sym in MMap.toSeq conn.symbols do
+            match sym with
+            | Sym.Ref ref -> conn <- evaluateReference oracle (scope, ref) conn
+            | _ -> ()
+
+        conn
 
     let difference c1 c2 : ConnDifference = {
-        refsDifference = MMap.difference c1.refs c2.refs
-        defsDifference = MMap.difference c1.defs.byScope c2.defs.byScope
-        tagsDifference = MMap.difference c1.tags c2.tags
-        resolvedDifference = Graph.difference c1.resolved c2.resolved
-        unresolvedDifference = Graph.difference c1.unresolved c2.unresolved
-        refDepsDifference = Graph.difference c1.refDeps c2.refDeps
+        refsDifference = MMap.difference (symbolsOf Sym.asRef c1) (symbolsOf Sym.asRef c2)
+        defsDifference = MMap.difference (symbolsOf Sym.asDef c1) (symbolsOf Sym.asDef c2)
+        tagsDifference = MMap.difference (symbolsOf Sym.asTag c1) (symbolsOf Sym.asTag c2)
+        resolvedDifference = Graph.difference (resolutionGraph c1) (resolutionGraph c2)
+        unresolvedDifference = Graph.difference (unresolvedGraph c1) (unresolvedGraph c2)
+        stateDifferences = [
+            if c1.dependencies <> c2.dependencies then
+                "Dependencies"
+            if c1.dependents <> c2.dependents then
+                "Dependents"
+            if c1.computedValues <> c2.computedValues then
+                "Computed values"
+            if c1.referencesByTarget <> c2.referencesByTarget then
+                "Reverse reference index"
+        ]
     }
 
 module Query =
-    let resolve (scopedSym: ScopedSym) (conn: Conn) : Set<ScopedSym> =
-        conn.resolved.edges
-        |> MMap.tryFind scopedSym
-        |> Option.defaultValue Set.empty
+    let private sourceContains scope sym conn =
+        MMap.tryFind scope conn.symbols |> Option.exists (Set.contains sym)
+
+    let resolve ((scope, sym) as scopedSym) (conn: Conn) : Set<ScopedSym> =
+        match sym with
+        | Sym.Ref ref when sourceContains scope sym conn ->
+            match
+                Map.tryFind (ConnectionComputation.ResolveReference(scope, ref)) conn.computedValues
+            with
+            | Some(ConnectionValue.ReferenceResolution result) -> result.resolved
+            | _ -> Set.empty
+        | Sym.Tag _ when sourceContains scope sym conn -> Set.singleton (Scope.Global, sym)
+        | Sym.Tag tag when scope = Scope.Global ->
+            MMap.toSeq conn.symbols
+            |> Seq.choose (fun (sourceScope, source) ->
+                if source = Sym.Tag tag then Some(sourceScope, source) else None)
+            |> Set.ofSeq
+        | _ ->
+            MMap.tryFind scopedSym conn.referencesByTarget
+            |> Option.defaultValue Set.empty

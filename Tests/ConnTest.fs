@@ -67,8 +67,8 @@ let d3 =
 let checkSnapshot (conn: Conn) = conn.CompactFormat().Lines().ShouldMatchSnapshot()
 
 let emptyOracle = {
-    resolveToScope = fun _ _ -> [||] //
-    resolveInScope = fun _ _ -> [||]
+    resolveCandidateDocuments = fun _ -> { documents = Set.empty; aliasesRead = Set.empty } //
+    selectDefinitions = fun _ -> [||]
 }
 
 let incrConfig = { Config.Config.Default with coreIncrementalReferences = Some true }
@@ -396,3 +396,155 @@ module ConnGraphTests_TitleLess =
         let fromScratch = mkFolder [ d1'; d2 ] |> Folder.conn
         let connDiff = Conn.difference fromScratch incr
         checkInlineSnapshot id [ connDiff.CompactFormat() ] [ "" ]
+
+module IncrementalRegressionTests =
+    open Marksman.ConnDependencyTests
+
+    let doc path lines = FakeDoc.Mk(path = path, contentLines = Array.ofList lines)
+
+    [<Theory>]
+    [<InlineData("remove section")>]
+    [<InlineData("remove explicit doc")>]
+    [<InlineData("add matching heading")>]
+    [<InlineData("rename missing target")>]
+    [<InlineData("delete missing target")>]
+    [<InlineData("add ambiguous target")>]
+    let lifecycle scenario =
+        let target = doc "target.md" [ "# Target"; "## Sub" ]
+        let source lines = doc "source.md" lines
+
+        let folder, update =
+            match scenario with
+            | "remove section" ->
+                mkFolder [ target; source [ "[[target#Sub]]" ] ], Folder.withDoc (source [])
+            | "remove explicit doc" ->
+                mkFolder [ target; source [ "[[target]]"; "[[target#Sub]]" ] ],
+                Folder.withDoc (source [ "[[target#Sub]]" ])
+            | "add matching heading" ->
+                mkFolder [ target; source [ "[[target#Sub]]" ] ],
+                Folder.withDoc (doc "target.md" [ "# Target"; "## Sub"; "### Sub" ])
+            | "rename missing target" ->
+                mkFolder [ target; source [ "[[Target#Missing]]" ] ],
+                Folder.withDoc (doc "target.md" [ "# Other"; "## Sub" ])
+            | "delete missing target" ->
+                mkFolder [ target; source [ "[[target#Missing]]" ] ],
+                (Folder.withoutDoc target.Id >> Option.get)
+            | _ ->
+                mkFolder [ target; source [ "[[target#Sub]]" ] ],
+                Folder.withDoc (doc "other.md" [ "# Target"; "## Sub" ])
+
+        Assert.True(
+            (Folder.configOrDefault folder).CoreIncrementalReferences(),
+            "incremental enabled"
+        )
+
+        let updated = update folder
+        assertMatchesCleanConstruction updated
+
+        updated
+        |> Folder.withDoc (doc "target.md" [ "# Renamed" ])
+        |> assertMatchesCleanConstruction
+
+    [<Fact>]
+    let addingAmbiguousScopeInvalidatesMissingSections () =
+        mkFolder [ doc "one.md" [ "# Alpha" ]; doc "source.md" [ "[[Alpha#Sub]]" ] ]
+        |> Folder.withDoc (doc "two.md" [ "# Alpha"; "## Sub" ])
+        |> assertMatchesCleanConstruction
+
+    [<Fact>]
+    let addingPathMatchWhenExistingMatchHasDifferentTitle () =
+        mkFolder [ doc "nested/a.md" [ "# Beta" ]; doc "source.md" [ "[[a]]" ] ]
+        |> Folder.withDoc (doc "a.md" [])
+        |> assertMatchesCleanConstruction
+
+    [<Fact>]
+    let renamingScopeClearsOldUnresolvedEdges () =
+        mkFolder [ doc "one.md" [ "# Alpha" ]; doc "source.md" [ "[[Alpha#Sub]]" ] ]
+        |> Folder.withDoc (doc "one.md" [ "# Beta" ])
+        |> assertMatchesCleanConstruction
+
+    [<Fact>]
+    let reorderingTitlesChangesCandidateSelection () =
+        mkFolder [
+            doc "one.md" [ "# Alpha"; "# Beta" ]
+            doc "source.md" [ "[[Alpha]]"; "[[Beta]]" ]
+        ]
+        |> Folder.withDoc (doc "one.md" [ "# Beta"; "# Alpha" ])
+        |> assertMatchesCleanConstruction
+
+    [<Theory>]
+    [<InlineData(17)>]
+    [<InlineData(42)>]
+    [<InlineData(123)>]
+    let editSequences seed =
+        let random = System.Random(seed)
+        let paths = [| "a.md"; "b.md"; "nested/a.md"; "c.md" |]
+
+        let contents = [|
+            []
+            [ "# Alpha"; "## Sub" ]
+            [ "# Beta"; "## Other" ]
+            [ "# Alpha"; "## Other"; "# Beta" ]
+            [ "[[Alpha#Sub]]"; "[[a#Other]]"; "[[b]]" ]
+            [ "[[Alpha]]"; "[[Alpha#Other]]"; "[[#Sub]]"; "## Sub" ]
+            [ "# Beta"; "[[Alpha#Missing]]"; "[[nested/a#Sub]]" ]
+            [ "# Alpha"; "#tag"; "[link]"; "[link]: /url" ]
+            [ "# Beta"; "# Alpha"; "## Other" ]
+            [ "[[a]]"; "[[a#Sub]]"; "[[a#Other]]" ]
+            [ "[[a#Other]]"; "[[./a#Sub]]"; "[[/a#Sub]]" ]
+            [ "## Sub"; "### Other"; "[link]" ]
+            [ "[link]: /url"; "[link]"; "#tag" ]
+        |]
+
+        let mutable folder = mkFolder []
+        let history = ResizeArray<string>()
+
+        for step in 1..1000 do
+            let path = paths[random.Next(paths.Length)]
+            let content = random.Next(contents.Length)
+            let next = doc path contents[content]
+            let delete = random.Next(5) = 0
+            let action = if delete then "deleted" else string content
+            history.Add($"{step}: {path} = {action}")
+
+            folder <-
+                if delete then
+                    Folder.withoutDoc next.Id folder |> Option.get
+                else
+                    Folder.withDoc next folder
+
+            try
+                assertMatchesCleanConstruction folder
+            with ex ->
+                let edits = System.String.Join("\n", history)
+                failwith $"seed {seed}\n{edits}\n{ex.Message}"
+
+    [<Fact>]
+    let removingTitleClearsUnresolvedScope () =
+        mkFolder [
+            doc "one.md" [ "# Alpha" ]
+            doc "two.md" [ "# Alpha"; "## Sub" ]
+            doc "source.md" [ "[[Alpha#Sub]]" ]
+        ]
+        |> Folder.withDoc (doc "one.md" [])
+        |> assertMatchesCleanConstruction
+
+    [<Fact>]
+    let paranoidScopeChanges () =
+        let config = { incrConfig with coreParanoid = Some true }
+
+        FakeFolder.Mk(
+            config = config,
+            docs = [ doc "one.md" [ "# Alpha" ]; doc "source.md" [ "[[Alpha#Sub]]" ] ]
+        )
+        |> Folder.withDoc (doc "two.md" [ "# Alpha"; "## Sub"; "# Beta" ])
+        |> Folder.withDoc (doc "two.md" [ "# Beta"; "## Sub"; "# Alpha" ])
+        |> Folder.withoutDoc (doc "one.md" []).Id
+        |> Option.get
+        |> assertMatchesCleanConstruction
+
+    [<Fact>]
+    let changingTitlePreservesUnresolvedLocalReferences () =
+        mkFolder [ doc "one.md" [ "## Sub"; "[missing]" ] ]
+        |> Folder.withDoc (doc "one.md" [ "# Alpha"; "[missing]" ])
+        |> assertMatchesCleanConstruction

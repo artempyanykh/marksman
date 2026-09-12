@@ -163,7 +163,7 @@ module FolderLookup =
 module Oracle =
     open Conn
 
-    let filterDocsByInternPath
+    let resolveDocumentsByPath
         (path: InternPath)
         (data: FolderData)
         (lookup: FolderLookup)
@@ -182,65 +182,58 @@ module Oracle =
 
             SuffixTree.filterMatchingValues canonPath lookup.docsByPath
 
-    let filterDocsByName (data: FolderData) (lookup: FolderLookup) (name: InternName) : seq<DocId> =
-        let byTitle: seq<DocId> =
-            FolderLookup.filterDocsBySlug (InternName.name name |> Slug.ofString) lookup
+    let resolveCandidateDocuments
+        (data: FolderData)
+        (lookup: FolderLookup)
+        (name: InternName)
+        : CandidateDocumentResolution =
+        let exts = (FolderData.configOrDefault data).CoreMarkdownFileExtensions()
+        let aliasesRead = DocumentAlias.ofReferenceName exts name
+
+        let documents =
+            aliasesRead
+            |> Seq.collect (function
+                | DocumentAlias.TitleSlug slug -> FolderLookup.filterDocsBySlug slug lookup
+                | DocumentAlias.CanonicalPath path ->
+                    FolderData.tryFindDocByRelPath (CanonDocPath.toRel path) data
+                    |> Option.toList
+                    |> Seq.ofList
+                | DocumentAlias.PathSuffix parts ->
+                    SuffixTree.filterMatchingParts parts lookup.docsByPath)
             |> Seq.map Doc.id
+            |> Set.ofSeq
 
-        let byPath: seq<DocId> =
-            InternName.tryAsPath name
-            |> Option.map (fun path -> filterDocsByInternPath path data lookup |> Seq.map Doc.id)
-            |> Option.defaultValue []
+        { documents = documents; aliasesRead = aliasesRead }
 
-        Set.ofSeq (Seq.append byTitle byPath)
+    let private selectDefinitions (data: FolderData) (selector: Conn.DefinitionSelector) : Def[] =
+        let scope =
+            match selector with
+            | Conn.DefinitionSelector.DocumentTarget scope
+            | Conn.DefinitionSelector.SectionTarget(scope, _)
+            | Conn.DefinitionSelector.LinkDefinitionTarget(scope, _) -> scope
 
-    let private resolveToDoc (data: FolderData) (lookup: FolderLookup) (fromDoc: DocId) (ref: Ref) =
-        match ref with
-        | Ref.CrossRef r ->
-            let internName = InternName.mkUnchecked fromDoc r.Doc
-
-            filterDocsByName data lookup internName
-            |> Seq.map Scope.Doc
-            |> Seq.toArray
-        | Ref.IntraRef _ -> [| Scope.Doc fromDoc |]
-
-    let private resolveInDoc (data: FolderData) (ref: Ref) (inDoc: DocId) : Def[] =
-        let destDoc = FolderData.findDocById inDoc data
-        let destStruct = Doc.structure destDoc
-
-        match ref with
-        | Ref.CrossRef(CrossDoc _) ->
-            let titles =
-                Structure.symbols destStruct
+        match scope with
+        | Scope.Global -> [||]
+        | Scope.Doc docId ->
+            let defs =
+                FolderData.findDocById docId data
+                |> Doc.structure
+                |> Structure.symbols
                 |> Seq.choose Sym.asDef
-                |> Seq.filter Def.isTitle
-                |> Seq.toArray
 
-            if Array.isEmpty titles then [| Doc |] else titles
-        | Ref.CrossRef(CrossSection(_, section))
-        | Ref.IntraRef(IntraSection section) ->
-            Structure.symbols destStruct
-            |> Seq.choose Sym.asDef
-            |> Seq.filter (Def.isHeaderOrTitleWithId (Slug.toString section))
-            |> Seq.toArray
-        | Ref.IntraRef(IntraLinkDef label) ->
-            Structure.symbols destStruct
-            |> Seq.choose Sym.asDef
-            |> Seq.filter (Def.isLinkDefWithLabel label)
-            |> Seq.toArray
+            match selector with
+            | Conn.DefinitionSelector.DocumentTarget _ ->
+                let titles = defs |> Seq.filter Def.isTitle |> Set.ofSeq
+                if Set.isEmpty titles then [| Def.Doc |] else Set.toArray titles
+            | Conn.DefinitionSelector.SectionTarget(_, id) ->
+                defs |> Seq.filter (Def.isHeaderOrTitleWithId id) |> Seq.toArray
+            | Conn.DefinitionSelector.LinkDefinitionTarget(_, label) ->
+                defs |> Seq.filter (Def.isLinkDefWithLabel label) |> Seq.toArray
 
-    let oracle data lookup : Oracle =
-        let resolveToScope scope ref =
-            match scope, ref with
-            | Scope.Doc docId, ref -> resolveToDoc data lookup docId ref
-            | _ -> [||]
-
-        let resolveInScope ref scope =
-            match ref, scope with
-            | ref, Scope.Doc docId -> resolveInDoc data ref docId
-            | _ -> [||]
-
-        { resolveToScope = resolveToScope; resolveInScope = resolveInScope }
+    let oracle data lookup : Oracle = {
+        resolveCandidateDocuments = resolveCandidateDocuments data lookup
+        selectDefinitions = selectDefinitions data
+    }
 
 type Folder = { data: FolderData; lookup: FolderLookup; conn: Conn.Conn }
 
@@ -517,7 +510,10 @@ module Folder =
         else
             match folder.data with
             | SingleFile folder -> SingleFile { folder with config = config } |> mk
-            | MultiFile folder -> MultiFile { folder with config = config } |> mk
+            | MultiFile folder ->
+                // Extension changes also change canonical path keys. Rebuild
+                // the document map, not just the indexes over its old keys.
+                multiFile folder.name folder.root (Map.values folder.docs) config
 
     let tryLoad (userConfig: option<Config>) (name: string) (folderId: FolderId) : option<Folder> =
         logger.info (
@@ -546,6 +542,31 @@ module Folder =
 
             None
 
+    let private documentAliases (config: Config) doc =
+        DocumentAlias.ofDocument
+            (config.CoreMarkdownFileExtensions())
+            (Doc.slug doc)
+            (Doc.pathFromRoot doc)
+
+    let private updateConnectionGraph data lookup (change: Conn.ConnectionChange) previous =
+        let config = FolderData.configOrDefault data
+        let oracle = Oracle.oracle data lookup
+
+        let conn =
+            if config.CoreIncrementalReferences() then
+                Conn.Conn.update oracle change previous
+            else
+                Conn.Conn.mk oracle (FolderData.syms data)
+
+        if config.CoreParanoid() then
+            let rebuilt = Conn.Conn.mk oracle (FolderData.syms data)
+            let diff = Conn.Conn.difference rebuilt conn
+
+            if not (diff.IsEmpty()) then
+                failwith $"PARANOID MODE ERROR:\n{diff.CompactFormat()}"
+
+        conn
+
     let withDoc (newDoc: Doc) { data = prevData; lookup = prevLookup; conn = prevConn } : Folder =
         match prevData with
         | MultiFile folder ->
@@ -570,39 +591,52 @@ module Folder =
 
             let lookup = FolderLookup.withDoc newDoc lookup
 
+            let symbolDifference, invalidatedDocumentAliases =
+                match existingDoc with
+                | None ->
+                    let added = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
+                    { added = added; removed = Set.empty }, documentAliases config newDoc
+                | Some existingDoc ->
+                    let symbolDifference =
+                        if existingDoc.Id = newDoc.Id then
+                            Doc.symsDifference existingDoc newDoc
+                            |> Difference.map (Sym.scopedToDoc newDoc.Id)
+                        else
+                            // A replacement with the same canonical path can still
+                            // change DocId (e.g. switching markdown extensions).
+                            {
+                                removed =
+                                    Doc.syms existingDoc
+                                    |> Sym.allScopedToDoc existingDoc.Id
+                                    |> Set.ofSeq
+                                added = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
+                            }
+
+                    let before = documentAliases config existingDoc
+                    let after = documentAliases config newDoc
+
+                    let aliases =
+                        if existingDoc.Id <> newDoc.Id then
+                            Set.union before after
+                        else
+                            Set.union (before - after) (after - before)
+
+                    symbolDifference, aliases
+
+            let change: Conn.ConnectionChange = {
+                symbolDifference = symbolDifference
+                invalidatedDocumentAliases = invalidatedDocumentAliases
+            }
+
             let conn =
-                let symDifference =
-                    match existingDoc with
-                    | None ->
-                        let newSyms = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
-
-                        { added = newSyms; removed = Set.empty }
-                    | Some existingDoc ->
-                        Doc.symsDifference existingDoc newDoc
-                        |> Difference.map (Sym.scopedToDoc newDoc.Id)
-
-                if Difference.isEmpty symDifference then
+                if
+                    Difference.isEmpty symbolDifference
+                    && Set.isEmpty invalidatedDocumentAliases
+                    && not (config.CoreParanoid())
+                then
                     prevConn
-                else if config.CoreIncrementalReferences() then
-                    let incrConn =
-                        Conn.Conn.update (Oracle.oracle data lookup) symDifference prevConn
-
-                    if config.CoreParanoid() then
-                        let fromScratchConn =
-                            Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
-
-                        let connDiff = Conn.Conn.difference fromScratchConn incrConn
-
-                        if not (connDiff.IsEmpty()) then
-                            failwith
-                                $"""PARANOID MODE ERROR:
-        Compared to the one built from scratch, the incremental graph has:
-        {connDiff.CompactFormat()}
-        """
-
-                    incrConn
                 else
-                    Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
+                    updateConnectionGraph data lookup change prevConn
 
             { data = data; lookup = lookup; conn = conn }
         | SingleFile({ doc = existingDoc } as folder) ->
@@ -628,10 +662,15 @@ module Folder =
                 let lookup = FolderLookup.withoutDoc doc folder.lookup
 
                 let conn =
-                    let removedSyms = Doc.syms doc |> Sym.allScopedToDoc docId |> Set.ofSeq
+                    let removedSyms = Doc.syms doc |> Sym.allScopedToDoc doc.Id |> Set.ofSeq
 
-                    let diff = { added = Set.empty; removed = removedSyms }
-                    Conn.Conn.update (Oracle.oracle data lookup) diff folder.conn
+                    let change: Conn.ConnectionChange = {
+                        symbolDifference = { added = Set.empty; removed = removedSyms }
+                        invalidatedDocumentAliases =
+                            documentAliases (FolderData.configOrDefault data) doc
+                    }
+
+                    updateConnectionGraph data lookup change folder.conn
 
                 Some { data = data; lookup = lookup; conn = conn }
         | SingleFile { doc = doc } ->
@@ -676,10 +715,11 @@ module Folder =
         FolderLookup.filterDocsBySlug slug folder.lookup
 
     let filterDocsByInternPath (path: InternPath) (folder: Folder) : seq<Doc> =
-        Oracle.filterDocsByInternPath path folder.data folder.lookup
+        Oracle.resolveDocumentsByPath path folder.data folder.lookup
 
     let filterDocsByName (name: InternName) (folder: Folder) : seq<Doc> =
-        Oracle.filterDocsByName folder.data folder.lookup name
+        Oracle.resolveCandidateDocuments folder.data folder.lookup name
+        |> fun resolution -> resolution.documents
         |> Seq.map (flip findDocById folder)
 
     let configuredMarkdownExts folder =

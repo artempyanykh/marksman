@@ -14,7 +14,7 @@ Track progress in order. Keep tests passing after each code change.
   re-opening a document, and comparison of the latest state after multiple
   changes. Assert diagnostic content and publication decisions, not just
   message text.
-- [ ] **2. Add a diagnostics benchmark and record a baseline.** Reuse the
+- [x] **2. Add a diagnostics benchmark and record a baseline.** Reuse the
   existing 100- and 1,000-document fixtures. Measure initial calculation and
   updates after an unrelated edit, a link edit, and a target-heading edit.
   Construct and parse fixtures outside the measured call, force diagnostic
@@ -41,3 +41,23 @@ Track progress in order. Keep tests passing after each code change.
   unrelated document is not recalculated. Rerun the benchmark and compare time
   and allocations with the baseline, especially for unrelated edits and larger
   folders.
+
+Baseline on 2026-09-12: BenchmarkDotNet 0.15.6, .NET 9.0.19, Linux x64,
+Intel Core i7-12700K. The Release benchmark was run in-process with two warmup
+and five measurement iterations at 200 ms each. Figures are mean time and
+allocated memory per calculation; they are indicative short-run measurements.
+
+| Scenario | 100 documents | 1,000 documents |
+| --- | ---: | ---: |
+| Initial | 3.6 ms / 5.9 MB | 46.8 ms / 63.9 MB |
+| Prose edit | 7.0 ms / 11.7 MB | 91.9 ms / 126.2 MB |
+| Link edit | 7.0 ms / 11.7 MB | 91.1 ms / 126.2 MB |
+| Target-heading edit | 7.1 ms / 11.7 MB | 91.4 ms / 126.2 MB |
+
+Repeat after building the Release benchmark project:
+
+```sh
+dotnet run -c Release --no-build --project Benchmarks -- \
+  --filter '*DiagnosticUpdates*' -j Short \
+  --warmupCount 2 --iterationCount 5 --iterationTime 200 --inProcess
+```

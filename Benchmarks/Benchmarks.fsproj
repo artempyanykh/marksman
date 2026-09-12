@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <Compile Include="ConnectionUpdates.fs" />
+        <Compile Include="DiagnosticUpdates.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

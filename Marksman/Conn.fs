@@ -72,7 +72,7 @@ type private ConnectionValue =
     | ReferenceResolution of ReferenceResolution
 
 /// Source symbols and derived computations form one connection state. The
-/// reverse-reference map is a materialized query index over reference resolutions.
+/// reverse-reference map indexes resolved references and tag occurrences.
 type Conn = private {
     symbols: MMap<Scope, Sym>
     dependencies: MMap<ConnectionComputation, ConnectionDependency>
@@ -578,15 +578,27 @@ module Conn =
         let conn =
             match sym with
             | Sym.Ref ref -> removeReference (scope, ref) conn
-            | Sym.Def _
-            | Sym.Tag _ -> conn
+            | Sym.Tag _ ->
+                {
+                    conn with
+                        referencesByTarget =
+                            MMap.removeValue (Scope.Global, sym) (scope, sym) conn.referencesByTarget
+                }
+            | Sym.Def _ -> conn
 
         { conn with symbols = MMap.removeValue scope sym conn.symbols }
 
-    let private addSymbol (scope, sym) conn = {
-        conn with
-            symbols = MMap.add scope sym conn.symbols
-    }
+    let private addSymbol (scope, sym) conn =
+        let referencesByTarget =
+            match sym with
+            | Sym.Tag _ -> MMap.add (Scope.Global, sym) (scope, sym) conn.referencesByTarget
+            | _ -> conn.referencesByTarget
+
+        {
+            conn with
+                symbols = MMap.add scope sym conn.symbols
+                referencesByTarget = referencesByTarget
+        }
 
     let private rebuild oracle initialWork conn =
         let mutable conn = conn
@@ -752,6 +764,27 @@ module Query =
     let private sourceContains scope sym conn =
         MMap.tryFind scope conn.symbols |> Option.exists (Set.contains sym)
 
+    /// Compare materialized reference results without recalculating references.
+    /// This scans the graph, but avoids parsing links or constructing diagnostics.
+    let documentsWithChangedReferenceResolutions (before: Conn) (after: Conn) : Set<DocId> =
+        let mutable changed = Set.empty
+
+        for KeyValue(node, value) in before.computedValues do
+            match node with
+            | ConnectionComputation.ResolveReference(Scope.Doc doc, _) when
+                Map.tryFind node after.computedValues <> Some value
+                -> changed <- Set.add doc changed
+            | _ -> ()
+
+        for KeyValue(node, _) in after.computedValues do
+            match node with
+            | ConnectionComputation.ResolveReference(Scope.Doc doc, _) when
+                not (Map.containsKey node before.computedValues)
+                -> changed <- Set.add doc changed
+            | _ -> ()
+
+        changed
+
     let resolve ((scope, sym) as scopedSym) (conn: Conn) : Set<ScopedSym> =
         match sym with
         | Sym.Ref ref when sourceContains scope sym conn ->
@@ -761,11 +794,6 @@ module Query =
             | Some(ConnectionValue.ReferenceResolution result) -> result.resolved
             | _ -> Set.empty
         | Sym.Tag _ when sourceContains scope sym conn -> Set.singleton (Scope.Global, sym)
-        | Sym.Tag tag when scope = Scope.Global ->
-            MMap.toSeq conn.symbols
-            |> Seq.choose (fun (sourceScope, source) ->
-                if source = Sym.Tag tag then Some(sourceScope, source) else None)
-            |> Set.ofSeq
         | _ ->
             MMap.tryFind scopedSym conn.referencesByTarget
             |> Option.defaultValue Set.empty

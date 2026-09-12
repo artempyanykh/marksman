@@ -204,6 +204,16 @@ module DiagnosticPublicationTests =
         Assert.Empty(cleared)
 
     [<Fact>]
+    let removingAFolderClearsDiagnosticsForItsDocuments () =
+        let source = doc "source.md" [ "[[missing]]" ]
+        let before = state (FakeFolder.Mk [ source ])
+        let after = Workspace.ofFolders None [] |> State.mk ClientDescription.empty
+
+        let cleared = publications (Some before) after |> onlyPublication source
+
+        Assert.Empty(cleared)
+
+    [<Fact>]
     let reopeningADocumentResendsUnchangedDiagnostics () =
         let source = doc "source.md" [ "[[missing]]" ]
         let before = FakeFolder.Mk [ source ]
@@ -219,6 +229,15 @@ module DiagnosticPublicationTests =
 
         let brokenLink = Assert.Single reported
         Assert.Equal("Link to non-existent document 'missing'", brokenLink.Message)
+
+    [<Fact>]
+    let reopeningACleanDocumentDoesNotPublishAnEmptyUpdate () =
+        let source = doc "source.md" [ "Some prose." ]
+        let before = FakeFolder.Mk [ source ]
+        let reopened = Doc.mk ParserSettings.Default source.Id (Some 1) (Doc.text source)
+        let after = Folder.withDoc reopened before
+
+        Assert.Empty(publications (Some(state before)) (state after))
 
     [<Fact>]
     let publicationComparesLastPublishedStateWithLatestDebouncedState () =

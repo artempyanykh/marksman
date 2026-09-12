@@ -5,7 +5,9 @@ open Ionide.LanguageServerProtocol.Types
 open Marksman.Misc
 open Marksman.Names
 open Marksman.Doc
+open Marksman.Conn
 open Marksman.Folder
+open Marksman.Syms
 open Marksman.Workspace
 
 module Lsp = Ionide.LanguageServerProtocol.Types
@@ -202,3 +204,82 @@ module WorkspaceDiag =
         |> Map.ofSeq
 
     let empty = Map.empty
+
+    let private incomingReferenceDocuments folder docIds =
+        docIds
+        |> Seq.collect (fun docId ->
+            let doc = Folder.findDocById docId folder
+
+            Doc.syms doc
+            |> Seq.choose Sym.asDef
+            |> Seq.collect (fun definition ->
+                Conn.Query.resolve (Scope.Doc docId, Sym.Def definition) (Folder.conn folder)))
+        |> Seq.choose (function
+            | Scope.Doc source, Sym.Ref _ -> Some source
+            | _ -> None)
+        |> Set.ofSeq
+
+    /// Candidate documents whose diagnostics may differ between two immutable
+    /// workspace snapshots. The comparison runs at publication time, so edits
+    /// coalesced by the diagnostics agent need no separate change log.
+    let affectedDocuments (before: Workspace) (after: Workspace) : Map<FolderId, Set<DocId>> =
+        let previousFolders =
+            Workspace.folders before |> Seq.map (fun folder -> Folder.id folder, folder) |> Map.ofSeq
+
+        let currentFolders =
+            Workspace.folders after |> Seq.map (fun folder -> Folder.id folder, folder) |> Map.ofSeq
+
+        let folderIds =
+            Set.union
+                (Map.keys previousFolders |> Set.ofSeq)
+                (Map.keys currentFolders |> Set.ofSeq)
+
+        folderIds
+        |> Seq.choose (fun folderId ->
+            let previous = Map.tryFind folderId previousFolders
+            let current = Map.tryFind folderId currentFolders
+
+            let affected =
+                match previous, current with
+                | Some oldFolder, Some newFolder when obj.ReferenceEquals(oldFolder, newFolder) ->
+                    Set.empty
+                | Some oldFolder, Some newFolder when
+                    Folder.config oldFolder <> Folder.config newFolder
+                    || Folder.isSingleFile oldFolder <> Folder.isSingleFile newFolder
+                    ->
+                    Set.union
+                        (Folder.docs oldFolder |> Seq.map Doc.id |> Set.ofSeq)
+                        (Folder.docs newFolder |> Seq.map Doc.id |> Set.ofSeq)
+                | Some oldFolder, Some newFolder ->
+                    let docs = Folder.docsDifference oldFolder newFolder
+
+                    let reopened =
+                        docs.unchanged
+                        |> Set.filter (fun docId ->
+                            Doc.version (Folder.findDocById docId oldFolder) = None
+                            && Option.isSome (Doc.version (Folder.findDocById docId newFolder)))
+
+                    let oldTargets = docs.changed + docs.removed
+                    let newTargets = docs.changed + docs.added
+                    let oldConn = Folder.conn oldFolder
+                    let newConn = Folder.conn newFolder
+
+                    let changedResolutions =
+                        if obj.ReferenceEquals(oldConn, newConn) then
+                            Set.empty
+                        else
+                            Conn.Query.documentsWithChangedReferenceResolutions oldConn newConn
+
+                    docs.added
+                    + docs.removed
+                    + docs.changed
+                    + reopened
+                    + changedResolutions
+                    + incomingReferenceDocuments oldFolder oldTargets
+                    + incomingReferenceDocuments newFolder newTargets
+                | Some folder, None
+                | None, Some folder -> Folder.docs folder |> Seq.map Doc.id |> Set.ofSeq
+                | None, None -> Set.empty
+
+            if Set.isEmpty affected then None else Some(folderId, affected))
+        |> Map.ofSeq

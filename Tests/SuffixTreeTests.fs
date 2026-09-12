@@ -55,3 +55,12 @@ module ImplTests =
             SuffixTree.remove [ "a"; "b" ] tree |> SuffixTree.collectValues
 
         Assert.Equal([ 3; 4; 1; 2 ], actual)
+
+    [<Fact>]
+    let multipleValuesAtTheSamePathRemainIndependent () =
+        let tree = SuffixTree.ofSeq [ [ "notes" ], 1; [ "notes" ], 2 ]
+
+        Assert.Equal<int>([ 1; 2 ], SuffixTree.findExactValues [ "notes" ] tree)
+
+        let remaining = SuffixTree.removeValue [ "notes" ] 1 tree
+        Assert.Equal<int>([ 2 ], SuffixTree.findExactValues [ "notes" ] remaining)

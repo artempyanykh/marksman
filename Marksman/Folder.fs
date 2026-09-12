@@ -19,7 +19,7 @@ open Marksman.Syms
 type MultiFile = {
     name: string
     root: FolderId
-    docs: Map<CanonDocPath, Doc>
+    docs: Map<RelPath, Doc>
     config: option<Config>
 } with
 
@@ -53,23 +53,15 @@ module FolderData =
             |> Option.filter (fun x ->
                 let sysPath = ((Doc.path x) |> AbsPath.filenameStem)
                 sysPath.EndsWith(path |> RelPath.filenameStem))
-        | MultiFile { docs = docs } ->
-            let canonPath =
-                path
-                |> CanonDocPath.mk ((configOrDefault data).CoreMarkdownFileExtensions())
-
-            Map.tryFind canonPath docs
+        | MultiFile { docs = docs } -> Map.tryFind path docs
 
     let tryFindDocByPath (uri: AbsPath) data : option<Doc> =
         match data with
         | SingleFile { doc = doc } -> Some doc |> Option.filter (fun x -> Doc.path x = uri)
         | MultiFile { root = root; docs = docs } ->
-            let canonPath =
-                RootedRelPath.mk root.data (Abs uri)
-                |> RootedRelPath.relPathForced
-                |> CanonDocPath.mk ((configOrDefault data).CoreMarkdownFileExtensions())
-
-            Map.tryFind canonPath docs
+            RootedRelPath.mk root.data (Abs uri)
+            |> RootedRelPath.relPathForced
+            |> fun path -> Map.tryFind path docs
 
     let tryFindDocById (id: DocId) data : option<Doc> =
         let docRelPath = id.Path |> RootedRelPath.relPathForced
@@ -110,14 +102,15 @@ module FolderLookup =
             { docsBySlug = bySlug; docsByPath = byPath; config = config }
         | MultiFile data ->
             let bySlug =
-                Map.toSeq data.docs
-                |> Seq.map snd
+                Map.values data.docs
                 |> Seq.groupBy Doc.slug
                 |> Seq.map (fun (slug, docs) -> slug, Set.ofSeq docs)
                 |> Map.ofSeq
 
             let byPath =
-                Map.toSeq data.docs |> SuffixTree.ofSeq CanonDocPath.components
+                Map.values data.docs
+                |> Seq.map (fun doc -> Doc.pathFromRoot doc |> CanonDocPath.mk mdExt, doc)
+                |> SuffixTree.ofSeq CanonDocPath.components
 
             { docsBySlug = bySlug; docsByPath = byPath; config = config }
 
@@ -134,7 +127,7 @@ module FolderLookup =
             | Some docs -> Set.remove doc docs |> Some
 
         let bySlug = Map.change slug updateBySlug lookup.docsBySlug
-        let byPath = SuffixTree.remove docPath lookup.docsByPath
+        let byPath = SuffixTree.removeValue docPath doc lookup.docsByPath
         { docsBySlug = bySlug; docsByPath = byPath; config = lookup.config }
 
     let withDoc (doc: Doc) (lookup: FolderLookup) =
@@ -171,9 +164,17 @@ module Oracle =
         match path with
         | ExactAbs rooted
         | ExactRel(_, rooted) ->
-            FolderData.tryFindDocByRelPath (RootedRelPath.relPathForced rooted) data
-            |> Option.toList
-            |> Seq.ofList
+            let path = RootedRelPath.relPathForced rooted
+
+            match FolderData.tryFindDocByRelPath path data with
+            | Some doc when Doc.pathFromRoot doc = path -> Seq.singleton doc
+            | _ ->
+                let canonPath =
+                    CanonDocPath.mk
+                        ((FolderData.configOrDefault data).CoreMarkdownFileExtensions())
+                        path
+
+                SuffixTree.findExactValues canonPath lookup.docsByPath |> Set.toSeq
         | Approx relPath ->
             let canonPath =
                 CanonDocPath.mk
@@ -195,9 +196,7 @@ module Oracle =
             |> Seq.collect (function
                 | DocumentAlias.TitleSlug slug -> FolderLookup.filterDocsBySlug slug lookup
                 | DocumentAlias.CanonicalPath path ->
-                    FolderData.tryFindDocByRelPath (CanonDocPath.toRel path) data
-                    |> Option.toList
-                    |> Seq.ofList
+                    SuffixTree.findExactValues path lookup.docsByPath |> Set.toSeq
                 | DocumentAlias.PathSuffix parts ->
                     SuffixTree.filterMatchingParts parts lookup.docsByPath)
             |> Seq.map Doc.id
@@ -299,7 +298,18 @@ module Folder =
     let rec tryFindDocByPath (uri: AbsPath) folder : option<Doc> =
         FolderData.tryFindDocByPath uri folder.data
 
-    let tryFindDocByRelPath (path: RelPath) folder = FolderData.tryFindDocByRelPath path folder.data
+    let tryFindDocByRelPath (path: RelPath) folder =
+        match FolderData.tryFindDocByRelPath path folder.data with
+        | Some doc -> Some doc
+        | None ->
+            let extensions = (configOrDefault folder).CoreMarkdownFileExtensions()
+            let canonPath = CanonDocPath.mk extensions path
+
+            SuffixTree.findExactValues canonPath folder.lookup.docsByPath
+            |> Set.toList
+            |> function
+                | [ doc ] -> Some doc
+                | _ -> None
 
     let findDocById (id: DocId) folder = FolderData.findDocById id folder.data
 
@@ -491,16 +501,10 @@ module Folder =
         mk data
 
     let multiFile name root (docs: seq<Doc>) config =
-        let byCanonPath =
-            docs
-            |> Seq.map (fun doc ->
-                Doc.pathFromRoot doc
-                |> CanonDocPath.mk ((Config.orDefault config).CoreMarkdownFileExtensions()),
-                doc)
-            |> Map.ofSeq
+        let byPath = docs |> Seq.map (fun doc -> Doc.pathFromRoot doc, doc) |> Map.ofSeq
 
         let data =
-            MultiFile({ name = name; root = root; docs = byCanonPath; config = config })
+            MultiFile({ name = name; root = root; docs = byPath; config = config })
 
         mk data
 
@@ -576,13 +580,11 @@ module Folder =
 
             let config = FolderData.configOrDefault prevData
 
-            let canonPath =
-                CanonDocPath.mk (config.CoreMarkdownFileExtensions()) newDoc.RelPath
-
-            let existingDoc = Map.tryFind canonPath folder.docs
+            let path = newDoc.RelPath
+            let existingDoc = Map.tryFind path folder.docs
 
             let data =
-                MultiFile { folder with docs = Map.add canonPath newDoc folder.docs }
+                MultiFile { folder with docs = Map.add path newDoc folder.docs }
 
             let lookup =
                 match existingDoc with
@@ -649,15 +651,12 @@ module Folder =
     let withoutDoc (docId: DocId) folder : option<Folder> =
         match folder.data with
         | MultiFile mf ->
-            let canonPath =
-                docId.Path
-                |> RootedRelPath.relPathForced
-                |> CanonDocPath.mk ((configOrDefault folder).CoreMarkdownFileExtensions())
+            let path = docId.Path |> RootedRelPath.relPathForced
 
-            match Map.tryFind canonPath mf.docs with
+            match Map.tryFind path mf.docs with
             | None -> Some folder
             | Some doc ->
-                let docs = Map.remove canonPath mf.docs
+                let docs = Map.remove path mf.docs
                 let data = MultiFile { mf with docs = docs }
                 let lookup = FolderLookup.withoutDoc doc folder.lookup
 

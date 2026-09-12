@@ -24,14 +24,12 @@ Track progress in order. Keep tests passing after each code change.
   diagnostic calculation, represent previous results as a keyed snapshot, and
   make the calculation and publication decision testable apart from the mailbox.
   Check that the behavior tests still pass.
-- [ ] **4. Report affected documents.** During Conn and folder updates, collect
-  directly changed documents, source documents whose references were
-  reevaluated, and documents referring to edited targets. Include references
-  from the old and new graphs: a target can move without changing its symbolic
-  resolution, yet its location in a diagnostic changes. Carry the change summary
-  through state mutations and union it across the debounce window. Test that
-  intermediate changes are retained when states are coalesced. Mark all
-  documents in a newly loaded or reconfigured folder as affected.
+- [x] **4. Derive affected documents from snapshots.** At publication time,
+  compare the last published workspace with the latest one. Select directly
+  changed and reopened documents, sources whose cached Conn resolutions differ,
+  and references into edited targets in either graph. Select every document for
+  added, removed, or reconfigured folders. Test comparison across coalesced
+  edits. No per-edit change summary is needed in state mutations or hooks.
 - [ ] **5. Implement incremental calculation and publication.** With previous
   results `None`, calculate every current document. Otherwise, reuse cached
   results, recalculate affected documents, remove results for deleted documents,
@@ -41,6 +39,23 @@ Track progress in order. Keep tests passing after each code change.
   unrelated document is not recalculated. Rerun the benchmark and compare time
   and allocations with the baseline, especially for unrelated edits and larger
   folders.
+
+Follow-up review work for Conn, after incremental diagnostics is wired in:
+
+- [ ] Measure the snapshot resolution scan on graph-changing edits. If it
+  dominates diagnostic calculation, use a cheaper snapshot comparison. The
+  resolved/unresolved graph scans in `Conn.difference` are currently for
+  paranoid validation, not the normal update path.
+- [ ] Give alias changes one explicit external-input invalidation API so a
+  `Conn.update` caller cannot omit the affected aliases.
+- [ ] Make definition-selection dependencies explicit or verify the mapping
+  from changed definitions to selectors against what selection reads.
+- [ ] Simplify Conn's three computation queues without losing their dependency
+  order or incremental correctness.
+- [ ] Share graph construction between Conn's compact formatting and
+  difference routines.
+- [ ] Centralize selector scope extraction and the repeated orphan-collection
+  folds when working on those paths.
 
 Baseline on 2026-09-12: BenchmarkDotNet 0.15.6, .NET 9.0.19, Linux x64,
 Intel Core i7-12700K. The Release benchmark was run in-process with two warmup

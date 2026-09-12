@@ -32,6 +32,25 @@ let assertMatchesCleanConstruction folder =
     Assert.True(difference.IsEmpty(), difference.CompactFormat())
 
 [<Fact>]
+let globalTagLookupTracksAddedAndRemovedSources () =
+    let first = doc "first.md" [ "#tag" ]
+    let second = doc "second.md" [ "#tag" ]
+    let tag = Sym.Tag(Tag "tag")
+    let sources folder = Conn.Query.resolve (Scope.Global, tag) (Folder.conn folder)
+    let both = folder [ first; second ]
+
+    Assert.Equal<Set<ScopedSym>>(
+        Set.ofList [ Scope.Doc first.Id, tag; Scope.Doc second.Id, tag ],
+        sources both
+    )
+
+    let withoutFirst = Folder.withDoc (doc "first.md" [ "No tag" ]) both
+    Assert.Equal<Set<ScopedSym>>(Set.singleton (Scope.Doc second.Id, tag), sources withoutFirst)
+
+    let restored = Folder.withDoc first withoutFirst
+    Assert.Equal<Set<ScopedSym>>(sources both, sources restored)
+
+[<Fact>]
 let removingMissingDocumentReferencesCleansDependencyState () =
     let source lines = doc "source.md" lines
 

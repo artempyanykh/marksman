@@ -46,4 +46,5 @@ module Folder =
     val oracle: Folder -> Conn.Oracle
     val conn: Folder -> Conn.Conn
     val syms: Folder -> MMap<DocId, Sym>
+    val docsDifference: Folder -> Folder -> FullDifference<DocId>
     val symsDifference: Folder -> Folder -> FullDifference<DocId> * Difference<ScopedSym>

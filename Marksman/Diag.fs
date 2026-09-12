@@ -4,6 +4,7 @@ open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Misc
 open Marksman.Names
+open Marksman.Paths
 open Marksman.Doc
 open Marksman.Conn
 open Marksman.Folder
@@ -96,9 +97,6 @@ let checkDoc (folder: Folder) (doc: Doc) : list<Entry> =
     }
     |> List.ofSeq
 
-let checkFolder (folder: Folder) : seq<DocId * list<Entry>> =
-    Folder.docs folder |> Seq.map (fun doc -> Doc.id doc, checkDoc folder doc)
-
 let destToHuman (ref: Dest) : string =
     match ref with
     | Dest.Doc { doc = doc } -> $"document {Doc.name doc}"
@@ -186,25 +184,9 @@ let diagToLsp (diag: Entry) : Lsp.Diagnostic =
 
 type FolderDiag = Map<DocId, array<Lsp.Diagnostic>>
 
-module FolderDiag =
-    let mk (folder: Folder) : FolderDiag =
-        checkFolder folder
-        |> Seq.map (fun (uri, diags) ->
-            let lspDiags = List.map diagToLsp diags |> Array.ofList
-
-            uri, lspDiags)
-        |> Map.ofSeq
-
 type WorkspaceDiag = Map<FolderId, FolderDiag>
 
 module WorkspaceDiag =
-    let mk (ws: Workspace) : WorkspaceDiag =
-        Workspace.folders ws
-        |> Seq.map (fun folder -> (Folder.id folder), FolderDiag.mk folder)
-        |> Map.ofSeq
-
-    let empty = Map.empty
-
     let private incomingReferenceDocuments folder docIds =
         docIds
         |> Seq.collect (fun docId ->
@@ -219,8 +201,8 @@ module WorkspaceDiag =
             | _ -> None)
         |> Set.ofSeq
 
-    /// Candidate documents whose diagnostics may differ between two immutable
-    /// workspace snapshots. The comparison runs at publication time, so edits
+    /// Documents whose diagnostics may differ between two immutable workspace
+    /// states. The comparison runs at publication time, so edits
     /// coalesced by the diagnostics agent need no separate change log.
     let affectedDocuments (before: Workspace) (after: Workspace) : Map<FolderId, Set<DocId>> =
         let previousFolders =
@@ -283,3 +265,46 @@ module WorkspaceDiag =
 
             if Set.isEmpty affected then None else Some(folderId, affected))
         |> Map.ofSeq
+
+    /// Calculate diagnostics for the current workspace. Without prior results,
+    /// every document is recalculated; otherwise only affected documents are.
+    let calculate
+        (previous: option<Workspace * WorkspaceDiag>)
+        (current: Workspace)
+        : WorkspaceDiag * Map<FolderId, Set<DocId>> =
+        let affected =
+            match previous with
+            | None ->
+                Workspace.folders current
+                |> Seq.map (fun folder ->
+                    Folder.id folder, Folder.docs folder |> Seq.map Doc.id |> Set.ofSeq)
+                |> Map.ofSeq
+            | Some(previousWorkspace, _) -> affectedDocuments previousWorkspace current
+
+        let previousDiagnostics =
+            previous |> Option.map snd |> Option.defaultValue Map.empty
+
+        let diagnostics =
+            Workspace.folders current
+            |> Seq.map (fun folder ->
+                let folderId = Folder.id folder
+                let previousFolder =
+                    Map.tryFind folderId previousDiagnostics |> Option.defaultValue Map.empty
+
+                let affectedIds = Map.tryFind folderId affected |> Option.defaultValue Set.empty
+
+                let updated =
+                    affectedIds
+                    |> Set.fold (fun entries docId ->
+                        let docPath = UriWith.rootedRelToAbs docId.Raw
+
+                        match Folder.tryFindDocByPath docPath.data folder with
+                        | None -> Map.remove docId entries
+                        | Some doc ->
+                            let diags = checkDoc folder doc |> List.map diagToLsp |> Array.ofList
+                            Map.add docId diags entries) previousFolder
+
+                folderId, updated)
+            |> Map.ofSeq
+
+        diagnostics, affected

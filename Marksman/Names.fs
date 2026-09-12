@@ -162,17 +162,16 @@ module DocumentAlias =
                 DocumentAlias.CanonicalPath(CanonDocPath.mk exts (RootedRelPath.relPathForced path))
             ]
         | Some(Approx path) ->
-            Set.ofList [
-                title
-                DocumentAlias.PathSuffix(CanonDocPath.mk exts path |> CanonDocPath.components)
-            ]
+            match CanonDocPath.mk exts path |> CanonDocPath.components with
+            | [] -> Set.singleton title
+            | parts -> Set.ofList [ title; DocumentAlias.PathSuffix parts ]
 
     let ofDocument exts slug path =
         let canon = CanonDocPath.mk exts path
 
         let rec suffixes =
             function
-            | [] -> [ DocumentAlias.PathSuffix [] ]
+            | [] -> []
             | (_ :: rest as parts) -> DocumentAlias.PathSuffix parts :: suffixes rest
 
         Set.ofList (

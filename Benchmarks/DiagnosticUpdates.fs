@@ -2,6 +2,7 @@ module Marksman.DiagnosticUpdateBenchmarks
 
 open BenchmarkDotNet.Attributes
 open Marksman.Config
+open Marksman.Diag
 open Marksman.Doc
 open Marksman.Folder
 open Marksman.Misc
@@ -14,7 +15,7 @@ open Marksman.Workspace
 /// Measures diagnostic calculation after parsing and folder updates have finished.
 [<MemoryDiagnoser>]
 type DiagnosticUpdates() =
-    let mutable previous: State option = None
+    let mutable previous: (State * WorkspaceDiag) option = None
     let mutable current: State option = None
 
     [<Params(100, 1000)>]
@@ -73,9 +74,23 @@ type DiagnosticUpdates() =
         let state folder =
             Workspace.ofFolders None [ folder ] |> State.mk ClientDescription.empty
 
-        previous <- if this.Scenario = "Initial" then None else Some(state before)
+        previous <-
+            if this.Scenario = "Initial" then
+                None
+            else
+                let beforeState = state before
+                let diagnostics, _ = WorkspaceDiag.calculate None (State.workspace beforeState)
+                Some(beforeState, diagnostics)
+
         current <- Some(state after)
 
     [<Benchmark>]
     member _.Calculate() =
-        calcDiagnosticsUpdate previous current.Value |> Array.ofSeq
+        calcDiagnosticsUpdate previous current.Value
+
+    [<Benchmark>]
+    member _.FindAffectedDocuments() =
+        match previous with
+        | None -> Map.empty
+        | Some(before, _) ->
+            WorkspaceDiag.affectedDocuments (State.workspace before) (State.workspace current.Value)

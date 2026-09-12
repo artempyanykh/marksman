@@ -181,7 +181,10 @@ module Oracle =
                     ((FolderData.configOrDefault data).CoreMarkdownFileExtensions())
                     relPath
 
-            SuffixTree.filterMatchingValues canonPath lookup.docsByPath
+            if CanonDocPath.components canonPath |> List.isEmpty then
+                Seq.empty
+            else
+                SuffixTree.filterMatchingValues canonPath lookup.docsByPath
 
     let resolveCandidateDocuments
         (data: FolderData)

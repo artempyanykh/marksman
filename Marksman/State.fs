@@ -12,7 +12,6 @@ open Marksman.Config
 open Marksman.Doc
 open Marksman.Folder
 open Marksman.Workspace
-open Marksman.Diag
 
 type InitOptions = { preferredTextSyncKind: Option<TextSync> }
 
@@ -116,9 +115,7 @@ type State = private {
     client: ClientDescription
     workspace: Workspace
     revision: int
-} with
-
-    member this.Diag() : WorkspaceDiag = WorkspaceDiag.mk this.workspace
+}
 
 module State =
     let private logger = LogProvider.getLoggerByName "State"
@@ -139,8 +136,6 @@ module State =
         Workspace.userConfig s.workspace |> Option.defaultValue Config.Default
 
     let revision s = s.revision
-
-    let diag (s: State) = s.Diag()
 
     let tryFindFolderEnclosing (uri: UriWith<AbsPath>) (state: State) : option<Folder> =
         Workspace.tryFindFolderEnclosing uri.data state.workspace

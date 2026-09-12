@@ -36,10 +36,13 @@ module Folder =
     val closeDoc: DocId -> Folder -> option<Folder>
 
     val tryFindDocByPath: AbsPath -> Folder -> option<Doc>
+    /// An exact file path wins; a path without an exact match returns a document
+    /// only when its canonical path identifies exactly one document.
     val tryFindDocByRelPath: RelPath -> Folder -> option<Doc>
     val tryFindDocByUrl: string -> Folder -> option<Doc>
     val findDocById: DocId -> Folder -> Doc
     val filterDocsBySlug: Slug -> Folder -> seq<Doc>
+    /// Return all path candidates, including documents with the same canonical path.
     val filterDocsByInternPath: InternPath -> Folder -> seq<Doc>
     val filterDocsByName: InternName -> Folder -> seq<Doc>
 

@@ -13,15 +13,14 @@ open Marksman.Folder
 open Marksman.Refs
 open Marksman.Workspace
 
-let entryToHuman (entry: Entry) =
-    let lsp = diagToLsp entry
-    lsp.Message
+let diagToHuman (folder: Folder) : list<string * string> =
+    let diagnostics, _ =
+        WorkspaceDiag.calculate None (Workspace.ofFolders None [ folder ])
 
-let diagToHuman (diag: seq<DocId * list<Entry>>) : list<string * string> =
     seq {
-        for id, entries in diag do
-            for e in entries do
-                yield id.Path |> RootedRelPath.relPathForced |> RelPath.toSystem, entryToHuman e
+        for KeyValue(id, entries) in diagnostics[Folder.id folder] do
+            for entry in entries do
+                yield id.Path |> RootedRelPath.relPathForced |> RelPath.toSystem, entry.Message
     }
     |> List.ofSeq
 
@@ -53,7 +52,7 @@ let nonBreakingWhitespace () =
 let noDiagOnShortcutLinks () =
     let doc = FakeDoc.Mk([| "# H1"; "## H2"; "[shortcut]"; "[[#h42]]" |])
     let folder = FakeFolder.Mk([ doc ])
-    let diag = checkFolder folder |> diagToHuman
+    let diag = diagToHuman folder
 
     Assert.Equal<string * string>([ "fake.md", "Link to non-existent heading 'h42'" ], diag)
 
@@ -63,9 +62,22 @@ let noDiagOnRealUrls () =
         FakeDoc.Mk([| "# H1"; "## H2"; "[](www.bad.md)"; "[](https://www.good.md)" |])
 
     let folder = FakeFolder.Mk([ doc ])
-    let diag = checkFolder folder |> diagToHuman
+    let diag = diagToHuman folder
 
     Assert.Equal<string * string>([ "fake.md", "Link to non-existent document 'www.bad.md'" ], diag)
+
+[<Fact>]
+let markdownExtensionWithoutANameDoesNotResolveToEveryDocument () =
+    let source = FakeDoc.Mk(path = "source.md", contentLines = [| "[x](.md)" |])
+    let first = FakeDoc.Mk(path = "first.md", contentLines = [| "# First" |])
+    let second = FakeDoc.Mk(path = "second.md", contentLines = [| "# Second" |])
+    let folder = FakeFolder.Mk [ source; first; second ]
+
+    match Assert.Single(checkDoc folder source) with
+    | BrokenLink _ -> ()
+    | diagnostic -> failwith $"Expected a broken link, got {diagnostic}"
+
+    Assert.Empty(Folder.filterDocsByInternPath (Approx(RelPath ".md")) folder)
 
 [<Fact>]
 let noDiagOnNonMarkdownFiles () =
@@ -81,7 +93,7 @@ let noDiagOnNonMarkdownFiles () =
         )
 
     let folder = FakeFolder.Mk([ doc ])
-    let diag = checkFolder folder |> diagToHuman
+    let diag = diagToHuman folder
 
     Assert.Equal<string * string>(
         [
@@ -97,7 +109,7 @@ let crossFileDiagOnBrokenWikiLinks () =
     let doc = FakeDoc.Mk([| "[[bad]]" |])
 
     let folder = FakeFolder.Mk([ doc ])
-    let diag = checkFolder folder |> diagToHuman
+    let diag = diagToHuman folder
 
     Assert.Equal<string * string>([ "fake.md", "Link to non-existent document 'bad'" ], diag)
 
@@ -113,7 +125,7 @@ let noCrossFileDiagOnSingleFileFolders () =
         )
 
     let folder = Folder.singleFile doc None
-    let diag = checkFolder folder |> diagToHuman
+    let diag = diagToHuman folder
 
     Assert.Equal<string * string>(
         [
@@ -134,8 +146,13 @@ module AffectedDocumentTests =
             |> Map.tryFind (Folder.id before)
             |> Option.defaultValue Set.empty
 
-        let previous = FolderDiag.mk before
-        let current = FolderDiag.mk after
+        let fullDiagnostics folder =
+            WorkspaceDiag.calculate None (Workspace.ofFolders None [ folder ])
+            |> fst
+            |> Map.find (Folder.id folder)
+
+        let previous = fullDiagnostics before
+        let current = fullDiagnostics after
 
         let changedDiagnostics =
             Set.union (Map.keys previous |> Set.ofSeq) (Map.keys current |> Set.ofSeq)

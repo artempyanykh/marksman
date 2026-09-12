@@ -4,6 +4,7 @@ open Xunit
 open Ionide.LanguageServerProtocol.Types
 
 open Marksman.Config
+open Marksman.Diag
 open Marksman.Server
 open Marksman.State
 open Marksman.Doc
@@ -74,7 +75,13 @@ module DiagnosticPublicationTests =
         |> State.mk ClientDescription.empty
 
     let private publications previous current =
-        calcDiagnosticsUpdate previous current |> Array.ofSeq
+        let previous =
+            previous
+            |> Option.map (fun state ->
+                let diagnostics, _ = WorkspaceDiag.calculate None (State.workspace state)
+                state, diagnostics)
+
+        calcDiagnosticsUpdate previous current |> snd
 
     let private onlyPublication (doc: Doc) (updates: PublishDiagnosticsParams[]) =
         let update = Assert.Single updates
@@ -113,6 +120,43 @@ module DiagnosticPublicationTests =
         let after = state (FakeFolder.Mk [ edited ])
 
         Assert.Empty(publications (Some before) after)
+
+    [<Fact>]
+    let unrelatedEditReusesCachedDiagnostics () =
+        let source = doc "source.md" [ "[[missing]]" ]
+        let unrelated = doc "unrelated.md" [ "Some prose." ]
+        let beforeFolder = FakeFolder.Mk [ source; unrelated ]
+        let before = state beforeFolder
+        let edited = doc "unrelated.md" [ "More prose." ]
+        let after = state (Folder.withDoc edited beforeFolder)
+        let beforeDiag, _ = calcDiagnosticsUpdate None before
+        let afterDiag, updates = calcDiagnosticsUpdate (Some(before, beforeDiag)) after
+        let folderId = Folder.id beforeFolder
+        let sourceBefore = beforeDiag[folderId][source.Id]
+        let sourceAfter = afterDiag[folderId][source.Id]
+
+        Assert.True(obj.ReferenceEquals(sourceBefore, sourceAfter))
+        Assert.Empty(updates)
+
+    [<Fact>]
+    let successiveUpdatesUseTheLastCalculatedSnapshot () =
+        let source = doc "source.md" [ "[[Target#Section]]" ]
+        let first = doc "first.md" [ "# Target"; "## Section" ]
+        let second = doc "second.md" [ "# Target"; "## Section" ]
+        let initialFolder = FakeFolder.Mk [ source ]
+        let initial = state initialFolder
+        let initialDiag, _ = calcDiagnosticsUpdate None initial
+
+        let resolvedFolder = Folder.withDoc first initialFolder
+        let resolved = state resolvedFolder
+        let resolvedDiag, cleared = calcDiagnosticsUpdate (Some(initial, initialDiag)) resolved
+        Assert.Empty(onlyPublication source cleared)
+
+        let ambiguous = state (Folder.withDoc second resolvedFolder)
+        let _, reported = calcDiagnosticsUpdate (Some(resolved, resolvedDiag)) ambiguous
+        let diagnostic = reported |> onlyPublication source |> Assert.Single
+
+        Assert.Equal("Ambiguous link to heading 'section' in document 'Target'", diagnostic.Message)
 
     [<Fact>]
     let otherDocumentsCanResolveOrMakeALinkAmbiguous () =

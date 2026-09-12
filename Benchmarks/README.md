@@ -18,9 +18,13 @@ dotnet run -c Release --project Benchmarks -- --filter '*DiagnosticUpdates*'
 ```
 
 `DiagnosticUpdates` uses the same folder sizes and eight-reference document
-shape, plus one broken link per document. It measures initial calculation and
-updates after a prose edit, link edit, or target-heading edit. Parsing and
-folder updates happen in setup; the measured call evaluates all publications.
+shape, plus one broken link per document. `Calculate` measures initial
+calculation and updates after a prose edit, link edit, or target-heading edit;
+`FindAffectedDocuments` measures the time spent finding documents that need
+diagnostics recalculated after an edit.
+Parsing, folder updates, and the prior diagnostics results are prepared in
+setup. The initial `FindAffectedDocuments` case has no previous workspace state
+to compare.
 
 An earlier single-run measurement of the pre-cleanup dependency graph at 1,000
 documents took about 13 µs for an unlinked title rename, 77 µs for a linked

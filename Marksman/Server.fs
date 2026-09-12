@@ -207,69 +207,65 @@ let private diagnosticPublication
         None
 
 let calcDiagnosticsUpdate
-    (prevState: Option<State>)
+    (previous: option<State * WorkspaceDiag>)
     (newState: State)
-    : seq<PublishDiagnosticsParams> =
-    let existingDiag =
-        prevState
-        |> Option.map State.diag
-        |> Option.defaultValue WorkspaceDiag.empty
+    : WorkspaceDiag * array<PublishDiagnosticsParams> =
+    let previousWorkspace =
+        previous |> Option.map (fun (state, diagnostics) -> State.workspace state, diagnostics)
 
-    let newDiag = State.diag newState
+    let newDiag, affected = WorkspaceDiag.calculate previousWorkspace (State.workspace newState)
+    let existingDiag = previous |> Option.map snd |> Option.defaultValue Map.empty
 
-    let allFolders =
-        Set.union (Map.keys existingDiag |> Set.ofSeq) (Map.keys newDiag |> Set.ofSeq)
+    let updates =
+        [|
+            for KeyValue(folderPath, documents) in affected do
+                let existingFolderDiag =
+                    Map.tryFind folderPath existingDiag |> Option.defaultValue Map.empty
 
-    seq {
-        for folderPath in allFolders do
-            let existingFolderDiag =
-                Map.tryFind folderPath existingDiag |> Option.defaultValue Map.empty
+                let newFolderDiag =
+                    Map.tryFind folderPath newDiag |> Option.defaultValue Map.empty
 
-            let newFolderDiag =
-                Map.tryFind folderPath newDiag |> Option.defaultValue Map.empty
+                logger.trace (
+                    Log.setMessage "Updating folder diag"
+                    >> Log.addContext "folder" folderPath
+                    >> Log.addContext "num_docs" documents.Count
+                )
 
-            let allDocs =
-                Set.union
-                    (Map.keys newFolderDiag |> Set.ofSeq)
-                    (Map.keys existingFolderDiag |> Set.ofSeq)
+                for docUri in documents do
+                    let docPath = UriWith.rootedRelToAbs docUri.Raw
+                    let existingDoc =
+                        previous |> Option.bind (fun (state, _) -> State.tryFindDoc docPath state)
 
-            logger.trace (
-                Log.setMessage "Updating folder diag"
-                >> Log.addContext "folder" folderPath
-                >> Log.addContext "num_docs" allDocs.Count
-            )
+                    let existingDocVersion = Option.bind Doc.version existingDoc
 
-            for docUri in allDocs do
-                let docPath = UriWith.rootedRelToAbs docUri.Raw
-                let existingDoc = prevState |> Option.bind (State.tryFindDoc docPath)
-                let existingDocVersion = Option.bind Doc.version existingDoc
+                    let existingDocDiag =
+                        Map.tryFind docUri existingFolderDiag |> Option.defaultValue [||]
 
-                let existingDocDiag =
-                    Map.tryFind docUri existingFolderDiag |> Option.defaultValue [||]
+                    let newDoc = State.tryFindDoc docPath newState
+                    let newDocVersion = Option.bind Doc.version newDoc
 
-                let newDoc = State.tryFindDoc docPath newState
-                let newDocVersion = Option.bind Doc.version newDoc
+                    let newDocDiag =
+                        Map.tryFind docUri newFolderDiag |> Option.defaultValue [||]
 
-                let newDocDiag =
-                    Map.tryFind docUri newFolderDiag |> Option.defaultValue [||]
+                    match
+                        diagnosticPublication
+                            docUri
+                            existingDocVersion
+                            newDocVersion
+                            existingDocDiag
+                            newDocDiag
+                    with
+                    | Some update ->
+                        logger.trace (
+                            Log.setMessage "Diagnostic changed, queueing the update"
+                            >> Log.addContext "doc" docUri
+                        )
 
-                match
-                    diagnosticPublication
-                        docUri
-                        existingDocVersion
-                        newDocVersion
-                        existingDocDiag
-                        newDocDiag
-                with
-                | Some update ->
-                    logger.trace (
-                        Log.setMessage "Diagnostic changed, queueing the update"
-                        >> Log.addContext "doc" docUri
-                    )
+                        yield update
+                    | None -> ()
+        |]
 
-                    yield update
-                | None -> ()
-    }
+    newDiag, updates
 
 type DiagnosticsManager(client: MarksmanClient) =
     let logger = LogProvider.getLoggerByName "BackgroundAgent"
@@ -290,12 +286,13 @@ type DiagnosticsManager(client: MarksmanClient) =
 
             and publishOn lastProcessedState mostRecentState =
                 async {
-                    let diagnostics = calcDiagnosticsUpdate lastProcessedState mostRecentState
+                    let newDiag, diagnostics =
+                        calcDiagnosticsUpdate lastProcessedState mostRecentState
 
                     for update in diagnostics do
                         do! client.TextDocumentPublishDiagnostics(update)
 
-                    return! waitStateUpdate (Some mostRecentState)
+                    return! waitStateUpdate (Some(mostRecentState, newDiag))
                 }
 
             and waitStateUpdate lastProcessedState =

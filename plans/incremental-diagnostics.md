@@ -7,12 +7,13 @@ when previous results are `None`, every current document needs calculation.
 
 Track progress in order. Keep tests passing after each code change.
 
-- [ ] **1. Establish behavior with tests.** Cover initial calculation, unchanged
+- [x] **1. Establish behavior with tests.** Cover initial calculation, unchanged
   results, broken links becoming valid or ambiguous after another document
-  changes, ambiguous-link related locations after a target heading moves or is
-  duplicated, removal clearing diagnostics, re-opening a document, and multiple
-  state changes within one debounce window. Assert diagnostic content and
-  publication decisions, not just message text.
+  changes, ambiguous-link related locations after a target heading moves,
+  ambiguity clearing when a target disappears, removal clearing diagnostics,
+  re-opening a document, and comparison of the latest state after multiple
+  changes. Assert diagnostic content and publication decisions, not just
+  message text.
 - [ ] **2. Add a diagnostics benchmark and record a baseline.** Reuse the
   existing 100- and 1,000-document fixtures. Measure initial calculation and
   updates after an unrelated edit, a link edit, and a target-heading edit.
@@ -26,9 +27,10 @@ Track progress in order. Keep tests passing after each code change.
 - [ ] **4. Report affected documents.** During Conn and folder updates, collect
   directly changed documents, source documents whose references were
   reevaluated, and documents referring to edited targets. Include references
-  from the old and new graphs: a target can move or gain a duplicate concrete
-  definition without changing its symbolic resolution. Carry the change summary
-  through state mutations and union it across the debounce window. Mark all
+  from the old and new graphs: a target can move without changing its symbolic
+  resolution, yet its location in a diagnostic changes. Carry the change summary
+  through state mutations and union it across the debounce window. Test that
+  intermediate changes are retained when states are coalesced. Mark all
   documents in a newly loaded or reconfigured folder as affected.
 - [ ] **5. Implement incremental calculation and publication.** With previous
   results `None`, calculate every current document. Otherwise, reuse cached

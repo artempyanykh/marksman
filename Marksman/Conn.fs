@@ -1,5 +1,6 @@
 module Marksman.Conn
 
+open System.Collections.Generic
 open Ionide.LanguageServerProtocol.Logging
 
 open Marksman.Misc
@@ -176,6 +177,41 @@ type private ConnectionValue =
     | SelectedDefinitions of Set<Def>
     | ReferenceResolution of ReferenceResolution
 
+let private resolutionGraph symbols computedValues =
+    let referenceEdges =
+        seq {
+            for KeyValue(node, value) in computedValues do
+                match node, value with
+                | ConnectionComputation.ResolveReference(scope, ref),
+                  ConnectionValue.ReferenceResolution result ->
+                    for target in result.resolved do
+                        yield (scope, Sym.Ref ref), target
+                | _ -> ()
+        }
+
+    let tagEdges =
+        seq {
+            for scope, sym in MMap.toSeq symbols do
+                match sym with
+                | Sym.Tag _ -> yield (scope, sym), (Scope.Global, sym)
+                | _ -> ()
+        }
+
+    Seq.append referenceEdges tagEdges
+    |> Seq.fold (fun graph (source, target) -> Graph.addEdge source target graph) Graph.empty
+
+let private unresolvedGraph computedValues =
+    seq {
+        for KeyValue(node, value) in computedValues do
+            match node, value with
+            | ConnectionComputation.ResolveReference(scope, ref),
+              ConnectionValue.ReferenceResolution result ->
+                for target in result.unresolved do
+                    yield Unresolved.Ref(scope, ref), Unresolved.Scope target
+            | _ -> ()
+    }
+    |> Seq.fold (fun graph (source, target) -> Graph.addEdge source target graph) Graph.empty
+
 /// Source symbols and derived computations form one connection state. The
 /// reverse-reference map indexes resolved references and tag occurrences.
 type Conn = private {
@@ -187,24 +223,7 @@ type Conn = private {
 } with
 
     member private this.ResolvedCompactFormat() =
-        let graph =
-            seq {
-                for KeyValue(node, value) in this.computedValues do
-                    match node, value with
-                    | ConnectionComputation.ResolveReference(scope, ref),
-                      ConnectionValue.ReferenceResolution result ->
-                        for target in result.resolved do
-                            yield (scope, Sym.Ref ref), target
-                    | _ -> ()
-
-                for scope, sym in MMap.toSeq this.symbols do
-                    match sym with
-                    | Sym.Tag _ -> yield (scope, sym), (Scope.Global, sym)
-                    | _ -> ()
-            }
-            |> Seq.fold
-                (fun graph (source, target) -> Graph.addEdge source target graph)
-                Graph.empty
+        let graph = resolutionGraph this.symbols this.computedValues
 
         let edges =
             graph.edges
@@ -224,19 +243,7 @@ type Conn = private {
         concatLines lines
 
     member private this.UnresolvedCompactFormat() =
-        let graph =
-            seq {
-                for KeyValue(node, value) in this.computedValues do
-                    match node, value with
-                    | ConnectionComputation.ResolveReference(scope, ref),
-                      ConnectionValue.ReferenceResolution result ->
-                        for target in result.unresolved do
-                            yield Unresolved.Ref(scope, ref), Unresolved.Scope target
-                    | _ -> ()
-            }
-            |> Seq.fold
-                (fun graph (source, target) -> Graph.addEdge source target graph)
-                Graph.empty
+        let graph = unresolvedGraph this.computedValues
 
         let lines =
             seq {
@@ -376,41 +383,6 @@ module Conn =
         |> Seq.choose (fun (scope, sym) -> choose sym |> Option.map (fun value -> scope, value))
         |> MMap.ofSeq
 
-    let private resolutionGraph conn =
-        let referenceEdges =
-            seq {
-                for KeyValue(node, value) in conn.computedValues do
-                    match node, value with
-                    | ConnectionComputation.ResolveReference(scope, ref),
-                      ConnectionValue.ReferenceResolution result ->
-                        for target in result.resolved do
-                            yield (scope, Sym.Ref ref), target
-                    | _ -> ()
-            }
-
-        let tagEdges =
-            seq {
-                for scope, sym in MMap.toSeq conn.symbols do
-                    match sym with
-                    | Sym.Tag _ -> yield (scope, sym), (Scope.Global, sym)
-                    | _ -> ()
-            }
-
-        Seq.append referenceEdges tagEdges
-        |> Seq.fold (fun graph (a, b) -> Graph.addEdge a b graph) Graph.empty
-
-    let private unresolvedGraph conn =
-        seq {
-            for KeyValue(node, value) in conn.computedValues do
-                match node, value with
-                | ConnectionComputation.ResolveReference(scope, ref),
-                  ConnectionValue.ReferenceResolution result ->
-                    for target in result.unresolved do
-                        yield Unresolved.Ref(scope, ref), Unresolved.Scope target
-                | _ -> ()
-        }
-        |> Seq.fold (fun graph (a, b) -> Graph.addEdge a b graph) Graph.empty
-
     let private tryReferenceName (scope, ref) =
         match scope, ref with
         | Scope.Doc src, CrossRef ref -> Some(InternName.mkUnchecked src ref.Doc)
@@ -457,26 +429,43 @@ module Conn =
         | ConnectionComputation.SelectDefinitions _ -> true
         | ConnectionComputation.ResolveReference _ -> false
 
-    let rec private collectIfOrphan computation conn =
-        if
-            isCollectableComputation computation
-            && Set.isEmpty (
-                dependentComputations (ConnectionDependency.ComputedValue computation) conn
-            )
-            && Map.containsKey computation conn.computedValues
-        then
-            let conn, dependencies = removeComputation computation conn
-
-            dependencies
-            |> Set.fold
-                (fun state dependency ->
-                    match dependency with
-                    | ConnectionDependency.ComputedValue dependency ->
-                        collectIfOrphan dependency state
-                    | ConnectionDependency.ExternalInput _ -> state)
-                conn
-        else
+    let private collectOrphanedComputations dependencies conn =
+        if Set.isEmpty dependencies then
             conn
+        else
+            // The input set deduplicates initial work. Collectable computations
+            // currently have no computed-value inputs, so removing one cannot
+            // enqueue another. The existence check below also makes repeated
+            // entries safe if that changes.
+            let pending = Queue<ConnectionComputation>()
+
+            let enqueue dependencies =
+                for dependency in dependencies do
+                    match dependency with
+                    | ConnectionDependency.ComputedValue computation ->
+                        pending.Enqueue computation
+                    | ConnectionDependency.ExternalInput _ -> ()
+
+            enqueue dependencies
+            let mutable current = conn
+
+            while pending.Count > 0 do
+                let computation = pending.Dequeue()
+
+                if
+                    isCollectableComputation computation
+                    && Set.isEmpty (
+                        dependentComputations
+                            (ConnectionDependency.ComputedValue computation)
+                            current
+                    )
+                    && Map.containsKey computation current.computedValues
+                then
+                    let next, inputs = removeComputation computation current
+                    current <- next
+                    enqueue inputs
+
+            current
 
     let private setComputationDependencies computation dependencies conn =
         let old = computationDependencies computation conn
@@ -502,14 +491,7 @@ module Conn =
                     dependents = dependents
             }
 
-            removed
-            |> Set.fold
-                (fun state dependency ->
-                    match dependency with
-                    | ConnectionDependency.ComputedValue dependency ->
-                        collectIfOrphan dependency state
-                    | ConnectionDependency.ExternalInput _ -> state)
-                conn
+            collectOrphanedComputations removed conn
 
     let private setComputationValue computation value conn =
         let previous = Map.tryFind computation conn.computedValues
@@ -657,13 +639,7 @@ module Conn =
         let conn = { conn with referencesByTarget = referencesByTarget }
         let conn, dependencies = removeComputation node conn
 
-        dependencies
-        |> Set.fold
-            (fun state dependency ->
-                match dependency with
-                | ConnectionDependency.ComputedValue dependency -> collectIfOrphan dependency state
-                | ConnectionDependency.ExternalInput _ -> state)
-            conn
+        collectOrphanedComputations dependencies conn
 
     let private removeSymbol (scope, sym) conn =
         let conn =
@@ -811,8 +787,14 @@ module Conn =
         refsDifference = MMap.difference (symbolsOf Sym.asRef c1) (symbolsOf Sym.asRef c2)
         defsDifference = MMap.difference (symbolsOf Sym.asDef c1) (symbolsOf Sym.asDef c2)
         tagsDifference = MMap.difference (symbolsOf Sym.asTag c1) (symbolsOf Sym.asTag c2)
-        resolvedDifference = Graph.difference (resolutionGraph c1) (resolutionGraph c2)
-        unresolvedDifference = Graph.difference (unresolvedGraph c1) (unresolvedGraph c2)
+        resolvedDifference =
+            Graph.difference
+                (resolutionGraph c1.symbols c1.computedValues)
+                (resolutionGraph c2.symbols c2.computedValues)
+        unresolvedDifference =
+            Graph.difference
+                (unresolvedGraph c1.computedValues)
+                (unresolvedGraph c2.computedValues)
         stateDifferences = [
             if c1.dependencies <> c2.dependencies then
                 "Dependencies"

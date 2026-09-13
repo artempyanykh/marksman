@@ -68,10 +68,16 @@ Follow-up review work after incremental diagnostics is wired in:
   A mutable priority queue and membership set reduced allocation slightly in
   the 1,000-document benchmark but did not improve update times, so the simpler
   immutable set remains.
-- [ ] Share graph construction between Conn's compact formatting and
-  difference routines.
-- [ ] Centralize the repeated orphan-collection folds. Selector scope extraction
-  is now shared by Conn and Folder.
+- [x] Share resolved and unresolved graph construction between Conn's compact
+  formatting and difference routines. Existing connection snapshots and
+  incremental-equivalence tests pass.
+- [x] Centralize the repeated orphan-collection folds in Conn. An iterative
+  work queue handles dependencies released by computation removal, dependency
+  replacement, and reference removal without growing the call stack. Selector
+  scope extraction is already shared by Conn and Folder. Tests pass. In the
+  1,000-document short-run benchmark, most edits were unchanged; removing a
+  document rose from 281.5 µs / 383 KB to 292.0 µs / 389 KB, while link edits
+  remained about 28 µs / 48 KB.
 
 Baseline on 2026-09-12: BenchmarkDotNet 0.15.6, .NET 9.0.19, Linux x64,
 Intel Core i7-12700K. The Release benchmark was run in-process with two warmup

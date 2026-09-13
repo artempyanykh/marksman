@@ -10,6 +10,13 @@ open Marksman.Doc
 
 type Folder
 
+type DocumentDifference = {
+    added: Set<DocId>
+    removed: Set<DocId>
+    changed: Set<DocId>
+    reopened: Set<DocId>
+}
+
 module Folder =
     val id: Folder -> FolderId
     val rootPath: Folder -> RootPath
@@ -49,4 +56,4 @@ module Folder =
     val oracle: Folder -> Conn.Oracle
     val conn: Folder -> Conn.Conn
     val syms: Folder -> MMap<DocId, Sym>
-    val docsDifference: Folder -> Folder -> FullDifference<DocId>
+    val docsDifference: Folder -> Folder -> DocumentDifference

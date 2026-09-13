@@ -32,7 +32,18 @@ module FolderTest =
         Assert.Equal<Set<DocId>>(Set.ofList [ b.Id; d.Id; z.Id ], difference.added)
         Assert.Equal<Set<DocId>>(Set.singleton e.Id, difference.removed)
         Assert.Equal<Set<DocId>>(Set.singleton c.Id, difference.changed)
-        Assert.Equal<Set<DocId>>(Set.ofList [ a.Id; g.Id ], difference.unchanged)
+        Assert.Empty(difference.reopened)
+
+    [<Fact>]
+    let docsDifferenceReportsReopeningWithoutAContentChange () =
+        let closed = FakeDoc.Mk(content = "A", path = "a.md")
+        let reopened = Doc.mk ParserSettings.Default closed.Id (Some 1) (Doc.text closed)
+        let before = FakeFolder.Mk [ closed ]
+        let after = Folder.withDoc reopened before
+        let difference = Folder.docsDifference before after
+
+        Assert.Equal<Set<DocId>>(Set.singleton closed.Id, difference.reopened)
+        Assert.Empty(difference.changed)
 
     [<Fact>]
     let rooPath_singleFile () =

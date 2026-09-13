@@ -79,6 +79,19 @@ Follow-up review work after incremental diagnostics is wired in:
   document rose from 281.5 µs / 383 KB to 292.0 µs / 389 KB, while link edits
   remained about 28 µs / 48 KB.
 
+Further two-state comparison work:
+
+- [x] Report reopened documents while comparing folder documents instead of
+  collecting every unchanged document and filtering it afterward. At 1,000
+  documents, affected-document selection fell from 1.03 ms / 2.41 MB to
+  0.079 ms / 0.23 MB for a prose edit, and from 4.04 ms / 8.03 MB to
+  2.99 ms / 5.85 MB for a link edit. End-to-end diagnostic calculation fell
+  from 1.40 ms / 2.96 MB to 0.43 ms / 0.78 MB for prose and from
+  4.60 ms / 8.58 MB to 3.36 ms / 6.41 MB for links.
+- [ ] Assess a sharing-aware representation for cached reference results so
+  comparing two Conn states can skip unchanged portions. Compare its update
+  cost and end-to-end diagnostics benefit before adopting it.
+
 Baseline on 2026-09-12: BenchmarkDotNet 0.15.6, .NET 9.0.19, Linux x64,
 Intel Core i7-12700K. The Release benchmark was run in-process with two warmup
 and five measurement iterations at 200 ms each. Figures are mean time and

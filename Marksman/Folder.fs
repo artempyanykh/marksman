@@ -233,6 +233,13 @@ module Oracle =
 
 type Folder = { data: FolderData; lookup: FolderLookup; conn: Conn.Conn }
 
+type DocumentDifference = {
+    added: Set<DocId>
+    removed: Set<DocId>
+    changed: Set<DocId>
+    reopened: Set<DocId>
+}
+
 module Folder =
     let private logger = LogProvider.getLoggerByName "Folder"
 
@@ -426,9 +433,9 @@ module Folder =
 
     let syms (folder: Folder) = FolderData.syms folder.data
 
-    /// Identify added, removed, changed, and unchanged docs between
+    /// Identify added, removed, changed, and reopened docs between
     /// two folders.
-    let docsDifference (before: Folder) (after: Folder) =
+    let docsDifference (before: Folder) (after: Folder) : DocumentDifference =
         let keyedDocs =
             function
             | SingleFile { doc = doc } -> Seq.singleton (Doc.pathFromRoot doc, doc)
@@ -437,7 +444,7 @@ module Folder =
         let mutable added = Set.empty
         let mutable removed = Set.empty
         let mutable changed = Set.empty
-        let mutable unchanged = Set.empty
+        let mutable reopened = Set.empty
 
         use oldDocs = (keyedDocs before.data).GetEnumerator()
         use newDocs = (keyedDocs after.data).GetEnumerator()
@@ -462,10 +469,12 @@ module Folder =
                 if oldId <> newId then
                     removed <- Set.add oldId removed
                     added <- Set.add newId added
-                elif obj.ReferenceEquals(oldDoc, newDoc) || oldDoc = newDoc then
-                    unchanged <- Set.add oldId unchanged
-                else
-                    changed <- Set.add oldId changed
+                elif not (obj.ReferenceEquals(oldDoc, newDoc)) then
+                    if oldDoc <> newDoc then
+                        changed <- Set.add oldId changed
+                    // Doc equality ignores version; reopening still needs publication.
+                    elif Doc.version oldDoc = None && Option.isSome (Doc.version newDoc) then
+                        reopened <- Set.add oldId reopened
 
                 hasOld <- oldDocs.MoveNext()
                 hasNew <- newDocs.MoveNext()
@@ -482,7 +491,7 @@ module Folder =
             added = added
             removed = removed
             changed = changed
-            unchanged = unchanged
+            reopened = reopened
         }
 
     let mk data =

@@ -235,12 +235,6 @@ module WorkspaceDiag =
                 | Some oldFolder, Some newFolder ->
                     let docs = Folder.docsDifference oldFolder newFolder
 
-                    let reopened =
-                        docs.unchanged
-                        |> Set.filter (fun docId ->
-                            Doc.version (Folder.findDocById docId oldFolder) = None
-                            && Option.isSome (Doc.version (Folder.findDocById docId newFolder)))
-
                     let oldTargets = docs.changed + docs.removed
                     let newTargets = docs.changed + docs.added
                     let oldConn = Folder.conn oldFolder
@@ -255,7 +249,7 @@ module WorkspaceDiag =
                     docs.added
                     + docs.removed
                     + docs.changed
-                    + reopened
+                    + docs.reopened
                     + changedResolutions
                     + incomingReferenceDocuments oldFolder oldTargets
                     + incomingReferenceDocuments newFolder newTargets

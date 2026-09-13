@@ -312,13 +312,6 @@ module Difference =
     let mk (before: Set<'A>) (after: Set<'A>) : Difference<'A> =
         { added = after - before; removed = before - after }
 
-type FullDifference<'A> when 'A: comparison = {
-    added: Set<'A>
-    removed: Set<'A>
-    changed: Set<'A>
-    unchanged: Set<'A>
-}
-
 let getAssemblyVersion () : string =
     let assembly = Assembly.GetExecutingAssembly()
 

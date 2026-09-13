@@ -693,80 +693,56 @@ module Conn =
 
     let private rebuild oracle initialWork conn =
         let mutable conn = conn
-        let mutable candidateDocumentComputations = Set.empty
-        let mutable definitionComputations = Set.empty
-        let mutable referenceComputations = Set.empty
+        let mutable work = Set.empty
+
+        let priority =
+            function
+            | ConnectionComputation.ResolveCandidateDocuments _ -> 0
+            | ConnectionComputation.SelectDefinitions _ -> 1
+            | ConnectionComputation.ResolveReference _ -> 2
 
         let enqueue node =
-            match node with
-            | ConnectionComputation.ResolveCandidateDocuments _ ->
-                candidateDocumentComputations <- Set.add node candidateDocumentComputations
-            | ConnectionComputation.SelectDefinitions _ ->
-                definitionComputations <- Set.add node definitionComputations
-            | ConnectionComputation.ResolveReference _ ->
-                referenceComputations <- Set.add node referenceComputations
+            work <- Set.add (priority node, node) work
 
         Set.iter enqueue initialWork
         let mutable evaluatedCandidateDocumentComputations = 0
         let mutable evaluatedReferences = 0
 
-        // Each round drains candidates, then definitions, then references, in
-        // that dependency order; a value that changes requeues its dependents,
-        // which the next round picks up, so the loop keeps going until nothing
-        // is left dirty.
-        while not (
-            Set.isEmpty candidateDocumentComputations
-            && Set.isEmpty definitionComputations
-            && Set.isEmpty referenceComputations
-        ) do
-            while not (Set.isEmpty candidateDocumentComputations) do
-                let node = Set.minElement candidateDocumentComputations
+        // Resolve prerequisites before references. A changed value requeues its
+        // dependents, and the ordered set suppresses duplicate work.
+        while not (Set.isEmpty work) do
+            let item = Set.minElement work
+            work <- Set.remove item work
+            let _, node = item
 
-                candidateDocumentComputations <- Set.remove node candidateDocumentComputations
+            match node with
+            | ConnectionComputation.ResolveCandidateDocuments name when
+                Map.containsKey node conn.computedValues
+                ->
+                let next, _, changed = evaluateCandidateDocuments oracle name conn
+                conn <- next
+                evaluatedCandidateDocumentComputations <-
+                    evaluatedCandidateDocumentComputations + 1
 
-                match node with
-                | ConnectionComputation.ResolveCandidateDocuments name when
-                    Map.containsKey node conn.computedValues
-                    ->
-                    let next, _, changed = evaluateCandidateDocuments oracle name conn
-                    conn <- next
+                if changed then
+                    dependentComputations (ConnectionDependency.ComputedValue node) conn
+                    |> Set.iter enqueue
+            | ConnectionComputation.SelectDefinitions selector when
+                Map.containsKey node conn.computedValues
+                ->
+                let next, _, changed = evaluateDefinitionSelection oracle selector conn
+                conn <- next
 
-                    evaluatedCandidateDocumentComputations <-
-                        evaluatedCandidateDocumentComputations + 1
-
-                    if changed then
-                        dependentComputations (ConnectionDependency.ComputedValue node) conn
-                        |> Set.iter enqueue
-                | _ -> ()
-
-            while not (Set.isEmpty definitionComputations) do
-                let node = Set.minElement definitionComputations
-                definitionComputations <- Set.remove node definitionComputations
-
-                match node with
-                | ConnectionComputation.SelectDefinitions selector when
-                    Map.containsKey node conn.computedValues
-                    ->
-                    let next, _, changed = evaluateDefinitionSelection oracle selector conn
-                    conn <- next
-
-                    if changed then
-                        dependentComputations (ConnectionDependency.ComputedValue node) conn
-                        |> Set.iter enqueue
-                | _ -> ()
-
-            while not (Set.isEmpty referenceComputations) do
-                let node = Set.minElement referenceComputations
-                referenceComputations <- Set.remove node referenceComputations
-
-                match node with
-                | ConnectionComputation.ResolveReference(scope, ref) when
-                    MMap.tryFind scope conn.symbols
-                    |> Option.exists (Set.contains (Sym.Ref ref))
-                    ->
-                    conn <- evaluateReference oracle (scope, ref) conn
-                    evaluatedReferences <- evaluatedReferences + 1
-                | _ -> ()
+                if changed then
+                    dependentComputations (ConnectionDependency.ComputedValue node) conn
+                    |> Set.iter enqueue
+            | ConnectionComputation.ResolveReference(scope, ref) when
+                MMap.tryFind scope conn.symbols
+                |> Option.exists (Set.contains (Sym.Ref ref))
+                ->
+                conn <- evaluateReference oracle (scope, ref) conn
+                evaluatedReferences <- evaluatedReferences + 1
+            | _ -> ()
 
         logger.trace (
             Log.setMessage "Updated connection graph"

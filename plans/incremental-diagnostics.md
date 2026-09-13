@@ -62,8 +62,12 @@ Follow-up review work after incremental diagnostics is wired in:
   selectors read each definition; the folder oracle uses the same relationship
   while retaining the title-less document fallback. The connection-update
   benchmark shows no material regression.
-- [ ] Simplify Conn's three computation queues without losing their dependency
-  order or incremental correctness.
+- [x] Replace Conn's three computation queues and drain loops with one ordered
+  work set. Explicit priorities preserve candidate-document, definition, then
+  reference evaluation. Tests pass and update times are effectively unchanged.
+  A mutable priority queue and membership set reduced allocation slightly in
+  the 1,000-document benchmark but did not improve update times, so the simpler
+  immutable set remains.
 - [ ] Share graph construction between Conn's compact formatting and
   difference routines.
 - [ ] Centralize the repeated orphan-collection folds. Selector scope extraction

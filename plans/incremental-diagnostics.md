@@ -41,11 +41,11 @@ Track progress in order. Keep tests passing after each code change.
 
 Follow-up review work after incremental diagnostics is wired in:
 
-- [ ] Reduce the cost of comparing documents in two folder states. The current
-  `Folder.docsDifference` scans both document maps for each changed folder,
-  including single-document edits; at 1,000 documents it takes about 2.8 ms
-  and allocates 6.1 MB. Preserve comparison across coalesced edits without
-  adding a change summary to each state mutation.
+- [x] Reduce the cost of comparing documents in two folder states. Compare the
+  ordered document maps directly, without building intermediate sets or adding
+  a change summary to each state mutation. At 1,000 documents, finding affected
+  documents after a prose edit fell from about 3.4 ms / 7.1 MB to
+  1.06 ms / 2.43 MB. The comparison still visits every document.
 - [ ] Reduce the cost of comparing cached reference resolutions between the old
   and new Conn states. At 1,000 documents this takes about 20.7 ms and allocates
   22.6 MB, dominating graph-changing diagnostic updates. The resolved/unresolved

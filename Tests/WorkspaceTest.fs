@@ -16,6 +16,25 @@ open Marksman.Helpers
 
 module FolderTest =
     [<Fact>]
+    let docsDifferenceAcrossInterleavedPaths () =
+        let a = FakeDoc.Mk(content = "A", path = "a.md")
+        let c = FakeDoc.Mk(content = "C", path = "c.md")
+        let changedC = FakeDoc.Mk(content = "Updated C", path = "c.md")
+        let e = FakeDoc.Mk(content = "E", path = "e.md")
+        let g = FakeDoc.Mk(content = "G", path = "g.md")
+        let b = FakeDoc.Mk(content = "B", path = "b.md")
+        let d = FakeDoc.Mk(content = "D", path = "d.md")
+        let z = FakeDoc.Mk(content = "Z", path = "z.md")
+        let before = FakeFolder.Mk [ a; c; e; g ]
+        let after = FakeFolder.Mk [ a; b; changedC; d; g; z ]
+        let difference = Folder.docsDifference before after
+
+        Assert.Equal<Set<DocId>>(Set.ofList [ b.Id; d.Id; z.Id ], difference.added)
+        Assert.Equal<Set<DocId>>(Set.singleton e.Id, difference.removed)
+        Assert.Equal<Set<DocId>>(Set.singleton c.Id, difference.changed)
+        Assert.Equal<Set<DocId>>(Set.ofList [ a.Id; g.Id ], difference.unchanged)
+
+    [<Fact>]
     let rooPath_singleFile () =
         let d1 = FakeDoc.Mk(content = "", path = "a/b/d1.md", root = "a")
         let f1 = Folder.singleFile d1 None

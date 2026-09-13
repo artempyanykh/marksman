@@ -435,31 +435,60 @@ module Folder =
     /// Identify added, removed, changed, and unchanged docs between
     /// two folders.
     let docsDifference (before: Folder) (after: Folder) =
-        let idsBefore = docs before |> Seq.map Doc.id |> Set.ofSeq
-        let idsAfter = docs after |> Seq.map Doc.id |> Set.ofSeq
+        let keyedDocs =
+            function
+            | SingleFile { doc = doc } -> Seq.singleton (Doc.pathFromRoot doc, doc)
+            | MultiFile { docs = docs } -> Map.toSeq docs
 
-        let idsRemoved = idsBefore - idsAfter
-        let idsAdded = idsAfter - idsBefore
-        let idsBoth = Set.intersect idsBefore idsAfter
+        let mutable added = Set.empty
+        let mutable removed = Set.empty
+        let mutable changed = Set.empty
+        let mutable unchanged = Set.empty
 
-        let idsChanged =
-            seq {
-                for id in idsBoth do
-                    let beforeDoc = findDocById id before
-                    let afterDoc = findDocById id after
+        use oldDocs = (keyedDocs before.data).GetEnumerator()
+        use newDocs = (keyedDocs after.data).GetEnumerator()
+        let mutable hasOld = oldDocs.MoveNext()
+        let mutable hasNew = newDocs.MoveNext()
 
-                    if beforeDoc <> afterDoc then
-                        yield id
-            }
-            |> Set.ofSeq
+        while hasOld && hasNew do
+            let oldPath, oldDoc = oldDocs.Current
+            let newPath, newDoc = newDocs.Current
 
-        let idsUnchanged = idsBoth - idsChanged
+            match compare oldPath newPath with
+            | n when n < 0 ->
+                removed <- Set.add (Doc.id oldDoc) removed
+                hasOld <- oldDocs.MoveNext()
+            | n when n > 0 ->
+                added <- Set.add (Doc.id newDoc) added
+                hasNew <- newDocs.MoveNext()
+            | _ ->
+                let oldId = Doc.id oldDoc
+                let newId = Doc.id newDoc
+
+                if oldId <> newId then
+                    removed <- Set.add oldId removed
+                    added <- Set.add newId added
+                elif obj.ReferenceEquals(oldDoc, newDoc) || oldDoc = newDoc then
+                    unchanged <- Set.add oldId unchanged
+                else
+                    changed <- Set.add oldId changed
+
+                hasOld <- oldDocs.MoveNext()
+                hasNew <- newDocs.MoveNext()
+
+        while hasOld do
+            removed <- Set.add (Doc.id (snd oldDocs.Current)) removed
+            hasOld <- oldDocs.MoveNext()
+
+        while hasNew do
+            added <- Set.add (Doc.id (snd newDocs.Current)) added
+            hasNew <- newDocs.MoveNext()
 
         {
-            added = idsAdded
-            removed = idsRemoved
-            changed = idsChanged
-            unchanged = idsUnchanged
+            added = added
+            removed = removed
+            changed = changed
+            unchanged = unchanged
         }
 
     let symsDifference (before: Folder) (after: Folder) =

@@ -312,6 +312,40 @@ module Difference =
     let mk (before: Set<'A>) (after: Set<'A>) : Difference<'A> =
         { added = after - before; removed = before - after }
 
+/// Walk two sequences ordered by the same key without materializing their union.
+module SortedMerge =
+    let inline iter before after onlyBefore onlyAfter both =
+        use oldEntries = (before: seq<'Key * 'Old>).GetEnumerator()
+        use newEntries = (after: seq<'Key * 'New>).GetEnumerator()
+        let mutable hasOld = oldEntries.MoveNext()
+        let mutable hasNew = newEntries.MoveNext()
+
+        while hasOld && hasNew do
+            let oldKey, oldValue = oldEntries.Current
+            let newKey, newValue = newEntries.Current
+
+            match compare oldKey newKey with
+            | n when n < 0 ->
+                onlyBefore oldKey oldValue
+                hasOld <- oldEntries.MoveNext()
+            | n when n > 0 ->
+                onlyAfter newKey newValue
+                hasNew <- newEntries.MoveNext()
+            | _ ->
+                both oldKey oldValue newValue
+                hasOld <- oldEntries.MoveNext()
+                hasNew <- newEntries.MoveNext()
+
+        while hasOld do
+            let key, value = oldEntries.Current
+            onlyBefore key value
+            hasOld <- oldEntries.MoveNext()
+
+        while hasNew do
+            let key, value = newEntries.Current
+            onlyAfter key value
+            hasNew <- newEntries.MoveNext()
+
 let getAssemblyVersion () : string =
     let assembly = Assembly.GetExecutingAssembly()
 

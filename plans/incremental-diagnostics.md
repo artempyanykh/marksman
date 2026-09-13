@@ -88,9 +88,14 @@ Further two-state comparison work:
   2.99 ms / 5.85 MB for a link edit. End-to-end diagnostic calculation fell
   from 1.40 ms / 2.96 MB to 0.43 ms / 0.78 MB for prose and from
   4.60 ms / 8.58 MB to 3.36 ms / 6.41 MB for links.
-- [ ] Assess a sharing-aware representation for cached reference results so
+- [x] Assess a sharing-aware representation for cached reference results so
   comparing two Conn states can skip unchanged portions. Compare its update
-  cost and end-to-end diagnostics benefit before adopting it.
+  cost and end-to-end diagnostics benefit before adopting it. A partitioned
+  immutable map is now Conn's primary computed-value
+  store. At 1,000 documents, isolated link-edit comparison fell from
+  2.50 ms / 5.49 MB to 0.084 ms / 0.17 MB; end-to-end link diagnostics fell
+  from 3.32 ms / 6.41 MB to 0.51 ms / 0.93 MB. Connection link edits also fell
+  from 28.2 µs / 48.1 KB to 25.6 µs / 45.3 KB.
 
 Baseline on 2026-09-12: BenchmarkDotNet 0.15.6, .NET 9.0.19, Linux x64,
 Intel Core i7-12700K. The Release benchmark was run in-process with two warmup

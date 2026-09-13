@@ -5,6 +5,7 @@ open Ionide.LanguageServerProtocol.Logging
 
 open Marksman.Misc
 open Marksman.MMap
+open Marksman.PartitionedMap
 open Marksman.Names
 open Marksman.Paths
 open Marksman.Graph
@@ -180,7 +181,7 @@ type private ConnectionValue =
 let private resolutionGraph symbols computedValues =
     let referenceEdges =
         seq {
-            for KeyValue(node, value) in computedValues do
+            for node, value in PartitionedMap.toSeq computedValues do
                 match node, value with
                 | ConnectionComputation.ResolveReference(scope, ref),
                   ConnectionValue.ReferenceResolution result ->
@@ -202,7 +203,7 @@ let private resolutionGraph symbols computedValues =
 
 let private unresolvedGraph computedValues =
     seq {
-        for KeyValue(node, value) in computedValues do
+        for node, value in PartitionedMap.toSeq computedValues do
             match node, value with
             | ConnectionComputation.ResolveReference(scope, ref),
               ConnectionValue.ReferenceResolution result ->
@@ -218,7 +219,7 @@ type Conn = private {
     symbols: MMap<Scope, Sym>
     dependencies: MMap<ConnectionComputation, ConnectionDependency>
     dependents: MMap<ConnectionDependency, ConnectionComputation>
-    computedValues: Map<ConnectionComputation, ConnectionValue>
+    computedValues: PartitionedMap<ConnectionComputation, ConnectionValue>
     referencesByTarget: MMap<ScopedSym, ScopedSym>
 } with
 
@@ -365,7 +366,7 @@ module Conn =
         symbols = MMap.empty
         dependencies = MMap.empty
         dependents = MMap.empty
-        computedValues = Map.empty
+        computedValues = PartitionedMap.empty
         referencesByTarget = MMap.empty
     }
 
@@ -417,7 +418,7 @@ module Conn =
             conn with
                 dependencies = MMap.removeKey computation dependencies
                 dependents = MMap.removeKey computedValue dependents
-                computedValues = Map.remove computation conn.computedValues
+                computedValues = PartitionedMap.remove computation conn.computedValues
         },
         dependenciesOfComputation
 
@@ -459,7 +460,7 @@ module Conn =
                             (ConnectionDependency.ComputedValue computation)
                             current
                     )
-                    && Map.containsKey computation current.computedValues
+                    && PartitionedMap.containsKey computation current.computedValues
                 then
                     let next, inputs = removeComputation computation current
                     current <- next
@@ -494,13 +495,13 @@ module Conn =
             collectOrphanedComputations removed conn
 
     let private setComputationValue computation value conn =
-        let previous = Map.tryFind computation conn.computedValues
+        let values = PartitionedMap.add computation value conn.computedValues
 
         {
             conn with
-                computedValues = Map.add computation value conn.computedValues
+                computedValues = values
         },
-        previous <> Some value
+        not (obj.ReferenceEquals(values, conn.computedValues))
 
     let private evaluateCandidateDocuments oracle name conn =
         let node = ConnectionComputation.ResolveCandidateDocuments name
@@ -534,7 +535,9 @@ module Conn =
 
     let private ensureCandidateDocuments oracle name conn =
         match
-            Map.tryFind (ConnectionComputation.ResolveCandidateDocuments name) conn.computedValues
+            PartitionedMap.tryFind
+                (ConnectionComputation.ResolveCandidateDocuments name)
+                conn.computedValues
         with
         | Some(ConnectionValue.CandidateDocuments documents) -> conn, documents
         | _ ->
@@ -543,7 +546,9 @@ module Conn =
 
     let private ensureSelectedDefinitions oracle selector conn =
         match
-            Map.tryFind (ConnectionComputation.SelectDefinitions selector) conn.computedValues
+            PartitionedMap.tryFind
+                (ConnectionComputation.SelectDefinitions selector)
+                conn.computedValues
         with
         | Some(ConnectionValue.SelectedDefinitions definitions) -> conn, definitions
         | _ ->
@@ -557,7 +562,7 @@ module Conn =
         let sourceSymbol = scope, Sym.Ref ref
 
         let oldTargets =
-            match Map.tryFind node conn.computedValues with
+            match PartitionedMap.tryFind node conn.computedValues with
             | Some(ConnectionValue.ReferenceResolution old) -> old.resolved
             | _ -> Set.empty
 
@@ -573,7 +578,7 @@ module Conn =
         {
             conn with
                 computedValues =
-                    Map.add
+                    PartitionedMap.add
                         node
                         (ConnectionValue.ReferenceResolution resolution)
                         conn.computedValues
@@ -628,7 +633,7 @@ module Conn =
         let sourceSymbol = scope, Sym.Ref ref
 
         let referencesByTarget =
-            match Map.tryFind node conn.computedValues with
+            match PartitionedMap.tryFind node conn.computedValues with
             | Some(ConnectionValue.ReferenceResolution resolution) ->
                 resolution.resolved
                 |> Set.fold
@@ -693,7 +698,7 @@ module Conn =
 
             match node with
             | ConnectionComputation.ResolveCandidateDocuments name when
-                Map.containsKey node conn.computedValues
+                PartitionedMap.containsKey node conn.computedValues
                 ->
                 let next, _, changed = evaluateCandidateDocuments oracle name conn
                 conn <- next
@@ -704,7 +709,7 @@ module Conn =
                     dependentComputations (ConnectionDependency.ComputedValue node) conn
                     |> Set.iter enqueue
             | ConnectionComputation.SelectDefinitions selector when
-                Map.containsKey node conn.computedValues
+                PartitionedMap.containsKey node conn.computedValues
                 ->
                 let next, _, changed = evaluateDefinitionSelection oracle selector conn
                 conn <- next
@@ -812,53 +817,17 @@ module Query =
         MMap.tryFind scope conn.symbols |> Option.exists (Set.contains sym)
 
     /// Compare materialized reference results without recalculating references.
-    /// Both maps are ordered by computation, so matching references can be
-    /// compared in one pass without a map lookup for every reference.
+    /// Unchanged partitions of the computed-value map need no traversal.
     let documentsWithChangedReferenceResolutions (before: Conn) (after: Conn) : Set<DocId> =
-        let references conn =
-            conn.computedValues
-            |> Map.toSeq
-            |> Seq.choose (function
-                | (ConnectionComputation.ResolveReference(Scope.Doc doc, _) as node),
-                  (ConnectionValue.ReferenceResolution _ as value) -> Some(node, doc, value)
-                | _ -> None)
-
         let mutable changed = Set.empty
-        use oldRefs = (references before).GetEnumerator()
-        use newRefs = (references after).GetEnumerator()
-        let mutable hasOld = oldRefs.MoveNext()
-        let mutable hasNew = newRefs.MoveNext()
-
-        while hasOld && hasNew do
-            let oldNode, oldDoc, oldValue = oldRefs.Current
-            let newNode, newDoc, newValue = newRefs.Current
-
-            match compare oldNode newNode with
-            | n when n < 0 ->
-                changed <- Set.add oldDoc changed
-                hasOld <- oldRefs.MoveNext()
-            | n when n > 0 ->
-                changed <- Set.add newDoc changed
-                hasNew <- newRefs.MoveNext()
-            | _ ->
-                if
-                    not (obj.ReferenceEquals(oldValue, newValue))
-                    && oldValue <> newValue
-                then
-                    changed <- Set.add oldDoc changed
-
-                hasOld <- oldRefs.MoveNext()
-                hasNew <- newRefs.MoveNext()
-
-        while hasOld do
-            let _, doc, _ = oldRefs.Current
-            changed <- Set.add doc changed
-            hasOld <- oldRefs.MoveNext()
-
-        while hasNew do
-            let _, doc, _ = newRefs.Current
-            changed <- Set.add doc changed
-            hasNew <- newRefs.MoveNext()
+        PartitionedMap.iterDifferences
+            (fun node _ _ ->
+                match node with
+                | ConnectionComputation.ResolveReference(Scope.Doc doc, _) ->
+                    changed <- Set.add doc changed
+                | _ -> ())
+            before.computedValues
+            after.computedValues
 
         changed
 
@@ -866,7 +835,9 @@ module Query =
         match sym with
         | Sym.Ref ref when sourceContains scope sym conn ->
             match
-                Map.tryFind (ConnectionComputation.ResolveReference(scope, ref)) conn.computedValues
+                PartitionedMap.tryFind
+                    (ConnectionComputation.ResolveReference(scope, ref))
+                    conn.computedValues
             with
             | Some(ConnectionValue.ReferenceResolution result) -> result.resolved
             | _ -> Set.empty

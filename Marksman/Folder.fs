@@ -446,23 +446,12 @@ module Folder =
         let mutable changed = Set.empty
         let mutable reopened = Set.empty
 
-        use oldDocs = (keyedDocs before.data).GetEnumerator()
-        use newDocs = (keyedDocs after.data).GetEnumerator()
-        let mutable hasOld = oldDocs.MoveNext()
-        let mutable hasNew = newDocs.MoveNext()
-
-        while hasOld && hasNew do
-            let oldPath, oldDoc = oldDocs.Current
-            let newPath, newDoc = newDocs.Current
-
-            match compare oldPath newPath with
-            | n when n < 0 ->
-                removed <- Set.add (Doc.id oldDoc) removed
-                hasOld <- oldDocs.MoveNext()
-            | n when n > 0 ->
-                added <- Set.add (Doc.id newDoc) added
-                hasNew <- newDocs.MoveNext()
-            | _ ->
+        SortedMerge.iter
+            (keyedDocs before.data)
+            (keyedDocs after.data)
+            (fun _ oldDoc -> removed <- Set.add (Doc.id oldDoc) removed)
+            (fun _ newDoc -> added <- Set.add (Doc.id newDoc) added)
+            (fun _ oldDoc newDoc ->
                 let oldId = Doc.id oldDoc
                 let newId = Doc.id newDoc
 
@@ -474,18 +463,7 @@ module Folder =
                         changed <- Set.add oldId changed
                     // Doc equality ignores version; reopening still needs publication.
                     elif Doc.version oldDoc = None && Option.isSome (Doc.version newDoc) then
-                        reopened <- Set.add oldId reopened
-
-                hasOld <- oldDocs.MoveNext()
-                hasNew <- newDocs.MoveNext()
-
-        while hasOld do
-            removed <- Set.add (Doc.id (snd oldDocs.Current)) removed
-            hasOld <- oldDocs.MoveNext()
-
-        while hasNew do
-            added <- Set.add (Doc.id (snd newDocs.Current)) added
-            hasNew <- newDocs.MoveNext()
+                        reopened <- Set.add oldId reopened)
 
         {
             added = added

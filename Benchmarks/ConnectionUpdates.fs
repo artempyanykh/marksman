@@ -1,6 +1,7 @@
 module Marksman.ConnectionUpdateBenchmarks
 
 open BenchmarkDotNet.Attributes
+open Marksman.Conn
 open Marksman.Config
 open Marksman.Doc
 open Marksman.Folder
@@ -14,6 +15,7 @@ open Marksman.Paths
 type ConnectionUpdates() =
     let mutable runScenario: unit -> Folder =
         fun () -> failwith "Run setup first"
+    let mutable connectionVersions: (Conn * Conn) option = None
 
     [<Params(100, 1000)>]
     member val FolderSize = 100 with get, set
@@ -68,7 +70,12 @@ type ConnectionUpdates() =
         ]
 
         let docs = Array.init this.FolderSize (fun i -> mkDoc (path i) (lines i))
-        let original = Folder.multiFile "benchmark" folderId docs (Some config)
+        let original =
+            if this.Scenario = "RenameUnlinkedTitle" then
+                let unlinked = mkDoc "unlinked.md" [ "# Unlinked" ]
+                Folder.multiFile "benchmark" folderId (Seq.append docs [ unlinked ]) (Some config)
+            else
+                Folder.multiFile "benchmark" folderId docs (Some config)
 
         let replaceFirstDocument lines =
             let updated = mkDoc (path 0) lines
@@ -86,15 +93,6 @@ type ConnectionUpdates() =
                     |> List.map (fun line -> if line = "# Title 0" then "# Renamed" else line)
                 )
             | "RenameUnlinkedTitle" ->
-                let unlinked = mkDoc "unlinked.md" [ "# Unlinked" ]
-
-                let original =
-                    Folder.multiFile
-                        "benchmark"
-                        folderId
-                        (Seq.append docs [ unlinked ])
-                        (Some config)
-
                 let updated = mkDoc "unlinked.md" [ "# Renamed unlinked" ]
                 fun () -> Folder.withDoc updated original
             | "AddAmbiguousPath" ->
@@ -106,5 +104,12 @@ type ConnectionUpdates() =
             | "FullRebuild" -> fun () -> Folder.multiFile "benchmark" folderId docs (Some config)
             | scenario -> invalidArg "Scenario" scenario
 
+        connectionVersions <- Some(Folder.conn original, Folder.conn (runScenario ()))
+
     [<Benchmark>]
     member _.Update() = runScenario ()
+
+    [<Benchmark>]
+    member _.CompareReferenceResolutions() =
+        let before, after = connectionVersions.Value
+        Query.documentsWithChangedReferenceResolutions before after

@@ -197,5 +197,3 @@ module Sym =
     let scoped (scope: Scope) (sym: Sym) = scope, sym
 
     let scopedToDoc (docId: DocId) (sym: Sym) = Scope.Doc docId, sym
-
-    let allScopedToDoc (docId: DocId) (syms: seq<Sym>) = syms |> Seq.map (scopedToDoc docId)

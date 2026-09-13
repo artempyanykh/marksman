@@ -491,38 +491,6 @@ module Folder =
             unchanged = unchanged
         }
 
-    let symsDifference (before: Folder) (after: Folder) =
-        let docsDifference = docsDifference before after
-        let mutable added = Set.empty
-        let mutable removed = Set.empty
-
-        for id in docsDifference.removed do
-            let doc = findDocById id before
-
-            let symsInDoc = Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
-            removed <- removed + symsInDoc
-
-        for id in docsDifference.added do
-            let doc = findDocById id after
-
-            let symsInDoc = Sym.allScopedToDoc id (Doc.syms doc) |> Set.ofSeq
-            added <- added + symsInDoc
-
-        for id in docsDifference.changed do
-            let beforeDoc = findDocById id before
-            let afterDoc = findDocById id after
-            let docDiff = Doc.symsDifference beforeDoc afterDoc
-
-            let removedSyms = Sym.allScopedToDoc id docDiff.removed |> Set.ofSeq
-            removed <- removed + removedSyms
-
-            let addedSyms = Sym.allScopedToDoc id docDiff.added |> Set.ofSeq
-            added <- added + addedSyms
-
-        let symsDifference = { added = added; removed = removed }
-
-        docsDifference, symsDifference
-
     let mk data =
         let lookup = FolderLookup.ofData data
         let conn = Conn.Conn.mk (Oracle.oracle data lookup) (FolderData.syms data)
@@ -578,11 +546,12 @@ module Folder =
 
             None
 
-    let private documentAliases (config: Config) doc =
-        DocumentAlias.ofDocument
-            (config.CoreMarkdownFileExtensions())
-            (Doc.slug doc)
-            (Doc.pathFromRoot doc)
+    let private documentInput doc : Conn.DocumentInput = {
+        id = Doc.id doc
+        slug = Doc.slug doc
+        path = Doc.pathFromRoot doc
+        symbols = Doc.syms doc
+    }
 
     let private updateConnectionGraph data lookup (change: Conn.ConnectionChange) previous =
         let config = FolderData.configOrDefault data
@@ -625,49 +594,19 @@ module Folder =
 
             let lookup = FolderLookup.withDoc newDoc lookup
 
-            let symbolDifference, invalidatedDocumentAliases =
+            let documentChange =
                 match existingDoc with
-                | None ->
-                    let added = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
-                    { added = added; removed = Set.empty }, documentAliases config newDoc
+                | None -> Conn.DocumentChange.Added(documentInput newDoc)
                 | Some existingDoc ->
-                    let symbolDifference =
-                        if existingDoc.Id = newDoc.Id then
-                            Doc.symsDifference existingDoc newDoc
-                            |> Difference.map (Sym.scopedToDoc newDoc.Id)
-                        else
-                            // A replacement with the same canonical path can still
-                            // change DocId (e.g. switching markdown extensions).
-                            {
-                                removed =
-                                    Doc.syms existingDoc
-                                    |> Sym.allScopedToDoc existingDoc.Id
-                                    |> Set.ofSeq
-                                added = Doc.syms newDoc |> Sym.allScopedToDoc newDoc.Id |> Set.ofSeq
-                            }
+                    Conn.DocumentChange.Replaced(documentInput existingDoc, documentInput newDoc)
 
-                    let before = documentAliases config existingDoc
-                    let after = documentAliases config newDoc
-
-                    let aliases =
-                        if existingDoc.Id <> newDoc.Id then
-                            Set.union before after
-                        else
-                            Set.union (before - after) (after - before)
-
-                    symbolDifference, aliases
-
-            let change: Conn.ConnectionChange = {
-                symbolDifference = symbolDifference
-                invalidatedDocumentAliases = invalidatedDocumentAliases
-            }
+            let change =
+                Conn.ConnectionChange.ofDocuments
+                    (config.CoreMarkdownFileExtensions())
+                    [ documentChange ]
 
             let conn =
-                if
-                    Difference.isEmpty symbolDifference
-                    && Set.isEmpty invalidatedDocumentAliases
-                    && not (config.CoreParanoid())
-                then
+                if Conn.ConnectionChange.isEmpty change && not (config.CoreParanoid()) then
                     prevConn
                 else
                     updateConnectionGraph data lookup change prevConn
@@ -693,13 +632,11 @@ module Folder =
                 let lookup = FolderLookup.withoutDoc doc folder.lookup
 
                 let conn =
-                    let removedSyms = Doc.syms doc |> Sym.allScopedToDoc doc.Id |> Set.ofSeq
-
-                    let change: Conn.ConnectionChange = {
-                        symbolDifference = { added = Set.empty; removed = removedSyms }
-                        invalidatedDocumentAliases =
-                            documentAliases (FolderData.configOrDefault data) doc
-                    }
+                    let config = FolderData.configOrDefault data
+                    let change =
+                        Conn.ConnectionChange.ofDocuments
+                            (config.CoreMarkdownFileExtensions())
+                            [ Conn.DocumentChange.Removed(documentInput doc) ]
 
                     updateConnectionGraph data lookup change folder.conn
 

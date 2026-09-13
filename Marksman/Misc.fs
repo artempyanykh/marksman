@@ -309,16 +309,8 @@ module Difference =
 
     let isEmpty { added = added; removed = removed } = Set.isEmpty added && Set.isEmpty removed
 
-    let mk (before: seq<'A>) (after: seq<'A>) : Difference<'A> =
-        let before = Set.ofSeq before
-        let after = Set.ofSeq after
-
+    let mk (before: Set<'A>) (after: Set<'A>) : Difference<'A> =
         { added = after - before; removed = before - after }
-
-    let map f { added = added; removed = removed } = {
-        added = Set.map f added
-        removed = Set.map f removed
-    }
 
 type FullDifference<'A> when 'A: comparison = {
     added: Set<'A>

@@ -5,6 +5,7 @@ open Ionide.LanguageServerProtocol.Logging
 open Marksman.Misc
 open Marksman.MMap
 open Marksman.Names
+open Marksman.Paths
 open Marksman.Graph
 open Marksman.Syms
 
@@ -22,10 +23,92 @@ type Oracle = {
     selectDefinitions: DefinitionSelector -> Def[]
 }
 
-type ConnectionChange = {
+/// The document facts Conn needs to update its symbols and lookup dependencies.
+type DocumentInput = {
+    id: DocId
+    slug: Slug
+    path: RelPath
+    symbols: Set<Sym>
+}
+
+type DocumentChange =
+    | Added of DocumentInput
+    | Removed of DocumentInput
+    | Replaced of before: DocumentInput * after: DocumentInput
+
+type ConnectionChange = private {
     symbolDifference: Difference<ScopedSym>
     invalidatedDocumentAliases: Set<DocumentAlias>
 }
+
+module ConnectionChange =
+    let ofDocuments (markdownExtensions: seq<string>) (changes: seq<DocumentChange>) =
+        let aliases input =
+            DocumentAlias.ofDocument markdownExtensions input.slug input.path
+
+        let mutable symbolDifference: Difference<ScopedSym> = Difference.empty
+        let mutable invalidatedDocumentAliases = Set.empty
+
+        for change in changes do
+            let before, after =
+                match change with
+                | DocumentChange.Added current -> None, Some current
+                | DocumentChange.Removed previous -> Some previous, None
+                | DocumentChange.Replaced(previous, current) -> Some previous, Some current
+
+            let symbolChange =
+                match before, after with
+                | Some previous, Some current when previous.id = current.id -> {
+                    added =
+                        (current.symbols - previous.symbols)
+                        |> Set.map (Sym.scopedToDoc current.id)
+                    removed =
+                        (previous.symbols - current.symbols)
+                        |> Set.map (Sym.scopedToDoc previous.id)
+                  }
+                | _ -> {
+                    added =
+                        after
+                        |> Option.map (fun input ->
+                            input.symbols |> Set.map (Sym.scopedToDoc input.id))
+                        |> Option.defaultValue Set.empty
+                    removed =
+                        before
+                        |> Option.map (fun input ->
+                            input.symbols |> Set.map (Sym.scopedToDoc input.id))
+                        |> Option.defaultValue Set.empty
+                  }
+
+            symbolDifference <- {
+                added = symbolDifference.added + symbolChange.added
+                removed = symbolDifference.removed + symbolChange.removed
+            }
+
+            let aliasesToInvalidate =
+                match before, after with
+                | Some previous, Some current when
+                    previous.id = current.id
+                    && previous.slug = current.slug
+                    && previous.path = current.path
+                    -> Set.empty
+                | Some previous, Some current when previous.id <> current.id ->
+                    aliases previous + aliases current
+                | _ ->
+                    let oldAliases = before |> Option.map aliases |> Option.defaultValue Set.empty
+                    let newAliases = after |> Option.map aliases |> Option.defaultValue Set.empty
+                    (oldAliases - newAliases) + (newAliases - oldAliases)
+
+            invalidatedDocumentAliases <-
+                invalidatedDocumentAliases + aliasesToInvalidate
+
+        {
+            symbolDifference = symbolDifference
+            invalidatedDocumentAliases = invalidatedDocumentAliases
+        }
+
+    let isEmpty change =
+        Difference.isEmpty change.symbolDifference
+        && Set.isEmpty change.invalidatedDocumentAliases
 
 type UnresolvedScope =
     | FullyUnknown
@@ -688,10 +771,7 @@ module Conn =
         conn
 
     let update (oracle: Oracle) (change: ConnectionChange) (previous: Conn) : Conn =
-        if
-            Difference.isEmpty change.symbolDifference
-            && Set.isEmpty change.invalidatedDocumentAliases
-        then
+        if ConnectionChange.isEmpty change then
             previous
         else
             let mutable conn = previous

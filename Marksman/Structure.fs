@@ -95,7 +95,7 @@ module Structure =
         {
             cst = cst
             ast = ast
-            sym = syms.ToArray() |> Set.ofArray
+            sym = Set.ofSeq syms
             c2a = c2a
             a2s = a2s
         }

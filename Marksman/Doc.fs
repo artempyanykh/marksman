@@ -156,7 +156,4 @@ module Doc =
 
     let version (doc: Doc) : option<int> = doc.version
 
-    let syms (doc: Doc) : seq<Sym> = doc.structure.Symbols
-
-    let symsDifference (beforeDoc: Doc) (afterDoc: Doc) : Difference<Sym> =
-        Difference.mk (syms beforeDoc) (syms afterDoc)
+    let syms (doc: Doc) : Set<Sym> = doc.structure.Symbols

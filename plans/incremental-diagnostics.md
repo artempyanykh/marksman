@@ -52,8 +52,11 @@ Follow-up review work after incremental diagnostics is wired in:
   finding affected documents after a link edit fell from about 22.5 ms / 26 MB
   to 3.8 ms / 8.0 MB; a target-heading edit fell from about 23.3 ms / 26 MB to
   3.8 ms / 8.0 MB. The comparison still scans the reference computations.
-- [ ] Give alias changes one explicit external-input invalidation API so a
-  `Conn.update` caller cannot omit the affected aliases.
+- [x] Derive symbol changes and alias invalidation from the same document-change
+  input. `ConnectionChange.ofDocuments` creates the private update value, so a
+  `Conn.update` caller cannot omit affected aliases. Returning the symbol set
+  already stored by `Doc` avoids rebuilding it; the 1,000-document prose-edit
+  update takes about 5.0 µs / 12.4 KB, down from 9.0 µs / 20.1 KB.
 - [ ] Make definition-selection dependencies explicit or verify the mapping
   from changed definitions to selectors against what selection reads.
 - [ ] Simplify Conn's three computation queues without losing their dependency

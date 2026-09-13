@@ -24,6 +24,13 @@ let doc path lines =
 
 let folder docs = FakeFolder.Mk(docs = docs, config = config)
 
+let documentInput doc : DocumentInput = {
+    id = Doc.id doc
+    slug = Doc.slug doc
+    path = Doc.pathFromRoot doc
+    symbols = Doc.syms doc
+}
+
 /// The incremental graph must have the same observable results and internal
 /// connection state as a clean construction.
 let assertMatchesCleanConstruction folder =
@@ -163,20 +170,10 @@ let updateWithOracleCallCounts before after others =
                     oracle.selectDefinitions selector
     }
 
-    let aliases doc =
-        DocumentAlias.ofDocument
+    let change =
+        ConnectionChange.ofDocuments
             (config.CoreMarkdownFileExtensions())
-            (Doc.slug doc)
-            (Doc.pathFromRoot doc)
-
-    let beforeAliases, afterAliases = aliases before, aliases after
-
-    let change: ConnectionChange = {
-        symbolDifference =
-            Doc.symsDifference before after
-            |> Difference.map (Sym.scopedToDoc before.Id)
-        invalidatedDocumentAliases = (beforeAliases - afterAliases) + (afterAliases - beforeAliases)
-    }
+            [ DocumentChange.Replaced(documentInput before, documentInput after) ]
 
     let actual = Conn.update counted change (Folder.conn oldFolder)
     let diff = Conn.difference (Folder.conn newFolder) actual
@@ -333,18 +330,14 @@ let batchChangesCanMoveCandidatesAndReplaceReferenceSources () =
     let newSource = doc "source.md" [ "[[Alpha#Other]]"; "[[Alpha#Section]]" ]
     let before = folder [ oldTarget; oldSource ]
     let after = folder [ newTarget; newSource ]
-    let _, symbols = Folder.symsDifference before after
-
-    let aliases document =
-        DocumentAlias.ofDocument
+    let change =
+        ConnectionChange.ofDocuments
             (config.CoreMarkdownFileExtensions())
-            (Doc.slug document)
-            (Doc.pathFromRoot document)
-
-    let change: ConnectionChange = {
-        symbolDifference = symbols
-        invalidatedDocumentAliases = aliases oldTarget + aliases newTarget
-    }
+            [
+                DocumentChange.Removed(documentInput oldTarget)
+                DocumentChange.Added(documentInput newTarget)
+                DocumentChange.Replaced(documentInput oldSource, documentInput newSource)
+            ]
 
     let actual = Conn.update (Folder.oracle after) change (Folder.conn before)
     let diff = Conn.difference (Folder.conn after) actual

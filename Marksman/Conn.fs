@@ -765,23 +765,53 @@ module Query =
         MMap.tryFind scope conn.symbols |> Option.exists (Set.contains sym)
 
     /// Compare materialized reference results without recalculating references.
-    /// This scans the graph, but avoids parsing links or constructing diagnostics.
+    /// Both maps are ordered by computation, so matching references can be
+    /// compared in one pass without a map lookup for every reference.
     let documentsWithChangedReferenceResolutions (before: Conn) (after: Conn) : Set<DocId> =
+        let references conn =
+            conn.computedValues
+            |> Map.toSeq
+            |> Seq.choose (function
+                | (ConnectionComputation.ResolveReference(Scope.Doc doc, _) as node),
+                  (ConnectionValue.ReferenceResolution _ as value) -> Some(node, doc, value)
+                | _ -> None)
+
         let mutable changed = Set.empty
+        use oldRefs = (references before).GetEnumerator()
+        use newRefs = (references after).GetEnumerator()
+        let mutable hasOld = oldRefs.MoveNext()
+        let mutable hasNew = newRefs.MoveNext()
 
-        for KeyValue(node, value) in before.computedValues do
-            match node with
-            | ConnectionComputation.ResolveReference(Scope.Doc doc, _) when
-                Map.tryFind node after.computedValues <> Some value
-                -> changed <- Set.add doc changed
-            | _ -> ()
+        while hasOld && hasNew do
+            let oldNode, oldDoc, oldValue = oldRefs.Current
+            let newNode, newDoc, newValue = newRefs.Current
 
-        for KeyValue(node, _) in after.computedValues do
-            match node with
-            | ConnectionComputation.ResolveReference(Scope.Doc doc, _) when
-                not (Map.containsKey node before.computedValues)
-                -> changed <- Set.add doc changed
-            | _ -> ()
+            match compare oldNode newNode with
+            | n when n < 0 ->
+                changed <- Set.add oldDoc changed
+                hasOld <- oldRefs.MoveNext()
+            | n when n > 0 ->
+                changed <- Set.add newDoc changed
+                hasNew <- newRefs.MoveNext()
+            | _ ->
+                if
+                    not (obj.ReferenceEquals(oldValue, newValue))
+                    && oldValue <> newValue
+                then
+                    changed <- Set.add oldDoc changed
+
+                hasOld <- oldRefs.MoveNext()
+                hasNew <- newRefs.MoveNext()
+
+        while hasOld do
+            let _, doc, _ = oldRefs.Current
+            changed <- Set.add doc changed
+            hasOld <- oldRefs.MoveNext()
+
+        while hasNew do
+            let _, doc, _ = newRefs.Current
+            changed <- Set.add doc changed
+            hasNew <- newRefs.MoveNext()
 
         changed
 

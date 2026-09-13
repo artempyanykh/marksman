@@ -305,6 +305,25 @@ module AffectedDocumentTests =
         Assert.Equal<Set<DocId>>(Set.ofList [ source.Id; target.Id ], affected initial latest)
 
     [<Fact>]
+    let referenceComparisonHandlesAddedAndRemovedReferencesAcrossEdits () =
+        let unchanged = doc "a.md" [ "[[Missing]]" ]
+        let removedReference = doc "b.md" [ "[[Missing]]" ]
+        let addedReference = doc "c.md" [ "Some prose." ]
+        let before = FakeFolder.Mk [ unchanged; removedReference; addedReference ]
+
+        let after =
+            before
+            |> Folder.withDoc (doc "b.md" [ "Some prose." ])
+            |> Folder.withDoc (doc "c.md" [ "[[Missing]]" ])
+
+        Assert.Equal<Set<DocId>>(
+            Set.ofList [ removedReference.Id; addedReference.Id ],
+            Marksman.Conn.Query.documentsWithChangedReferenceResolutions
+                (Folder.conn before)
+                (Folder.conn after)
+        )
+
+    [<Fact>]
     let folderAdditionAndRemovalAffectAllItsDocuments () =
         let first = doc "first.md" [ "[[Missing]]" ]
         let second = doc "second.md" [ "Some prose." ]

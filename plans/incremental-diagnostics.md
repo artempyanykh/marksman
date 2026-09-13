@@ -46,10 +46,12 @@ Follow-up review work after incremental diagnostics is wired in:
   a change summary to each state mutation. At 1,000 documents, finding affected
   documents after a prose edit fell from about 3.4 ms / 7.1 MB to
   1.06 ms / 2.43 MB. The comparison still visits every document.
-- [ ] Reduce the cost of comparing cached reference resolutions between the old
-  and new Conn states. At 1,000 documents this takes about 20.7 ms and allocates
-  22.6 MB, dominating graph-changing diagnostic updates. The resolved/unresolved
-  graph scans in `Conn.difference` run in paranoid validation, not normal updates.
+- [x] Reduce the cost of comparing cached reference resolutions between the old
+  and new Conn states. Compare their ordered reference computations in one pass
+  instead of looking up each reference in the other map. At 1,000 documents,
+  finding affected documents after a link edit fell from about 22.5 ms / 26 MB
+  to 3.8 ms / 8.0 MB; a target-heading edit fell from about 23.3 ms / 26 MB to
+  3.8 ms / 8.0 MB. The comparison still scans the reference computations.
 - [ ] Give alias changes one explicit external-input invalidation API so a
   `Conn.update` caller cannot omit the affected aliases.
 - [ ] Make definition-selection dependencies explicit or verify the mapping
@@ -81,6 +83,16 @@ After step 5, with the same short-run benchmark settings:
 | Prose edit | 0.52 ms / 1.0 MB | 3.89 ms / 7.6 MB |
 | Link edit | 1.98 ms / 2.8 MB | 25.1 ms / 30.2 MB |
 | Target-heading edit | 1.97 ms / 2.8 MB | 24.8 ms / 30.2 MB |
+
+After the document and reference-resolution comparison follow-ups, a fresh
+end-to-end run for 1,000 documents measured:
+
+| Scenario | Before incremental diagnostics | Current implementation |
+| --- | ---: | ---: |
+| Initial | 46.8 ms / 63.9 MB | 41.8 ms / 63.3 MB |
+| Prose edit | 91.9 ms / 126.2 MB | 1.39 ms / 3.0 MB |
+| Link edit | 91.1 ms / 126.2 MB | 4.53 ms / 8.6 MB |
+| Target-heading edit | 91.4 ms / 126.2 MB | 4.52 ms / 8.6 MB |
 
 Finding the documents that need diagnostics recalculated takes about
 3.4 ms / 7.1 MB for the 1,000-document prose edit and 25 ms / 29.7 MB for link

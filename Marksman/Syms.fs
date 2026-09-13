@@ -110,17 +110,6 @@ module Def =
         | Header _ -> true
         | _ -> false
 
-    let isHeaderOrTitleWithId id =
-        function
-        | Title id'
-        | Header(_, id') -> id = id'
-        | _ -> false
-
-    let isLinkDefWithLabel label =
-        function
-        | LinkDef label' when label = label' -> true
-        | _ -> false
-
     let asHeader =
         function
         | Title id -> Some(1, id)

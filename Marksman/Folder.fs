@@ -208,29 +208,23 @@ module Oracle =
         { documents = documents; aliasesRead = aliasesRead }
 
     let private selectDefinitions (data: FolderData) (selector: Conn.DefinitionSelector) : Def[] =
-        let scope =
-            match selector with
-            | Conn.DefinitionSelector.DocumentTarget scope
-            | Conn.DefinitionSelector.SectionTarget(scope, _)
-            | Conn.DefinitionSelector.LinkDefinitionTarget(scope, _) -> scope
-
-        match scope with
+        match Conn.DefinitionSelector.scope selector with
         | Scope.Global -> [||]
         | Scope.Doc docId ->
-            let defs =
+            let definitionsRead =
                 FolderData.findDocById docId data
                 |> Doc.structure
                 |> Structure.symbols
                 |> Seq.choose Sym.asDef
+                |> Seq.filter (Conn.DefinitionSelector.readsDefinition selector)
 
             match selector with
             | Conn.DefinitionSelector.DocumentTarget _ ->
-                let titles = defs |> Seq.filter Def.isTitle |> Set.ofSeq
-                if Set.isEmpty titles then [| Def.Doc |] else Set.toArray titles
-            | Conn.DefinitionSelector.SectionTarget(_, id) ->
-                defs |> Seq.filter (Def.isHeaderOrTitleWithId id) |> Seq.toArray
-            | Conn.DefinitionSelector.LinkDefinitionTarget(_, label) ->
-                defs |> Seq.filter (Def.isLinkDefWithLabel label) |> Seq.toArray
+                let titles = definitionsRead |> Seq.filter Def.isTitle |> Seq.toArray
+                if Array.isEmpty titles then [| Def.Doc |] else titles
+            | Conn.DefinitionSelector.SectionTarget _
+            | Conn.DefinitionSelector.LinkDefinitionTarget _ ->
+                definitionsRead |> Seq.toArray
 
     let oracle data lookup : Oracle = {
         resolveCandidateDocuments = resolveCandidateDocuments data lookup

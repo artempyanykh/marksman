@@ -57,14 +57,17 @@ Follow-up review work after incremental diagnostics is wired in:
   `Conn.update` caller cannot omit affected aliases. Returning the symbol set
   already stored by `Doc` avoids rebuilding it; the 1,000-document prose-edit
   update takes about 5.0 µs / 12.4 KB, down from 9.0 µs / 20.1 KB.
-- [ ] Make definition-selection dependencies explicit or verify the mapping
-  from changed definitions to selectors against what selection reads.
+- [x] Use one definition-to-selector relationship for both invalidation and
+  selection. `DefinitionSelector.forDefinition` determines which
+  selectors read each definition; the folder oracle uses the same relationship
+  while retaining the title-less document fallback. The connection-update
+  benchmark shows no material regression.
 - [ ] Simplify Conn's three computation queues without losing their dependency
   order or incremental correctness.
 - [ ] Share graph construction between Conn's compact formatting and
   difference routines.
-- [ ] Centralize selector scope extraction and the repeated orphan-collection
-  folds when working on those paths.
+- [ ] Centralize the repeated orphan-collection folds. Selector scope extraction
+  is now shared by Conn and Folder.
 
 Baseline on 2026-09-12: BenchmarkDotNet 0.15.6, .NET 9.0.19, Linux x64,
 Intel Core i7-12700K. The Release benchmark was run in-process with two warmup

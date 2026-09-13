@@ -15,6 +15,28 @@ type DefinitionSelector =
     | SectionTarget of Scope * string
     | LinkDefinitionTarget of Scope * LinkLabel
 
+module DefinitionSelector =
+    let scope =
+        function
+        | DefinitionSelector.DocumentTarget scope
+        | DefinitionSelector.SectionTarget(scope, _)
+        | DefinitionSelector.LinkDefinitionTarget(scope, _) -> scope
+
+    /// Def.Doc is an input to document selection because it supplies the
+    /// fallback when a document has no title.
+    let forDefinition scope =
+        function
+        | Def.Doc -> [ DefinitionSelector.DocumentTarget scope ]
+        | Def.Title id -> [
+            DefinitionSelector.DocumentTarget scope
+            DefinitionSelector.SectionTarget(scope, id)
+          ]
+        | Def.Header(_, id) -> [ DefinitionSelector.SectionTarget(scope, id) ]
+        | Def.LinkDef label -> [ DefinitionSelector.LinkDefinitionTarget(scope, label) ]
+
+    let readsDefinition selector definition =
+        forDefinition (scope selector) definition |> List.contains selector
+
 type CandidateDocumentResolution = { documents: Set<DocId>; aliasesRead: Set<DocumentAlias> }
 
 /// The oracle evaluates computations against the current folder snapshot.
@@ -130,7 +152,7 @@ type Unresolved =
 // invalidation, and scheduling with the rules for selecting documents and
 // definitions, which obscures both parts. For example, setComputationValue
 // returns a change flag that callers must propagate, while
-// affectedDefinitionSelectors derives invalidation links on demand and other
+// DefinitionSelector.forDefinition derives invalidation links on demand and other
 // dependencies are recorded during evaluation. A possible next step is a small
 // graph component that owns value comparison, dependency replacement, and
 // propagation. The reference resolver would define computations and their
@@ -402,16 +424,6 @@ module Conn =
             DefinitionSelector.SectionTarget(scope, Slug.toString section)
         | IntraRef(IntraLinkDef label) -> DefinitionSelector.LinkDefinitionTarget(scope, label)
 
-    let private affectedDefinitionSelectors (scope, def) =
-        match def with
-        | Def.Doc -> [ DefinitionSelector.DocumentTarget scope ]
-        | Title id -> [
-            DefinitionSelector.DocumentTarget scope
-            DefinitionSelector.SectionTarget(scope, id)
-          ]
-        | Header(_, id) -> [ DefinitionSelector.SectionTarget(scope, id) ]
-        | LinkDef label -> [ DefinitionSelector.LinkDefinitionTarget(scope, label) ]
-
     let private removeComputation computation conn =
         let dependenciesOfComputation = computationDependencies computation conn
         let computedValue = ConnectionDependency.ComputedValue computation
@@ -525,11 +537,7 @@ module Conn =
     let private evaluateDefinitionSelection oracle selector conn =
         let node = ConnectionComputation.SelectDefinitions selector
 
-        let scope =
-            match selector with
-            | DefinitionSelector.DocumentTarget scope
-            | DefinitionSelector.SectionTarget(scope, _)
-            | DefinitionSelector.LinkDefinitionTarget(scope, _) -> scope
+        let scope = DefinitionSelector.scope selector
 
         let definitions =
             if MMap.containsKey scope conn.symbols then
@@ -786,7 +794,8 @@ module Conn =
                 change.symbolDifference.added + change.symbolDifference.removed
                 |> Seq.choose (fun (scope, sym) ->
                     Sym.asDef sym |> Option.map (fun def -> scope, def))
-                |> Seq.collect affectedDefinitionSelectors
+                |> Seq.collect (fun (scope, definition) ->
+                    DefinitionSelector.forDefinition scope definition)
                 |> Seq.map ConnectionComputation.SelectDefinitions
                 |> Set.ofSeq
 

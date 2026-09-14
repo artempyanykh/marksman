@@ -92,10 +92,4 @@ module Structure =
 
         let ast: Ast.Ast = { elements = abs.ToArray() }
 
-        {
-            cst = cst
-            ast = ast
-            sym = Set.ofSeq syms
-            c2a = c2a
-            a2s = a2s
-        }
+        { cst = cst; ast = ast; sym = Set.ofSeq syms; c2a = c2a; a2s = a2s }

@@ -15,6 +15,7 @@ open Marksman.Paths
 type ConnectionUpdates() =
     let mutable runScenario: unit -> Folder =
         fun () -> failwith "Run setup first"
+
     let mutable connectionVersions: (Conn * Conn) option = None
 
     [<Params(100, 1000)>]
@@ -70,6 +71,7 @@ type ConnectionUpdates() =
         ]
 
         let docs = Array.init this.FolderSize (fun i -> mkDoc (path i) (lines i))
+
         let original =
             if this.Scenario = "RenameUnlinkedTitle" then
                 let unlinked = mkDoc "unlinked.md" [ "# Unlinked" ]

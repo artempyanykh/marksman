@@ -68,9 +68,14 @@ let noDiagOnRealUrls () =
 
 [<Fact>]
 let markdownExtensionWithoutANameDoesNotResolveToEveryDocument () =
-    let source = FakeDoc.Mk(path = "source.md", contentLines = [| "[x](.md)" |])
+    let source =
+        FakeDoc.Mk(path = "source.md", contentLines = [| "[x](.md)" |])
+
     let first = FakeDoc.Mk(path = "first.md", contentLines = [| "# First" |])
-    let second = FakeDoc.Mk(path = "second.md", contentLines = [| "# Second" |])
+
+    let second =
+        FakeDoc.Mk(path = "second.md", contentLines = [| "# Second" |])
+
     let folder = FakeFolder.Mk [ source; first; second ]
 
     match Assert.Single(checkDoc folder source) with
@@ -135,8 +140,7 @@ let noCrossFileDiagOnSingleFileFolders () =
     )
 
 module AffectedDocumentTests =
-    let private doc path lines =
-        FakeDoc.Mk(path = path, contentLines = Array.ofList lines)
+    let private doc path lines = FakeDoc.Mk(path = path, contentLines = Array.ofList lines)
 
     let private affected before after =
         let candidates =
@@ -279,7 +283,10 @@ module AffectedDocumentTests =
     [<Fact>]
     let aVersionChangeAloneDoesNotAffectDiagnosticsOfAnAlreadyOpenDocument () =
         let source = doc "source.md" [ "[[Missing]]" ]
-        let openAt version = Doc.mk ParserSettings.Default source.Id (Some version) (Doc.text source)
+
+        let openAt version =
+            Doc.mk ParserSettings.Default source.Id (Some version) (Doc.text source)
+
         let before = FakeFolder.Mk [ openAt 1 ]
         let after = Folder.withDoc (openAt 2) before
 
@@ -288,7 +295,10 @@ module AffectedDocumentTests =
     [<Fact>]
     let reopeningADocumentAffectsItEvenWhenItsTextIsUnchanged () =
         let source = doc "source.md" [ "[[Missing]]" ]
-        let reopened = Doc.mk ParserSettings.Default source.Id (Some 1) (Doc.text source)
+
+        let reopened =
+            Doc.mk ParserSettings.Default source.Id (Some 1) (Doc.text source)
+
         let before = FakeFolder.Mk [ source ]
         let after = Folder.withDoc reopened before
 
@@ -334,11 +344,14 @@ module AffectedDocumentTests =
 
         Assert.Equal<Set<DocId>>(
             expected,
-            WorkspaceDiag.affectedDocuments empty populated |> Map.find (Folder.id folder)
+            WorkspaceDiag.affectedDocuments empty populated
+            |> Map.find (Folder.id folder)
         )
+
         Assert.Equal<Set<DocId>>(
             expected,
-            WorkspaceDiag.affectedDocuments populated empty |> Map.find (Folder.id folder)
+            WorkspaceDiag.affectedDocuments populated empty
+            |> Map.find (Folder.id folder)
         )
 
     [<Fact>]
@@ -358,18 +371,34 @@ module AffectedDocumentTests =
 
     [<Fact>]
     let editingOneFolderDoesNotAffectAnotherFolder () =
-        let firstDoc = FakeDoc.Mk("[[Missing]]", path = "first/source.md", root = "first")
-        let secondDoc = FakeDoc.Mk("Some prose.", path = "second/other.md", root = "second")
+        let firstDoc =
+            FakeDoc.Mk("[[Missing]]", path = "first/source.md", root = "first")
+
+        let secondDoc =
+            FakeDoc.Mk("Some prose.", path = "second/other.md", root = "second")
+
         let firstFolder =
             Folder.multiFile "first" (dummyRootPath [ "first" ] |> mkFolderId) [ firstDoc ] None
 
         let secondFolder =
             Folder.multiFile "second" (dummyRootPath [ "second" ] |> mkFolderId) [ secondDoc ] None
 
-        let edited = FakeDoc.Mk("More prose.", path = "second/other.md", root = "second")
+        let edited =
+            FakeDoc.Mk("More prose.", path = "second/other.md", root = "second")
+
         let before = Workspace.ofFolders None [ firstFolder; secondFolder ]
-        let after = Workspace.ofFolders None [ firstFolder; Folder.withDoc edited secondFolder ]
+
+        let after =
+            Workspace.ofFolders None [ firstFolder; Folder.withDoc edited secondFolder ]
 
         let candidates = WorkspaceDiag.affectedDocuments before after
-        Assert.Equal<Set<FolderId>>(Set.singleton (Folder.id secondFolder), Map.keys candidates |> Set.ofSeq)
-        Assert.Equal<Set<DocId>>(Set.singleton secondDoc.Id, Map.find (Folder.id secondFolder) candidates)
+
+        Assert.Equal<Set<FolderId>>(
+            Set.singleton (Folder.id secondFolder),
+            Map.keys candidates |> Set.ofSeq
+        )
+
+        Assert.Equal<Set<DocId>>(
+            Set.singleton secondDoc.Id,
+            Map.find (Folder.id secondFolder) candidates
+        )

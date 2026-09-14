@@ -223,8 +223,7 @@ module Oracle =
                 let titles = definitionsRead |> Seq.filter Def.isTitle |> Seq.toArray
                 if Array.isEmpty titles then [| Def.Doc |] else titles
             | Conn.DefinitionSelector.SectionTarget _
-            | Conn.DefinitionSelector.LinkDefinitionTarget _ ->
-                definitionsRead |> Seq.toArray
+            | Conn.DefinitionSelector.LinkDefinitionTarget _ -> definitionsRead |> Seq.toArray
 
     let oracle data lookup : Oracle = {
         resolveCandidateDocuments = resolveCandidateDocuments data lookup
@@ -482,7 +481,8 @@ module Folder =
         mk data
 
     let multiFile name root (docs: seq<Doc>) config =
-        let byPath = docs |> Seq.map (fun doc -> Doc.pathFromRoot doc, doc) |> Map.ofSeq
+        let byPath =
+            docs |> Seq.map (fun doc -> Doc.pathFromRoot doc, doc) |> Map.ofSeq
 
         let data =
             MultiFile({ name = name; root = root; docs = byPath; config = config })
@@ -582,9 +582,9 @@ module Folder =
                     Conn.DocumentChange.Replaced(documentInput existingDoc, documentInput newDoc)
 
             let change =
-                Conn.ConnectionChange.ofDocuments
-                    (config.CoreMarkdownFileExtensions())
-                    [ documentChange ]
+                Conn.ConnectionChange.ofDocuments (config.CoreMarkdownFileExtensions()) [
+                    documentChange
+                ]
 
             let conn =
                 if Conn.ConnectionChange.isEmpty change && not (config.CoreParanoid()) then
@@ -614,10 +614,11 @@ module Folder =
 
                 let conn =
                     let config = FolderData.configOrDefault data
+
                     let change =
-                        Conn.ConnectionChange.ofDocuments
-                            (config.CoreMarkdownFileExtensions())
-                            [ Conn.DocumentChange.Removed(documentInput doc) ]
+                        Conn.ConnectionChange.ofDocuments (config.CoreMarkdownFileExtensions()) [
+                            Conn.DocumentChange.Removed(documentInput doc)
+                        ]
 
                     updateConnectionGraph data lookup change folder.conn
 

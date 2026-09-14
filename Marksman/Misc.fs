@@ -309,8 +309,10 @@ module Difference =
 
     let isEmpty { added = added; removed = removed } = Set.isEmpty added && Set.isEmpty removed
 
-    let mk (before: Set<'A>) (after: Set<'A>) : Difference<'A> =
-        { added = after - before; removed = before - after }
+    let mk (before: Set<'A>) (after: Set<'A>) : Difference<'A> = {
+        added = after - before
+        removed = before - after
+    }
 
 /// Walk two sequences ordered by the same key without materializing their union.
 module SortedMerge =

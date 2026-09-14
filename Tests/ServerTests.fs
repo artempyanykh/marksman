@@ -130,7 +130,10 @@ module DiagnosticPublicationTests =
         let edited = doc "unrelated.md" [ "More prose." ]
         let after = state (Folder.withDoc edited beforeFolder)
         let beforeDiag, _ = calcDiagnosticsUpdate None before
-        let afterDiag, updates = calcDiagnosticsUpdate (Some(before, beforeDiag)) after
+
+        let afterDiag, updates =
+            calcDiagnosticsUpdate (Some(before, beforeDiag)) after
+
         let folderId = Folder.id beforeFolder
         let sourceBefore = beforeDiag[folderId][source.Id]
         let sourceAfter = afterDiag[folderId][source.Id]
@@ -149,11 +152,17 @@ module DiagnosticPublicationTests =
 
         let resolvedFolder = Folder.withDoc first initialFolder
         let resolved = state resolvedFolder
-        let resolvedDiag, cleared = calcDiagnosticsUpdate (Some(initial, initialDiag)) resolved
+
+        let resolvedDiag, cleared =
+            calcDiagnosticsUpdate (Some(initial, initialDiag)) resolved
+
         Assert.Empty(onlyPublication source cleared)
 
         let ambiguous = state (Folder.withDoc second resolvedFolder)
-        let _, reported = calcDiagnosticsUpdate (Some(resolved, resolvedDiag)) ambiguous
+
+        let _, reported =
+            calcDiagnosticsUpdate (Some(resolved, resolvedDiag)) ambiguous
+
         let diagnostic = reported |> onlyPublication source |> Assert.Single
 
         Assert.Equal("Ambiguous link to heading 'section' in document 'Target'", diagnostic.Message)
@@ -251,7 +260,9 @@ module DiagnosticPublicationTests =
     let removingAFolderClearsDiagnosticsForItsDocuments () =
         let source = doc "source.md" [ "[[missing]]" ]
         let before = state (FakeFolder.Mk [ source ])
-        let after = Workspace.ofFolders None [] |> State.mk ClientDescription.empty
+
+        let after =
+            Workspace.ofFolders None [] |> State.mk ClientDescription.empty
 
         let cleared = publications (Some before) after |> onlyPublication source
 
@@ -278,7 +289,10 @@ module DiagnosticPublicationTests =
     let reopeningACleanDocumentDoesNotPublishAnEmptyUpdate () =
         let source = doc "source.md" [ "Some prose." ]
         let before = FakeFolder.Mk [ source ]
-        let reopened = Doc.mk ParserSettings.Default source.Id (Some 1) (Doc.text source)
+
+        let reopened =
+            Doc.mk ParserSettings.Default source.Id (Some 1) (Doc.text source)
+
         let after = Folder.withDoc reopened before
 
         Assert.Empty(publications (Some(state before)) (state after))

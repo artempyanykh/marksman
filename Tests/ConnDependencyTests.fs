@@ -171,9 +171,9 @@ let updateWithOracleCallCounts before after others =
     }
 
     let change =
-        ConnectionChange.ofDocuments
-            (config.CoreMarkdownFileExtensions())
-            [ DocumentChange.Replaced(documentInput before, documentInput after) ]
+        ConnectionChange.ofDocuments (config.CoreMarkdownFileExtensions()) [
+            DocumentChange.Replaced(documentInput before, documentInput after)
+        ]
 
     let actual = Conn.update counted change (Folder.conn oldFolder)
     let diff = Conn.difference (Folder.conn newFolder) actual
@@ -330,14 +330,13 @@ let batchChangesCanMoveCandidatesAndReplaceReferenceSources () =
     let newSource = doc "source.md" [ "[[Alpha#Other]]"; "[[Alpha#Section]]" ]
     let before = folder [ oldTarget; oldSource ]
     let after = folder [ newTarget; newSource ]
+
     let change =
-        ConnectionChange.ofDocuments
-            (config.CoreMarkdownFileExtensions())
-            [
-                DocumentChange.Removed(documentInput oldTarget)
-                DocumentChange.Added(documentInput newTarget)
-                DocumentChange.Replaced(documentInput oldSource, documentInput newSource)
-            ]
+        ConnectionChange.ofDocuments (config.CoreMarkdownFileExtensions()) [
+            DocumentChange.Removed(documentInput oldTarget)
+            DocumentChange.Added(documentInput newTarget)
+            DocumentChange.Replaced(documentInput oldSource, documentInput newSource)
+        ]
 
     let actual = Conn.update (Folder.oracle after) change (Folder.conn before)
     let diff = Conn.difference (Folder.conn after) actual

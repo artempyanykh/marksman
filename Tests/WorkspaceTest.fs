@@ -37,7 +37,10 @@ module FolderTest =
     [<Fact>]
     let docsDifferenceReportsReopeningWithoutAContentChange () =
         let closed = FakeDoc.Mk(content = "A", path = "a.md")
-        let reopened = Doc.mk ParserSettings.Default closed.Id (Some 1) (Doc.text closed)
+
+        let reopened =
+            Doc.mk ParserSettings.Default closed.Id (Some 1) (Doc.text closed)
+
         let before = FakeFolder.Mk [ closed ]
         let after = Folder.withDoc reopened before
         let difference = Folder.docsDifference before after
@@ -95,21 +98,32 @@ module FolderTest =
     [<Fact>]
     let collidingCanonicalPathsKeepBothDocuments () =
         let markdown = FakeDoc.Mk(content = "# Markdown", path = "notes.md")
-        let longExtension = FakeDoc.Mk(content = "# Long extension", path = "notes.markdown")
+
+        let longExtension =
+            FakeDoc.Mk(content = "# Long extension", path = "notes.markdown")
+
         let config = {
             Config.Default with
                 coreIncrementalReferences = Some true
                 coreParanoid = Some true
         }
 
-        let folder = FakeFolder.Mk([ markdown ], config = config) |> Folder.withDoc longExtension
+        let folder =
+            FakeFolder.Mk([ markdown ], config = config)
+            |> Folder.withDoc longExtension
 
         Assert.Equal(2, Folder.docCount folder)
         Assert.Equal(Some markdown, Folder.tryFindDocByPath (Doc.path markdown) folder)
         Assert.Equal(Some longExtension, Folder.tryFindDocByPath (Doc.path longExtension) folder)
         Assert.Equal(None, Folder.tryFindDocByRelPath (RelPath "notes") folder)
         Assert.Equal(Some markdown, Folder.tryFindDocByRelPath (RelPath "notes.md") folder)
-        Assert.Equal(2, Folder.filterDocsByInternPath (Approx(RelPath "notes")) folder |> Seq.length)
+
+        Assert.Equal(
+            2,
+            Folder.filterDocsByInternPath (Approx(RelPath "notes")) folder
+            |> Seq.length
+        )
+
         Assert.Equal(
             2,
             Folder.filterDocsByName (InternName.mkUnchecked markdown.Id "notes") folder
@@ -118,24 +132,51 @@ module FolderTest =
 
         let withoutMarkdown = Folder.withoutDoc markdown.Id folder |> Option.get
         Assert.Equal(1, Folder.docCount withoutMarkdown)
-        Assert.Equal(Some longExtension, Folder.tryFindDocByPath (Doc.path longExtension) withoutMarkdown)
-        Assert.Equal(1, Folder.filterDocsByInternPath (Approx(RelPath "notes")) withoutMarkdown |> Seq.length)
 
-        let updated = Folder.withDoc (FakeDoc.Mk(content = "# Updated", path = "notes.markdown")) folder
+        Assert.Equal(
+            Some longExtension,
+            Folder.tryFindDocByPath (Doc.path longExtension) withoutMarkdown
+        )
+
+        Assert.Equal(
+            1,
+            Folder.filterDocsByInternPath (Approx(RelPath "notes")) withoutMarkdown
+            |> Seq.length
+        )
+
+        let updated =
+            Folder.withDoc (FakeDoc.Mk(content = "# Updated", path = "notes.markdown")) folder
+
         Assert.Equal(2, Folder.docCount updated)
         Assert.Equal(Some markdown, Folder.tryFindDocByPath (Doc.path markdown) updated)
 
     [<Fact>]
     let extensionChangeKeepsDocumentsThatNowShareACanonicalPath () =
         let markdown = FakeDoc.Mk(content = "# Markdown", path = "notes.md")
-        let longExtension = FakeDoc.Mk(content = "# Long extension", path = "notes.markdown")
+
+        let longExtension =
+            FakeDoc.Mk(content = "# Long extension", path = "notes.markdown")
+
         let initialConfig = { Config.Default with coreMarkdownFileExtensions = Some [| "md" |] }
-        let folder = FakeFolder.Mk([ markdown; longExtension ], config = initialConfig)
-        let updatedConfig = { initialConfig with coreMarkdownFileExtensions = Some [| "md"; "markdown" |] }
+
+        let folder =
+            FakeFolder.Mk([ markdown; longExtension ], config = initialConfig)
+
+        let updatedConfig = {
+            initialConfig with
+                coreMarkdownFileExtensions = Some [| "md"; "markdown" |]
+        }
+
         let updated = Folder.withConfig (Some updatedConfig) folder
 
         Assert.Equal(2, Folder.docCount updated)
-        Assert.Equal(2, Folder.filterDocsByInternPath (Approx(RelPath "notes")) updated |> Seq.length)
+
+        Assert.Equal(
+            2,
+            Folder.filterDocsByInternPath (Approx(RelPath "notes")) updated
+            |> Seq.length
+        )
+
         Assert.Equal(Some markdown, Folder.tryFindDocByPath (Doc.path markdown) updated)
         Assert.Equal(Some longExtension, Folder.tryFindDocByPath (Doc.path longExtension) updated)
 

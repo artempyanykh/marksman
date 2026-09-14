@@ -206,15 +206,17 @@ module WorkspaceDiag =
     /// coalesced by the diagnostics agent need no separate change log.
     let affectedDocuments (before: Workspace) (after: Workspace) : Map<FolderId, Set<DocId>> =
         let previousFolders =
-            Workspace.folders before |> Seq.map (fun folder -> Folder.id folder, folder) |> Map.ofSeq
+            Workspace.folders before
+            |> Seq.map (fun folder -> Folder.id folder, folder)
+            |> Map.ofSeq
 
         let currentFolders =
-            Workspace.folders after |> Seq.map (fun folder -> Folder.id folder, folder) |> Map.ofSeq
+            Workspace.folders after
+            |> Seq.map (fun folder -> Folder.id folder, folder)
+            |> Map.ofSeq
 
         let folderIds =
-            Set.union
-                (Map.keys previousFolders |> Set.ofSeq)
-                (Map.keys currentFolders |> Set.ofSeq)
+            Set.union (Map.keys previousFolders |> Set.ofSeq) (Map.keys currentFolders |> Set.ofSeq)
 
         folderIds
         |> Seq.choose (fun folderId ->
@@ -282,21 +284,28 @@ module WorkspaceDiag =
             Workspace.folders current
             |> Seq.map (fun folder ->
                 let folderId = Folder.id folder
-                let previousFolder =
-                    Map.tryFind folderId previousDiagnostics |> Option.defaultValue Map.empty
 
-                let affectedIds = Map.tryFind folderId affected |> Option.defaultValue Set.empty
+                let previousFolder =
+                    Map.tryFind folderId previousDiagnostics
+                    |> Option.defaultValue Map.empty
+
+                let affectedIds =
+                    Map.tryFind folderId affected |> Option.defaultValue Set.empty
 
                 let updated =
                     affectedIds
-                    |> Set.fold (fun entries docId ->
-                        let docPath = UriWith.rootedRelToAbs docId.Raw
+                    |> Set.fold
+                        (fun entries docId ->
+                            let docPath = UriWith.rootedRelToAbs docId.Raw
 
-                        match Folder.tryFindDocByPath docPath.data folder with
-                        | None -> Map.remove docId entries
-                        | Some doc ->
-                            let diags = checkDoc folder doc |> List.map diagToLsp |> Array.ofList
-                            Map.add docId diags entries) previousFolder
+                            match Folder.tryFindDocByPath docPath.data folder with
+                            | None -> Map.remove docId entries
+                            | Some doc ->
+                                let diags =
+                                    checkDoc folder doc |> List.map diagToLsp |> Array.ofList
+
+                                Map.add docId diags entries)
+                        previousFolder
 
                 folderId, updated)
             |> Map.ofSeq

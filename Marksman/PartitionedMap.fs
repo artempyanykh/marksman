@@ -75,7 +75,6 @@ module PartitionedMap =
                     (fun key value -> visit key None (Some value))
                     (fun key oldValue newValue ->
                         if
-                            not (obj.ReferenceEquals(oldValue, newValue))
-                            && oldValue <> newValue
+                            not (obj.ReferenceEquals(oldValue, newValue)) && oldValue <> newValue
                         then
                             visit key (Some oldValue) (Some newValue))

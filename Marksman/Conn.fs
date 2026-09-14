@@ -48,12 +48,7 @@ type Oracle = {
 }
 
 /// The document facts Conn needs to update its symbols and lookup dependencies.
-type DocumentInput = {
-    id: DocId
-    slug: Slug
-    path: RelPath
-    symbols: Set<Sym>
-}
+type DocumentInput = { id: DocId; slug: Slug; path: RelPath; symbols: Set<Sym> }
 
 type DocumentChange =
     | Added of DocumentInput
@@ -67,8 +62,7 @@ type ConnectionChange = private {
 
 module ConnectionChange =
     let ofDocuments (markdownExtensions: seq<string>) (changes: seq<DocumentChange>) =
-        let aliases input =
-            DocumentAlias.ofDocument markdownExtensions input.slug input.path
+        let aliases input = DocumentAlias.ofDocument markdownExtensions input.slug input.path
 
         let mutable symbolDifference: Difference<ScopedSym> = Difference.empty
         let mutable invalidatedDocumentAliases = Set.empty
@@ -114,16 +108,20 @@ module ConnectionChange =
                     previous.id = current.id
                     && previous.slug = current.slug
                     && previous.path = current.path
-                    -> Set.empty
+                    ->
+                    Set.empty
                 | Some previous, Some current when previous.id <> current.id ->
                     aliases previous + aliases current
                 | _ ->
-                    let oldAliases = before |> Option.map aliases |> Option.defaultValue Set.empty
-                    let newAliases = after |> Option.map aliases |> Option.defaultValue Set.empty
+                    let oldAliases =
+                        before |> Option.map aliases |> Option.defaultValue Set.empty
+
+                    let newAliases =
+                        after |> Option.map aliases |> Option.defaultValue Set.empty
+
                     (oldAliases - newAliases) + (newAliases - oldAliases)
 
-            invalidatedDocumentAliases <-
-                invalidatedDocumentAliases + aliasesToInvalidate
+            invalidatedDocumentAliases <- invalidatedDocumentAliases + aliasesToInvalidate
 
         {
             symbolDifference = symbolDifference
@@ -443,8 +441,7 @@ module Conn =
             let enqueue dependencies =
                 for dependency in dependencies do
                     match dependency with
-                    | ConnectionDependency.ComputedValue computation ->
-                        pending.Enqueue computation
+                    | ConnectionDependency.ComputedValue computation -> pending.Enqueue computation
                     | ConnectionDependency.ExternalInput _ -> ()
 
             enqueue dependencies
@@ -497,10 +494,7 @@ module Conn =
     let private setComputationValue computation value conn =
         let values = PartitionedMap.add computation value conn.computedValues
 
-        {
-            conn with
-                computedValues = values
-        },
+        { conn with computedValues = values },
         not (obj.ReferenceEquals(values, conn.computedValues))
 
     let private evaluateCandidateDocuments oracle name conn =
@@ -650,12 +644,11 @@ module Conn =
         let conn =
             match sym with
             | Sym.Ref ref -> removeReference (scope, ref) conn
-            | Sym.Tag _ ->
-                {
-                    conn with
-                        referencesByTarget =
-                            MMap.removeValue (Scope.Global, sym) (scope, sym) conn.referencesByTarget
-                }
+            | Sym.Tag _ -> {
+                conn with
+                    referencesByTarget =
+                        MMap.removeValue (Scope.Global, sym) (scope, sym) conn.referencesByTarget
+              }
             | Sym.Def _ -> conn
 
         { conn with symbols = MMap.removeValue scope sym conn.symbols }
@@ -682,8 +675,7 @@ module Conn =
             | ConnectionComputation.SelectDefinitions _ -> 1
             | ConnectionComputation.ResolveReference _ -> 2
 
-        let enqueue node =
-            work <- Set.add (priority node, node) work
+        let enqueue node = work <- Set.add (priority node, node) work
 
         Set.iter enqueue initialWork
         let mutable evaluatedCandidateDocumentComputations = 0
@@ -702,8 +694,7 @@ module Conn =
                 ->
                 let next, _, changed = evaluateCandidateDocuments oracle name conn
                 conn <- next
-                evaluatedCandidateDocumentComputations <-
-                    evaluatedCandidateDocumentComputations + 1
+                evaluatedCandidateDocumentComputations <- evaluatedCandidateDocumentComputations + 1
 
                 if changed then
                     dependentComputations (ConnectionDependency.ComputedValue node) conn
@@ -797,9 +788,7 @@ module Conn =
                 (resolutionGraph c1.symbols c1.computedValues)
                 (resolutionGraph c2.symbols c2.computedValues)
         unresolvedDifference =
-            Graph.difference
-                (unresolvedGraph c1.computedValues)
-                (unresolvedGraph c2.computedValues)
+            Graph.difference (unresolvedGraph c1.computedValues) (unresolvedGraph c2.computedValues)
         stateDifferences = [
             if c1.dependencies <> c2.dependencies then
                 "Dependencies"
@@ -820,6 +809,7 @@ module Query =
     /// Unchanged partitions of the computed-value map need no traversal.
     let documentsWithChangedReferenceResolutions (before: Conn) (after: Conn) : Set<DocId> =
         let mutable changed = Set.empty
+
         PartitionedMap.iterDifferences
             (fun node _ _ ->
                 match node with

@@ -198,11 +198,7 @@ let private diagnosticPublication
 
     if newDocDiag <> existingDocDiag || reopenedWithDiagnostics then
         // TODO: check how the behavior changes when we supply the document version here
-        Some {
-            Uri = docUri.Uri
-            Diagnostics = newDocDiag
-            Version = None
-        }
+        Some { Uri = docUri.Uri; Diagnostics = newDocDiag; Version = None }
     else
         None
 
@@ -211,59 +207,64 @@ let calcDiagnosticsUpdate
     (newState: State)
     : WorkspaceDiag * array<PublishDiagnosticsParams> =
     let previousWorkspace =
-        previous |> Option.map (fun (state, diagnostics) -> State.workspace state, diagnostics)
+        previous
+        |> Option.map (fun (state, diagnostics) -> State.workspace state, diagnostics)
 
-    let newDiag, affected = WorkspaceDiag.calculate previousWorkspace (State.workspace newState)
-    let existingDiag = previous |> Option.map snd |> Option.defaultValue Map.empty
+    let newDiag, affected =
+        WorkspaceDiag.calculate previousWorkspace (State.workspace newState)
 
-    let updates =
-        [|
-            for KeyValue(folderPath, documents) in affected do
-                let existingFolderDiag =
-                    Map.tryFind folderPath existingDiag |> Option.defaultValue Map.empty
+    let existingDiag =
+        previous |> Option.map snd |> Option.defaultValue Map.empty
 
-                let newFolderDiag =
-                    Map.tryFind folderPath newDiag |> Option.defaultValue Map.empty
+    let updates = [|
+        for KeyValue(folderPath, documents) in affected do
+            let existingFolderDiag =
+                Map.tryFind folderPath existingDiag |> Option.defaultValue Map.empty
 
-                logger.trace (
-                    Log.setMessage "Updating folder diag"
-                    >> Log.addContext "folder" folderPath
-                    >> Log.addContext "num_docs" documents.Count
-                )
+            let newFolderDiag =
+                Map.tryFind folderPath newDiag |> Option.defaultValue Map.empty
 
-                for docUri in documents do
-                    let docPath = UriWith.rootedRelToAbs docUri.Raw
-                    let existingDoc =
-                        previous |> Option.bind (fun (state, _) -> State.tryFindDoc docPath state)
+            logger.trace (
+                Log.setMessage "Updating folder diag"
+                >> Log.addContext "folder" folderPath
+                >> Log.addContext "num_docs" documents.Count
+            )
 
-                    let existingDocVersion = Option.bind Doc.version existingDoc
+            for docUri in documents do
+                let docPath = UriWith.rootedRelToAbs docUri.Raw
 
-                    let existingDocDiag =
-                        Map.tryFind docUri existingFolderDiag |> Option.defaultValue [||]
+                let existingDoc =
+                    previous
+                    |> Option.bind (fun (state, _) -> State.tryFindDoc docPath state)
 
-                    let newDoc = State.tryFindDoc docPath newState
-                    let newDocVersion = Option.bind Doc.version newDoc
+                let existingDocVersion = Option.bind Doc.version existingDoc
 
-                    let newDocDiag =
-                        Map.tryFind docUri newFolderDiag |> Option.defaultValue [||]
+                let existingDocDiag =
+                    Map.tryFind docUri existingFolderDiag |> Option.defaultValue [||]
 
-                    match
-                        diagnosticPublication
-                            docUri
-                            existingDocVersion
-                            newDocVersion
-                            existingDocDiag
-                            newDocDiag
-                    with
-                    | Some update ->
-                        logger.trace (
-                            Log.setMessage "Diagnostic changed, queueing the update"
-                            >> Log.addContext "doc" docUri
-                        )
+                let newDoc = State.tryFindDoc docPath newState
+                let newDocVersion = Option.bind Doc.version newDoc
 
-                        yield update
-                    | None -> ()
-        |]
+                let newDocDiag =
+                    Map.tryFind docUri newFolderDiag |> Option.defaultValue [||]
+
+                match
+                    diagnosticPublication
+                        docUri
+                        existingDocVersion
+                        newDocVersion
+                        existingDocDiag
+                        newDocDiag
+                with
+                | Some update ->
+                    logger.trace (
+                        Log.setMessage "Diagnostic changed, queueing the update"
+                        >> Log.addContext "doc" docUri
+                    )
+
+                    yield update
+                | None -> ()
+    |]
 
     newDiag, updates
 

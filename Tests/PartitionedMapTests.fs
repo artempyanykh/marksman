@@ -30,7 +30,8 @@ let differencesMatchOrdinaryMapsAcrossSnapshots () =
 
     for oldMap, oldParts in snapshots do
         for newMap, newParts in snapshots do
-            let keys = Set.union (Map.keys oldMap |> Set.ofSeq) (Map.keys newMap |> Set.ofSeq)
+            let keys =
+                Set.union (Map.keys oldMap |> Set.ofSeq) (Map.keys newMap |> Set.ofSeq)
 
             let expectedChanges =
                 keys

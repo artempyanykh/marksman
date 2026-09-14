@@ -43,6 +43,7 @@ type DiagnosticUpdates() =
             yield ""
             for offset in 1..8 do
                 let target = (i + offset) % this.FolderSize
+
                 if offset % 2 = 0 then
                     yield $"[[doc{target}#Section]]"
                 else
@@ -72,21 +73,24 @@ type DiagnosticUpdates() =
                 Folder.withDoc (mkDoc (path 0) changedLines) before
 
         let state folder =
-            Workspace.ofFolders None [ folder ] |> State.mk ClientDescription.empty
+            Workspace.ofFolders None [ folder ]
+            |> State.mk ClientDescription.empty
 
         previous <-
             if this.Scenario = "Initial" then
                 None
             else
                 let beforeState = state before
-                let diagnostics, _ = WorkspaceDiag.calculate None (State.workspace beforeState)
+
+                let diagnostics, _ =
+                    WorkspaceDiag.calculate None (State.workspace beforeState)
+
                 Some(beforeState, diagnostics)
 
         current <- Some(state after)
 
     [<Benchmark>]
-    member _.Calculate() =
-        calcDiagnosticsUpdate previous current.Value
+    member _.Calculate() = calcDiagnosticsUpdate previous current.Value
 
     [<Benchmark>]
     member _.FindAffectedDocuments() =

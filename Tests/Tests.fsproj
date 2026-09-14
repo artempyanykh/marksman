@@ -33,6 +33,7 @@
         <Compile Include="PartitionedMapTests.fs" />
         <Compile Include="LensesTests.fs" />
         <Compile Include="CodeActionTests.fs" />
+        <Compile Include="CheckTests.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

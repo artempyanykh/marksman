@@ -48,6 +48,7 @@
         <Compile Include="Refs.fsi"/>
         <Compile Include="Refs.fs"/>
         <Compile Include="Diag.fs"/>
+        <Compile Include="Check.fs"/>
         <Compile Include="State.fs"/>
         <Compile Include="Fatality.fs"/>
         <Compile Include="Toc.fs"/>

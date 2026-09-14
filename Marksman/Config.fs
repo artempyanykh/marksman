@@ -364,8 +364,9 @@ module Config =
         try
             let content = using (new StreamReader(filepath)) (fun f -> f.ReadToEnd())
             tryParse content
-        with :? FileNotFoundException ->
-            None
+        with
+        | :? FileNotFoundException
+        | :? DirectoryNotFoundException -> None
 
     let private marksman = "marksman"
 

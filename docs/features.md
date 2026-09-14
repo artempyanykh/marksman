@@ -14,8 +14,8 @@
 - ✅ Custom parser for more fine-grained note structure.
 - ✅ Code Lens with "# references" on headings.
 - ✅ Rename refactor.
+- ✅ Standalone `check` command for CI / scripting (broken links, ambiguous links).
 - 🗓 Add support for images (diagnostics, completion, goto).
-- 🗓 Add "check" command for standalone workspace checking.
 - 🗓 Add "build" command that rewrites all cross-references into proper
   relative markdown links for further embedding into a static site generator
   such as Jekyll or Hakyll.

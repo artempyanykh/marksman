@@ -78,7 +78,7 @@ module Markdown =
     type WikiLinkParser() as this =
         inherit InlineParser()
 
-        do this.OpeningCharacters <- [| '[' |]
+        do this.OpeningCharacters <- [| '['; '!' |]
 
         override this.Match(processor, slice_) =
             let mutable docSpan: option<SourceSpan> = None
@@ -162,9 +162,24 @@ module Markdown =
                     | _ -> parseDoc offset
 
             // do the parsing (run the finite state machine)
-            let start = slice.Start
-            let offsetStart = processor.GetSourcePosition(start)
-            let hasParsedLink = parse ()
+            let start, offsetStart, hasParsedLink =
+                if slice.CurrentChar = '!' then
+                    let saved = slice
+                    slice.NextChar() |> ignore
+                    if slice.CurrentChar = '[' && slice.PeekChar() = '[' then
+                        let start = saved.Start
+                        let offsetStart = processor.GetSourcePosition(start)
+                        let hasParsedLink = parse ()
+                        start, offsetStart, hasParsedLink
+                    else
+                        slice <- saved
+                        (0, 0, false)
+                else
+                    let start = slice.Start
+                    let offsetStart = processor.GetSourcePosition(start)
+                    let hasParsedLink = parse ()
+                    start, offsetStart, hasParsedLink
+
             slice_ <- slice // update output parameter to modified slice state
 
             if hasParsedLink then

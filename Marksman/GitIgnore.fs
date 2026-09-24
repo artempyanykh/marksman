@@ -40,7 +40,17 @@ let mkGlobPattern (pat: string) : array<GlobPattern> =
         [||]
     else if pat.StartsWith("!") then
         let pat = pat.Substring(1)
-        patternToGlob pat |> Array.map Include
+        let isDir = pat.EndsWith("/")
+        if isDir then
+            let dirPat = if pat.StartsWith("/") then pat.Substring(1, pat.Length - 2) else pat.Substring(0, pat.Length - 1)
+            let dirPat = if pat.IndexOf('/') = pat.Length - 1 then "**/" + dirPat else dirPat
+            try
+                [| Include (GlobExpressions.Glob(dirPat, GlobExpressions.GlobOptions.Compiled)) |]
+            with :? GlobExpressions.GlobPatternException ->
+                logger.warn (Log.setMessage "Unsupported glob pattern" >> Log.addContext "pat" pat)
+                [||]
+        else
+            patternToGlob pat |> Array.map Include
     else
         patternToGlob pat |> Array.map Exclude
 
@@ -57,17 +67,14 @@ module GlobMatcher =
 
     let ignores (matcher: GlobMatcher) (path: string) : bool =
         let relPath = Path.GetRelativePath(matcher.root, path)
-
-        let checkGlob g =
-            match g with
-            | Include glob -> if glob.IsMatch(relPath) then Some false else None
-            | Exclude glob -> if glob.IsMatch(relPath) then Some true else None
-
-
-        match matcher.patterns |> Seq.map checkGlob |> Seq.tryFind Option.isSome with
+        let mutable lastMatch : option<bool> = None
+        for pat in matcher.patterns do
+            match pat with
+            | Include glob -> if glob.IsMatch(relPath) then lastMatch <- Some false
+            | Exclude glob -> if glob.IsMatch(relPath) then lastMatch <- Some true
+        match lastMatch with
+        | Some r -> r
         | None -> false
-        | Some(Some r) -> r
-        | Some None -> failwith "Unreachable: GlobMatcher.ignores"
 
     let ignoresAny (matchers: seq<GlobMatcher>) (path: string) : bool =
         Seq.exists (fun m -> ignores m path) matchers

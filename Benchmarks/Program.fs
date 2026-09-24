@@ -82,18 +82,18 @@ let main args =
 
     0
 // $ make bench
-// BenchmarkDotNet v0.14.0, macOS Sequoia 15.6.1 (24G90) [Darwin 24.6.0]
-// Apple M1 Pro, 1 CPU, 10 logical and 10 physical cores
-// .NET SDK 9.0.100
-//   [Host]     : .NET 9.0.0 (9.0.24.52809), Arm64 RyuJIT AdvSIMD DEBUG
-//   DefaultJob : .NET 9.0.0 (9.0.24.52809), Arm64 RyuJIT AdvSIMD
-
-
+// BenchmarkDotNet v0.15.6, Linux Arch Linux
+// 13th Gen Intel Core i7-1370P 0.40GHz, 1 CPU, 20 logical and 14 physical cores
+// .NET SDK 10.0.100
+//   [Host]     : .NET 10.0.0 (10.0.0, 42.42.42.42424), X64 RyuJIT x86-64-v3 DEBUG
+//   DefaultJob : .NET 10.0.0 (10.0.0, 42.42.42.42424), X64 RyuJIT x86-64-v3
+//
+//
 // | Method       | FolderSize | Mean       | Error     | StdDev    |
 // |------------- |----------- |-----------:|----------:|----------:|
-// | gotoDefTime  | 10         |   1.565 us | 0.0179 us | 0.0150 us |
-// | findRefsTime | 10         |   9.587 us | 0.1863 us | 0.2788 us |
-// | gotoDefTime  | 50         |   2.455 us | 0.0243 us | 0.0203 us |
-// | findRefsTime | 50         |  50.685 us | 0.9987 us | 0.8854 us |
-// | gotoDefTime  | 250        |   2.925 us | 0.0109 us | 0.0097 us |
-// | findRefsTime | 250        | 339.520 us | 6.7119 us | 5.9500 us |
+// | gotoDefTime  | 10         |   2.916 us | 0.0300 us | 0.0266 us |
+// | findRefsTime | 10         |  17.125 us | 0.2131 us | 0.1993 us |
+// | gotoDefTime  | 50         |   4.011 us | 0.0248 us | 0.0207 us |
+// | findRefsTime | 50         |  84.928 us | 0.6689 us | 0.5222 us |
+// | gotoDefTime  | 250        |   5.158 us | 0.0143 us | 0.0127 us |
+// | findRefsTime | 250        | 641.349 us | 5.2700 us | 4.9296 us |

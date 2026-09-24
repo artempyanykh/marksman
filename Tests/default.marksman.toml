@@ -48,7 +48,8 @@ create_missing_file.enable = true
 # The maximum number of candidates returned for a completion 
 candidates = 50
 # The style of wiki links completion.
-# Other values include: 
+# Other values include:
+# * "title" to complete using raw title text (Obsidian-compatible, e.g. "My Note"),
 # * "file-stem" to complete using file name without an extension,
 # * "file-path-stem" same as above but using file path.
 wiki.style = "title-slug"

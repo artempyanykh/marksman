@@ -339,6 +339,7 @@ module CompletionHelpers =
 
         match config.ComplWikiStyle() with
         | TitleSlug -> Slug.str (Doc.name doc) |> WTitle
+        | Title -> Doc.name doc |> WTitle
         | FileStem ->
             let name = docPath |> RelPath.filenameStem
             WPath(Approx(RelPath name))

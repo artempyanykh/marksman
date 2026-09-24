@@ -242,6 +242,20 @@ let testDefault () =
     Assert.Equal(Some Config.Default, parsed)
 
 [<Fact>]
+let testParse_wikiStyle_title () =
+    let content =
+        """
+[completion]
+wiki.style = "title"
+"""
+
+    let actual = Config.tryParse content
+
+    let expected = { Config.Empty with complWikiStyle = Some ComplWikiStyle.Title }
+
+    Assert.Equal(Some expected, actual)
+
+[<Fact>]
 let testDefault_titleVsCompletionStyle () =
     let content =
         """

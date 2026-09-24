@@ -57,6 +57,18 @@ See [this config file](../Tests/default.marksman.toml) for more details.
 Wiki links can use both a title and a filename to reference a document.
 The preferred style of completion is configured via `completion.wiki.style` configuration setting.
 
+Available styles:
+
+| Style | Example | Notes |
+|-------|---------|-------|
+| `title-slug` (default) | `[[my-note-title]]` | Slugified title (lowercase, spaces → hyphens) |
+| `title` | `[[My Note Title]]` | Raw title text as-is — Obsidian-compatible |
+| `file-stem` | `[[my-note]]` | Filename without extension |
+| `file-path-stem` | `[[subdir/my-note]]` | Relative file path without extension |
+
+The `title` style is recommended for users who want full Obsidian compatibility: both tools
+will generate `[[Raw Title Text]]` links that each resolves correctly.
+
 See [the example config file](../Tests/default.marksman.toml) for more details.
 
 ### Completion style and refactorings

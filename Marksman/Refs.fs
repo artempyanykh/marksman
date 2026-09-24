@@ -58,6 +58,7 @@ module FileLinkKind =
         fun destDoc ->
             match complStyle, Doc.slug destDoc = nameSlug, linkKindAsPath destDoc with
             | TitleSlug, true, _
+            | ComplWikiStyle.Title, true, _
             | _, true, None -> FileLinkKind.Title
             | _, _, Some fileKind -> fileKind
             | _, _, None -> FileLinkKind.FileName

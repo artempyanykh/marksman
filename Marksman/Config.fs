@@ -106,6 +106,8 @@ let private nonNegativeIntArrayFromTableOpt
 type ComplWikiStyle =
     /// Document title's slug, e.g. "A B C" -> "a-b-c"
     | TitleSlug
+    /// Document title as-is, e.g. "A B C" -> "A B C" (Obsidian-compatible)
+    | Title
     /// File name without an extension, e.g. "path/to/doc.md" -> "doc"
     | FileStem
     /// File path without an extension, e.g. "path/to/doc.md" -> "path/to/doc"
@@ -115,6 +117,7 @@ module ComplWikiStyle =
     let ofString (input: string) : Result<ComplWikiStyle, string> =
         match input.ToLower() with
         | "title-slug" -> Ok TitleSlug
+        | "title" -> Ok Title
         | "file-stem" -> Ok FileStem
         | "file-path-stem" -> Ok FilePathStem
         | other -> Error $"Unknown ComplWikiStyle: {other}"

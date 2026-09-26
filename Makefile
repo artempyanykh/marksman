@@ -34,7 +34,7 @@ else
 	endif
 
 	ifeq ($(UNAME_S),FreeBSD)
-		OS_ID := freebsd
+		OS_ID := freebsd.$(shell uname -r | cut -d. -f1)
 	endif
 
 	ifeq ($(TARGET),x86_64)

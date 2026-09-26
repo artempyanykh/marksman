@@ -741,7 +741,7 @@ type MarksmanServer(client: MarksmanClient) =
                     >> Log.addContext "uri" uri
                 )
 
-                match State.tryFindFolderAndDoc uri state with
+                match State.tryFindFolderAndDoc uri newState with
                 | None -> ()
                 | Some(folder, doc) ->
                     match Folder.withoutDoc (Doc.id doc) folder with

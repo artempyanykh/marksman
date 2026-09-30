@@ -514,7 +514,7 @@ type MarksmanServer(client: MarksmanClient) =
 
             None
 
-    override this.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
+    override _.Initialize(par: InitializeParams) : AsyncLspResult<InitializeResult> =
         try
             let workspaceFolders = ServerUtil.extractWorkspaceFolders par
             let clientDesc = ClientDescription.ofParams par
@@ -562,7 +562,16 @@ type MarksmanServer(client: MarksmanClient) =
 
             let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
 
-            let initResult = { InitializeResult.Default with Capabilities = serverCaps }
+            let serverAssembly = typeof<MarksmanServer>.Assembly.GetName()
+
+            let initResult = {
+                Capabilities = serverCaps
+                ServerInfo =
+                    Some {
+                        Name = serverAssembly.Name
+                        Version = Some $"{serverAssembly.Version}"
+                    }
+            }
 
             logger.debug (
                 Log.setMessage

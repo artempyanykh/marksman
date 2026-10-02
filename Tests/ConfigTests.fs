@@ -255,3 +255,43 @@ title_from_heading = false
 
     Assert.False(actual.CoreTitleFromHeading())
     Assert.Equal(ComplWikiStyle.FileStem, actual.ComplWikiStyle())
+
+[<Fact>]
+let parsesBibliographyPaths () =
+    let content =
+        """
+[completion]
+bibliography = ["references.bib", "other.bib"]
+"""
+
+    let paths = [| "references.bib"; "other.bib" |]
+    let expected = { Config.Empty with complBibFiles = Some paths }
+    Assert.Equal(Some expected, Config.tryParse content)
+
+[<Theory>]
+[<InlineData("\"references.bib\"")>]
+[<InlineData("[1]")>]
+[<InlineData("[\"references.bib\", 1]")>]
+let rejectsInvalidBibliographyPaths (value: string) =
+    let content = $"[completion]\nbibliography = {value}"
+    Assert.Equal(None, Config.tryParse content)
+
+[<Fact>]
+let inheritsUserBibliographyPaths () =
+    let paths = [| "references.bib" |]
+    let user = { Config.Empty with complBibFiles = Some paths }
+    let merged = Config.merge Config.Empty user
+    Assert.Equal<string>(paths, merged.ComplBibFiles())
+
+[<Fact>]
+let projectCanDisableUserBibliography () =
+    let project = { Config.Empty with complBibFiles = Some [||] }
+    let paths = [| "references.bib" |]
+    let user = { Config.Empty with complBibFiles = Some paths }
+    let merged = Config.merge project user
+    Assert.Equal(Some [||], merged.complBibFiles)
+
+[<Fact>]
+let bibliographyIsDisabledByDefault () =
+    let paths = Config.Empty.ComplBibFiles()
+    Assert.Empty(paths)

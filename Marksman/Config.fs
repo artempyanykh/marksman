@@ -155,6 +155,7 @@ type Config = {
     coreParanoid: option<bool>
     complWikiStyle: option<ComplWikiStyle>
     complCandidates: option<int>
+    complBibFiles: option<array<string>>
 } with
 
     static member Default = {
@@ -169,6 +170,7 @@ type Config = {
         coreParanoid = Some false
         complWikiStyle = Some TitleSlug
         complCandidates = Some 50
+        complBibFiles = Some [||]
     }
 
     static member Empty = {
@@ -183,6 +185,7 @@ type Config = {
         coreParanoid = None
         complWikiStyle = None
         complCandidates = None
+        complBibFiles = None
     }
 
     member this.CaTocEnable() =
@@ -244,6 +247,11 @@ type Config = {
         |> Option.orElse Config.Default.complCandidates
         |> Option.get
 
+    member this.ComplBibFiles() =
+        this.complBibFiles
+        |> Option.orElse Config.Default.complBibFiles
+        |> Option.get
+
 let private configOfTable (table: TomlTable) : LookupResult<Config> =
     monad {
         let! caTocEnable = getFromTableOpt<bool> table [] [ "code_action"; "toc"; "enable" ]
@@ -282,6 +290,9 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
         let complCandidatesPath = [ "completion"; "candidates" ]
         let! complCandidates = getFromTableOpt<int64> table [] complCandidatesPath
 
+        let bibPath = [ "completion"; "bibliography" ]
+        let! complBibFiles = getFromTableOpt<array<string>> table [] bibPath
+
         let! complCandidates =
             match complCandidates with
             | None -> Ok None
@@ -304,6 +315,7 @@ let private configOfTable (table: TomlTable) : LookupResult<Config> =
             coreParanoid = coreParanoid
             complWikiStyle = complWikiStyle
             complCandidates = complCandidates
+            complBibFiles = complBibFiles
         }
     }
 
@@ -330,6 +342,7 @@ module Config =
         coreParanoid = hi.coreParanoid |> Option.orElse low.coreParanoid
         complWikiStyle = hi.complWikiStyle |> Option.orElse low.complWikiStyle
         complCandidates = hi.complCandidates |> Option.orElse low.complCandidates
+        complBibFiles = hi.complBibFiles |> Option.orElse low.complBibFiles
     }
 
     let mergeOpt hi low =

@@ -25,6 +25,17 @@ let scrapeString content =
     parse Config.ParserSettings.Default (Text.mkText content)
     |> Structure.concreteElements
 
+module CodeBlockTests =
+    [<Theory>]
+    [<InlineData("```", 0)>]
+    [<InlineData("~~~", 0)>]
+    [<InlineData("Text\n```", 1)>]
+    let boundsUnclosedFenceAtEndOfFile (content: string, line: int) =
+        let text = Text.mkText content
+        let document = parse Config.ParserSettings.Default text
+        let expected = [| Range.Mk(line, 0, line, 3) |]
+        Assert.Equal<Range>(expected, document.Cst.codeRanges)
+
 [<StoreSnapshotsPerClass>]
 module HeadingTests =
 

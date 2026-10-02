@@ -409,9 +409,15 @@ module Element =
         | T { data = tag } -> Ast.Element.T(Ast.Tag tag.name.text) |> Some
         | YML _ -> None
 
-type Cst = { elements: Element[]; childMap: Map<Element, Element[]> }
+type Cst = {
+    elements: Element[]
+    childMap: Map<Element, Element[]>
+    codeRanges: Range[]
+}
 
 module Cst =
+    let empty = { elements = [||]; childMap = Map.empty; codeRanges = [||] }
+
     let elements (cst: Cst) : Element[] = cst.elements
 
     let children cst el = Map.tryFind el cst.childMap |> Option.defaultValue [||]

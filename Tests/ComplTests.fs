@@ -11,7 +11,9 @@ open Marksman.Misc
 
 let tryParsePartialElement text line col = PartialElement.inText text (Position.Mk(line, col))
 let parsePartialElement text line col = tryParsePartialElement text line col |> Option.get
-let findCandidatesInDoc folder doc pos = findCandidatesInDoc folder doc pos |> Array.ofSeq
+
+let findCandidatesInDoc folder doc pos =
+    Marksman.Compl.findCandidatesInDoc folder doc pos |> Array.ofSeq
 
 [<StoreSnapshotsPerClass>]
 module PartialElementWiki =
@@ -244,6 +246,82 @@ module PartialElementInline =
     let anchor6 () =
         let text = Text.mkText "(# "
         checkSnapshot [ parsePartialElement text 0 2 ]
+
+[<StoreSnapshotsPerClass>]
+module PartialElementCitation =
+    let tryParse (content: string) line col =
+        let doc = FakeDoc.Mk(content)
+
+        findCompletableAtPos doc (Position.Mk(line, col))
+        |> Option.bind (function
+            | PE(PartialElement.Citation _ as citation) -> Some citation
+            | _ -> None)
+
+    let parse content line col = tryParse content line col |> Option.get
+
+    let checkSnapshot (element: PartialElement) =
+        let lines = element.ToString().Lines()
+        lines.ShouldMatchSnapshot()
+
+    [<Fact>]
+    let empty () = Assert.Equal(None, tryParse "" 0 0)
+
+    [<Fact>]
+    let emptyEof () = checkSnapshot (parse "@" 0 1)
+
+    [<Fact>]
+    let emptyEol () = checkSnapshot (parse "@\n" 0 1)
+
+    [<Fact>]
+    let someEof () = checkSnapshot (parse "@aud" 0 4)
+
+    [<Fact>]
+    let someAndTextAfter () = checkSnapshot (parse "@audiokit" 0 4)
+
+    [<Fact>]
+    let punctuationAtCursor () = checkSnapshot (parse "[@Smith:]" 0 8)
+
+    [<Fact>]
+    let punctuationAfterCursor () =
+        let citation = parse "Use @aud--the library." 0 8
+        checkSnapshot citation
+
+    [<Fact>]
+    let keyAfterLineBreak () = checkSnapshot (parse "[@first;\n@aud]" 1 4)
+
+
+    [<Theory>]
+    [<InlineData("user@aud.com", 0, 8)>]
+    [<InlineData("\\@aud", 0, 5)>]
+    [<InlineData("@@aud", 0, 5)>]
+    [<InlineData("é@aud", 0, 5)>]
+    [<InlineData("á@aud", 0, 6)>]
+    [<InlineData("a‿@aud", 0, 6)>]
+    [<InlineData("@aud", 0, 0)>]
+    [<InlineData("@audiokit ", 0, 10)>]
+    [<InlineData("[@audiokit] ", 0, 12)>]
+    let outsideCitationKeys (content: string, line: int, col: int) =
+        Assert.Equal(None, tryParse content line col)
+
+    [<Theory>]
+    [<InlineData("```python\n@aud\n```", 1, 4)>]
+    [<InlineData("~~~css\n@aud\n~~~", 1, 4)>]
+    [<InlineData("```java\n@aud", 1, 4)>]
+    [<InlineData("> ```java\n> @aud", 1, 6)>]
+    [<InlineData("    @aud", 0, 8)>]
+    [<InlineData("Use `@aud` here.", 0, 9)>]
+    [<InlineData("Use ``code ` @aud`` here.", 0, 17)>]
+    [<InlineData("---\nauthor: @aud\n---\nText", 1, 12)>]
+    let codeOrFrontMatter (content: string, line: int, col: int) =
+        Assert.Equal(None, tryParse content line col)
+
+    [<Theory>]
+    [<InlineData("[link](../@aud)", 0, 14)>]
+    [<InlineData("[link](../@aud", 0, 14)>]
+    [<InlineData("[[target@aud]]", 0, 12)>]
+    [<InlineData("[link][@aud]", 0, 11)>]
+    let linkTargets (content: string, line: int, col: int) =
+        Assert.Equal(None, tryParse content line col)
 
 [<StoreSnapshotsPerClass>]
 module PartialElementTag =

@@ -220,10 +220,11 @@ module Markdown =
             }
 
 
-    let scrapeText (parserSettings: ParserSettings) (text: Text) : array<Element> =
+    let scrapeText (parserSettings: ParserSettings) (text: Text) =
         let parsed: MarkdownObject = Markdown.Parse(text.content, markdigPipeline)
 
         let elements = ResizeArray()
+        let codeRanges = ResizeArray()
 
         let lastHeadingNo = new Dictionary<Slug, int>()
 
@@ -237,6 +238,23 @@ module Markdown =
 
                 elements.Add(YML node)
 
+            | :? CodeBlock as code ->
+                // Unclosed fences can end relative to their final line
+                let last = code.Lines.Count - 1
+
+                let endOffset =
+                    if last < 0 then
+                        code.Span.End
+                    else
+                        let line = code.Lines.Lines[last]
+                        max code.Span.End line.Slice.End
+
+                let endOffset = min endOffset (text.content.Length - 1)
+                let span = SourceSpan(code.Span.Start, endOffset)
+                codeRanges.Add(sourceSpanToRange text span)
+            | :? CodeInline as code ->
+                let range = sourceSpanToRange text code.Span
+                codeRanges.Add(range)
             | :? HeadingBlock as h ->
                 let level = h.Level
 
@@ -415,7 +433,7 @@ module Markdown =
                 ()
             | _ -> ()
 
-        elements.ToArray()
+        elements.ToArray(), codeRanges.ToArray()
 
     let rec private sortElements (text: Text) (elements: array<Element>) : unit =
         let elemOffsets el =
@@ -429,7 +447,7 @@ module Markdown =
 
         Array.sortInPlaceBy elemOffsets elements
 
-    let buildCst (text: Text) (inputElements: Element[]) : Cst =
+    let buildCst (text: Text) (inputElements: Element[]) codeRanges : Cst =
         let nestedDeeperThan (_, baseHeader) (_, otherHeader) =
             otherHeader.data.level >= baseHeader.data.level
 
@@ -499,13 +517,12 @@ module Markdown =
         let elements = outputElements.ToArray()
         sortElements text elements
 
-        { elements = elements; childMap = childMap }
+        { elements = elements; childMap = childMap; codeRanges = codeRanges }
 
 let parse (parserSettings: ParserSettings) (text: Text) : Structure =
     if String.IsNullOrEmpty text.content then
-        let cst: Cst.Cst = { elements = [||]; childMap = Map.empty }
-        Structure.ofCst parserSettings cst
+        Structure.ofCst parserSettings Cst.Cst.empty
     else
-        let flatElements = Markdown.scrapeText parserSettings text
-        let cst = Markdown.buildCst text flatElements
+        let flatElements, codeRanges = Markdown.scrapeText parserSettings text
+        let cst = Markdown.buildCst text flatElements codeRanges
         Structure.ofCst parserSettings cst

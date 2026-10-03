@@ -15,6 +15,7 @@ open Marksman.Doc
 open Marksman.Index
 open Marksman.Config
 open Marksman.Folder
+open Marksman.BibTeX
 
 let private logger = LogProvider.getLoggerByName "Compl"
 
@@ -27,6 +28,7 @@ type PartialElement =
         anchor: option<UrlEncodedNode> *
         range: Range
     | ReferenceLink of label: option<TextNode> * range: Range
+    | Citation of key: TextNode
     // TODO: consider moving tag opening out of PartialElement due to
     // complications in findCompletableAtPos
     | TagOpening of cursorPos: Position
@@ -38,6 +40,7 @@ type PartialElement =
         | PartialElement.InlineLink(text, path, anchor, range) ->
             $"IL {range}: text={Node.fmtOptText text}; path={Node.fmtOptUrl path}; anchor={Node.fmtOptUrl anchor}"
         | PartialElement.ReferenceLink(label, range) -> $"RL {range}: label={Node.fmtOptText label}"
+        | PartialElement.Citation key -> $"C {key.range}: key={key.text}"
         | TagOpening pos -> $"TO: cursorPos={pos}"
 
 module PartialElement =
@@ -48,6 +51,7 @@ module PartialElement =
         | PartialElement.WikiLink(_, _, range)
         | PartialElement.InlineLink(_, _, _, range)
         | PartialElement.ReferenceLink(_, range) -> range
+        | PartialElement.Citation key -> key.range
         | PartialElement.TagOpening cursorPos -> { Start = cursorPos; End = cursorPos } // empty range
 
     let linkInLine (line: Line) (pos: Position) : option<PartialElement> =
@@ -234,6 +238,77 @@ module PartialElement =
             | _, _ -> return! None
         }
 
+    let citationInLine (line: Line) (pos: Position) : option<PartialElement> =
+        let isWord c =
+            Char.IsLetterOrDigit(c)
+            || match Char.GetUnicodeCategory(c) with
+               | Globalization.UnicodeCategory.NonSpacingMark
+               | Globalization.UnicodeCategory.ConnectorPunctuation -> true
+               | _ -> false
+
+        // Limit punctuation so completion preserves locators and prose
+        let isPunctuation =
+            function
+            | ':'
+            | '.'
+            | '#'
+            | '$'
+            | '%'
+            | '&'
+            | '+'
+            | '?'
+            | '<'
+            | '>'
+            | '~'
+            | '/'
+            | '-' -> true
+            | _ -> false
+
+        let findTailEnd =
+            Cursor.tryFindCharMatching Cursor.forward (isPunctuation >> not)
+
+        monad' {
+            let! startCursor =
+                match Line.toCursorAt pos line with
+                | Some cursor -> Cursor.backward cursor
+                | _ when Line.endsAt pos line -> Line.endCursor line
+                | _ -> None
+
+            let findAt = Cursor.tryFindCharMatching Cursor.backward ((=) '@')
+            let! opening = findAt startCursor
+
+            let! _ =
+                match Cursor.backwardChar opening with
+                | Some c when isWord c || c = '\\' || c = '@' -> None
+                | _ -> Some()
+
+            let rec findKeyEnd cursor =
+                match cursor with
+                | Some c when
+                    isWord (Cursor.char c)
+                    || (isPunctuation (Cursor.char c)
+                        && (Cursor.forwardChar c |> Option.exists isWord))
+                    ->
+                    findKeyEnd (Cursor.forward c)
+                | other -> other
+
+            let lineEnd = (line.text.LineContentRange(line.line)).End
+
+            let positionOrEnd (cursor: option<Cursor>) =
+                cursor |>> Cursor.pos |> Option.defaultValue lineEnd
+
+            let keyEndCursor = Cursor.forward opening |> findKeyEnd
+            let keyEnd = positionOrEnd keyEndCursor
+            let tailEnd = keyEndCursor >>= findTailEnd |> positionOrEnd
+            let keyStart = Cursor.forward opening |> positionOrEnd
+            let! _ = if keyStart <= pos && pos <= tailEnd then Some() else None
+
+            // Untyped trailing punctuation can belong to the surrounding prose
+            let range = Range.Mk(keyStart, max pos keyEnd)
+            let key = Node.mkText (line.text.Substring(range)) range
+            PartialElement.Citation key
+        }
+
     let tagOpeningInLine (line: Line) (pos: Position) : option<PartialElement> =
         let potentialHash =
             (Line.toCursorAt pos line >>= Cursor.backward)
@@ -273,6 +348,7 @@ type Prompt =
     | InlineAnchorInSrcDoc of input: string
     | InlineAnchorInOtherDoc of pathPart: string * anchorPart: string
     | Tag of input: string
+    | Citation of input: string
 
 module Prompt =
     let ofCompletable (pos: Position) (compl: Completable) : option<Prompt> =
@@ -329,6 +405,9 @@ module Prompt =
                 Some(InlineAnchorInOtherDoc(path.text, anchor.text))
             | PE(PartialElement.ReferenceLink(label, _)) ->
                 Some(Reference(Node.textOpt label String.Empty))
+            | PE(PartialElement.Citation key) ->
+                let inputLength = pos.Character - key.range.Start.Character
+                Some(Citation(key.text.Substring(0, inputLength)))
             // Tags
             | E(T { data = { name = name } }) -> Some(Tag name.text)
             | PE(PartialElement.TagOpening _) -> Some(Tag String.Empty)
@@ -679,7 +758,22 @@ module Completions =
                     Kind = Some CompletionItemKind.Reference
             }
 
+    let citation (compl: Completable) (CitationKey targetKey) =
+        match compl with
+        | PE(PartialElement.Citation key) ->
+            let edit = { Range = key.range; NewText = targetKey }
+
+            Some {
+                CompletionItem.Create(targetKey) with
+                    Kind = Some CompletionItemKind.Reference
+                    FilterText = Some targetKey
+                    TextEdit = Some(First edit)
+            }
+        | _ -> None
+
 module Candidates =
+    open System.IO
+
     let findDocCandidates (folder: Folder) (srcDoc: Doc) (destPart: option<InternName>) : seq<Doc> =
         let candidates =
             match destPart with
@@ -747,7 +841,72 @@ module Candidates =
 
         matchingTags
 
+    let findCitationCandidates (folder: Folder) (input: string) =
+        let paths = (Folder.configOrDefault folder).ComplBibFiles()
+
+        if Array.isEmpty paths then
+            Seq.empty
+        else
+            let root = Folder.rootPath folder |> RootPath.toSystem
+
+            let root =
+                if Folder.isSingleFile folder then
+                    Path.GetDirectoryName(root)
+                else
+                    root
+
+            let readKeys path =
+                try
+                    let filename = Path.GetFullPath(path, root)
+                    File.ReadAllText(filename) |> BibTeX.parseKeys
+                with
+                | :? IOException
+                | :? UnauthorizedAccessException
+                | :? ArgumentException ->
+                    logger.warn (
+                        Log.setMessage "Cannot read bibliography"
+                        >> Log.addContext "path" path
+                    )
+
+                    Seq.empty
+
+            let input = input.ToLowerInvariant()
+            let ordinal = StringComparison.Ordinal
+
+            paths
+            |> Seq.collect readKeys
+            |> Seq.distinct
+            |> Seq.choose (fun (CitationKey key as citationKey) ->
+                let searchText = key.ToLowerInvariant()
+
+                if input.IsSubSequenceOf(searchText) then
+                    let rank =
+                        if searchText = input then 0
+                        elif searchText.StartsWith(input, ordinal) then 1
+                        else 2
+
+                    Some(rank, citationKey)
+                else
+                    None)
+            |> Seq.sortBy fst
+            |> Seq.map snd
+
 let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
+    let citation () =
+        let contains (range: Range) = range.ContainsInclusive(pos)
+        let inCode = (Doc.cst doc).codeRanges |> Array.exists contains
+
+        let inYaml =
+            (Doc.index doc).yamlFrontMatter
+            |> Option.exists (fun node -> contains node.range)
+
+        if inCode || inYaml then
+            None
+        else
+            Line.ofPos (Doc.text doc) pos
+            |> Option.bind (fun line -> PartialElement.citationInLine line pos)
+            |> Option.map PE
+
     let link () = Doc.index doc |> Index.linkAtPos pos |> Option.map E
 
     let tag () =
@@ -760,17 +919,39 @@ let findCompletableAtPos (doc: Doc) (pos: Position) : option<Completable> =
 
     let partialElement () = PartialElement.inText (Doc.text doc) pos |> Option.map PE
 
+    let hasReference input =
+        let matches = LinkLabel.isSubSequenceOf (LinkLabel.ofString input)
+        Doc.index doc |> Index.filterLinkDefs matches |> Seq.isEmpty |> not
+
+    let isShortcut (range: Range) =
+        let column = range.Start.Character
+        column = 0 || (Doc.text doc).LineContent(pos.Line)[column - 1] <> ']'
+
     // The priority is generally link > partialElement > tag. However, when partial
     // element is a tag opening, try to check for proper tag first.
     // In particular, this means that [[#f will be completed as a wiki link,
     // rather than a tag.
     match link () with
+    | Some(E(ML { data = MdLink.RS label })) as reference ->
+        if hasReference label.text then
+            reference
+        else
+            citation () |> Option.orElse reference
     | Some _ as link -> link
     | _ ->
         match partialElement () with
+        | Some(PE(PartialElement.ReferenceLink(label, range))) as reference ->
+            let input = Node.textOpt label String.Empty
+
+            if isShortcut range && not (hasReference input) then
+                citation () |> Option.orElse reference
+            else
+                reference
+        | Some(PE(PartialElement.InlineLink(None, _, _, _))) as parenthesis ->
+            citation () |> Option.orElse parenthesis
         | Some(PE(PartialElement.TagOpening _)) as tagOpening -> tag () |> Option.orElse tagOpening
         | Some _ as partialElement -> partialElement
-        | None -> tag ()
+        | None -> tag () |> Option.orElseWith citation
 
 
 let findCandidatesForCompl
@@ -783,6 +964,9 @@ let findCandidatesForCompl
 
     match Prompt.ofCompletable pos compl with
     | None -> [||]
+    | Some(Citation input) ->
+        let cand = Candidates.findCitationCandidates folder input
+        cand |> Seq.choose (Completions.citation compl)
     | Some(WikiDoc input) ->
         let destPart = Some(InternName.mkUnchecked (Doc.id srcDoc) input)
         let cand = Candidates.findDocCandidates folder srcDoc destPart
@@ -835,11 +1019,12 @@ let findCandidatesForCompl
         let cand = Candidates.findTagCandidates folder srcDoc input
         cand |> Seq.choose (Completions.tag pos compl input)
 
-let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) : seq<CompletionItem> =
+
+let findCandidatesInDoc (folder: Folder) (doc: Doc) (pos: Position) =
     match findCompletableAtPos doc pos with
     | None ->
         logger.trace (Log.setMessage "No completion point found")
-        [||]
+        Seq.empty
     | Some compl ->
         logger.trace (Log.setMessage "Found completion point" >> Log.addContext "comp" compl)
         findCandidatesForCompl folder doc pos compl

@@ -153,7 +153,7 @@ module ServerUtil =
                 DocumentSymbolProvider = Some(First <| not clientDesc.IsVSCode)
                 CompletionProvider =
                     Some {
-                        TriggerCharacters = Some [| '['; '#'; '(' |]
+                        TriggerCharacters = Some [| '['; '#'; '('; '@' |]
                         ResolveProvider = None
                         AllCommitCharacters = None
                         CompletionItem = None

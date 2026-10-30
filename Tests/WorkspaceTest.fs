@@ -1,5 +1,7 @@
 module Marksman.WorkspaceTest
 
+open System.IO
+
 open Ionide.LanguageServerProtocol.Types
 
 open Xunit
@@ -179,6 +181,31 @@ module FolderTest =
 
         Assert.Equal(Some markdown, Folder.tryFindDocByPath (Doc.path markdown) updated)
         Assert.Equal(Some longExtension, Folder.tryFindDocByPath (Doc.path longExtension) updated)
+
+    let withTempDir (action: string -> unit) =
+        let dir = Directory.CreateTempSubdirectory()
+
+        try
+            action dir.FullName
+        finally
+            Directory.Delete(dir.FullName, true)
+
+    [<Fact>]
+    let checkWorkspaceFolder_gitFile () =
+        withTempDir (fun root ->
+            File.WriteAllText(Path.Join(root, ".git"), "gitdir: /somewhere/.git/worktrees/wt")
+            Assert.True(Folder.checkWorkspaceFolderWithWarn (mkFolderId root)))
+
+    [<Fact>]
+    let checkWorkspaceFolder_gitDir () =
+        withTempDir (fun root ->
+            Directory.CreateDirectory(Path.Join(root, ".git")) |> ignore
+            Assert.True(Folder.checkWorkspaceFolderWithWarn (mkFolderId root)))
+
+    [<Fact>]
+    let checkWorkspaceFolder_emptyRoot () =
+        withTempDir (fun root ->
+            Assert.False(Folder.checkWorkspaceFolderWithWarn (mkFolderId root)))
 
 
 module DocTest =

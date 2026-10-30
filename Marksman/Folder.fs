@@ -248,7 +248,8 @@ module Folder =
         let root = RootPath.toSystem root
 
         if Directory.Exists(root) then
-            let markerFiles = [| ".marksman.toml" |]
+            // Git worktrees and submodules use a .git file pointing to the real git directory
+            let markerFiles = [| ".marksman.toml"; ".git" |]
             let markerDirs = [| ".git"; ".hg"; ".svn"; ".jj" |]
 
             let hasMarkerFile () =

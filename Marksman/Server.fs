@@ -85,7 +85,7 @@ module ServerUtil =
                 | None -> "default", Full
 
     let mkServerCaps
-        (markdownExts: array<string>)
+        (workspace: Workspace)
         (textSyncKind: TextSync)
         (par: InitializeParams)
         : ServerCapabilities =
@@ -94,33 +94,44 @@ module ServerUtil =
             ChangeNotifications = Some(Second true)
         }
 
-        let glob = mkWatchGlob markdownExts
+        // Capabilities cover the whole workspace, while file events are filtered per folder.
+        // Folders added after initialization would need dynamic registration.
+        let markdownExts =
+            if Workspace.folderCount workspace = 0 then
+                (Workspace.userConfig workspace |> Config.orDefault)
+                    .CoreMarkdownFileExtensions()
+                |> Seq.ofArray
+            else
+                Workspace.folders workspace
+                |> Seq.collect Folder.configuredMarkdownExts
 
-        let markdownFilePattern = {
-            Glob = glob
-            Matches = Some FileOperationPatternKind.File
-            Options = Some { IgnoreCase = Some true }
-        }
+        let workspaceFileCaps =
+            markdownExts
+            |> Seq.distinct
+            |> Array.ofSeq
+            |> tryMkWatchGlob
+            |> Option.map (fun glob ->
+                let markdownFilePattern = {
+                    Glob = glob
+                    Matches = Some FileOperationPatternKind.File
+                    Options = Some { IgnoreCase = Some true }
+                }
 
-        let markdownFileRegistration = {
-            Filters = [| { Scheme = None; Pattern = markdownFilePattern } |]
-        }
+                let markdownFileRegistration = {
+                    Filters = [| { Scheme = None; Pattern = markdownFilePattern } |]
+                }
 
-        let workspaceFileCaps = {
-            WorkspaceFileOperationsServerCapabilities.Default with
-                DidCreate = Some markdownFileRegistration
-                DidDelete = Some markdownFileRegistration
-                // VSCode behaves weirdly when communicating file renames, so let's turn this off.
-                // Anyway, when the file is renamed VSCode sends
-                // - didClose on the old name, and
-                // - didOpen on the new one
-                // which is enough to keep the state in sync.
-                DidRename = None
-        }
+                {
+                    WorkspaceFileOperationsServerCapabilities.Default with
+                        DidCreate = Some markdownFileRegistration
+                        DidDelete = Some markdownFileRegistration
+                        // VSCode sends didClose for the old name and didOpen for the new one.
+                        DidRename = None
+                })
 
         let workspaceCaps = {
             WorkspaceFolders = Some workspaceFoldersCaps
-            FileOperations = Some workspaceFileCaps
+            FileOperations = workspaceFileCaps
         }
 
         let syncKind =
@@ -538,19 +549,6 @@ type MarksmanServer(client: MarksmanClient) =
             let initState = State.mk clientDesc workspace
             stateManager <- Some(new StateManager(initState))
 
-            // Workspace may contain several folders with their own configuration. However, server
-            // capabilities are communicated for the whole workspace. Therefore, we need to collect
-            // all configured markdown extensions and ask the client to watch them all, doing per-folder
-            // filtering on our own.
-            //
-            // NOTE: this doesn't address the case when a folder is added to the workspace later on.
-            // We'd need to add dynamic registration of capabilities on the server side.
-            let configuredExts =
-                Workspace.folders workspace
-                |> Seq.collect Folder.configuredMarkdownExts
-                |> Seq.distinct
-                |> Array.ofSeq
-
             let textSyncKindSource, textSyncKind =
                 ServerUtil.calcTextSync userConfig workspace clientDesc
 
@@ -560,7 +558,7 @@ type MarksmanServer(client: MarksmanClient) =
                 >> Log.addContext "kind" textSyncKind
             )
 
-            let serverCaps = ServerUtil.mkServerCaps configuredExts textSyncKind par
+            let serverCaps = ServerUtil.mkServerCaps workspace textSyncKind par
 
             let initResult = { InitializeResult.Default with Capabilities = serverCaps }
 

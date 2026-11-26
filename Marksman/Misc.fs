@@ -15,9 +15,13 @@ let lineEndings = [| "\r\n"; "\n" |]
 
 let concatLines (lines: seq<string>) : string = String.concat Environment.NewLine lines
 
-let mkWatchGlob (configuredExts: seq<string>) : string =
-    let ext_pattern = "{" + (String.concat "," configuredExts) + "}"
-    $"**/*.{ext_pattern}"
+let tryMkWatchGlob (configuredExts: array<string>) : option<string> =
+    match configuredExts with
+    | [||] -> None
+    | [| extension |] -> Some $"**/*.{extension}"
+    | _ ->
+        let alternatives = "{" + String.concat "," configuredExts + "}"
+        Some $"**/*.{alternatives}"
 
 let isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
 

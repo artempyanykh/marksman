@@ -114,4 +114,4 @@ module LinkLabelTest =
 module WatchGlobTest =
     [<Fact>]
     let test1 () =
-        Assert.Equal("**/*.{md,markdown,mdx}", mkWatchGlob [| "md"; "markdown"; "mdx" |])
+        Assert.Equal(Some "**/*.{md,markdown,mdx}", tryMkWatchGlob [| "md"; "markdown"; "mdx" |])

@@ -1,5 +1,6 @@
 module Marksman.ServerTests
 
+open Newtonsoft.Json.Linq
 open Xunit
 open Ionide.LanguageServerProtocol.Types
 
@@ -12,6 +13,8 @@ open Marksman.Folder
 open Marksman.Workspace
 
 open Marksman.Helpers
+
+module LspServer = Ionide.LanguageServerProtocol.Server
 
 module ServerUtilTests =
     [<Fact>]
@@ -66,6 +69,84 @@ module ServerUtilTests =
 
         let ws = Workspace.ofFolders None [ folder ]
         Assert.Equal(("workspaceConfig", Full), ServerUtil.calcTextSync None ws clientDesc)
+
+module FileOperationCapabilitiesTests =
+    let private configWithExtensions extensions = {
+        Config.Empty with
+            coreMarkdownFileExtensions = Some extensions
+    }
+
+    let private folder name config =
+        Folder.multiFile name (dummyRootPath [ name ] |> mkFolderId) Seq.empty config
+
+    let private serializedInitialization userConfig folders =
+        let par = LspServer.deserialize<InitializeParams> (JObject())
+        let workspace = Workspace.ofFolders userConfig folders
+        let capabilities = ServerUtil.mkServerCaps workspace Full par
+
+        { InitializeResult.Default with Capabilities = capabilities }
+        |> LspServer.serialize
+
+    let private assertMarkdownFileOperations (glob: string) (result: JToken) =
+        let fileOperations =
+            result.SelectToken("capabilities.workspace.fileOperations")
+
+        for operation in [ "didCreate"; "didDelete" ] do
+            let filter =
+                fileOperations[operation].SelectToken("filters").Children()
+                |> Assert.Single
+
+            Assert.Equal(glob, filter.SelectToken("pattern.glob").ToObject<string>())
+            Assert.Equal("file", filter.SelectToken("pattern.matches").ToObject<string>())
+            Assert.True(filter.SelectToken("pattern.options.ignoreCase").ToObject<bool>())
+            Assert.Null(filter["scheme"])
+
+        Assert.Null(fileOperations["didRename"])
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let defaultExtensionsWithOrWithoutWorkspaceFolders rooted =
+        let folders = if rooted then [ folder "notes" None ] else []
+        let result = serializedInitialization None folders
+        assertMarkdownFileOperations "**/*.{md,markdown}" result
+
+    [<Fact>]
+    let singleFileModeUsesTheUserExtension () =
+        let result =
+            serializedInitialization (Some(configWithExtensions [| "mdx" |])) []
+
+        assertMarkdownFileOperations "**/*.mdx" result
+
+    [<Fact>]
+    let workspaceUsesTheDistinctUnionOfEffectiveFolderExtensions () =
+        let userConfig = configWithExtensions [| "md"; "mdx" |]
+        let folderConfig = configWithExtensions [| "md"; "notes" |]
+        let folders = [ folder "first" None; folder "second" (Some folderConfig) ]
+
+        let result = serializedInitialization (Some userConfig) folders
+        assertMarkdownFileOperations "**/*.{md,mdx,notes}" result
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let explicitEmptyExtensionsOmitFileOperations rooted =
+        let emptyExtensions = configWithExtensions [||]
+
+        let userConfig, folders =
+            if rooted then
+                Some(configWithExtensions [| "mdx" |]), [ folder "notes" (Some emptyExtensions) ]
+            else
+                Some emptyExtensions, []
+
+        let result = serializedInitialization userConfig folders
+        Assert.Null(result.SelectToken("capabilities.workspace.fileOperations"))
+
+        let workspaceFolders =
+            result.SelectToken("capabilities.workspace.workspaceFolders")
+
+        Assert.True(workspaceFolders["supported"].ToObject<bool>())
+        Assert.True(workspaceFolders["changeNotifications"].ToObject<bool>())
 
 module DiagnosticPublicationTests =
     let private doc path lines = FakeDoc.Mk(path = path, contentLines = Array.ofList lines)
